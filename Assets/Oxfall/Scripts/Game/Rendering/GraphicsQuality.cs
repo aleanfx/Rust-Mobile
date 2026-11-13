@@ -113,17 +113,17 @@ namespace Oxfall.Game.Rendering
                 case QualityTier.Low:
                     renderScale = 0.75f; shadows = LightShadows.None; shadowDistance = 0f;
                     msaa = 1; hdr = false; post = false; fogDensity = 0.0115f; far = 210f;
-                    grassRadius = 20f; grassDensity = 1.6f;
+                    grassRadius = 20f; grassDensity = 0.8f;
                     break;
                 case QualityTier.Medium:
                     renderScale = 0.9f; shadows = LightShadows.Hard; shadowDistance = 35f;
                     msaa = 1; hdr = false; post = true; fogDensity = 0.0095f; far = 270f;
-                    grassRadius = 32f; grassDensity = 3f;
+                    grassRadius = 30f; grassDensity = 1.4f;
                     break;
                 default:
                     renderScale = 1f; shadows = LightShadows.Hard; shadowDistance = 60f;
                     msaa = 2; hdr = true; post = true; fogDensity = 0.008f; far = 340f;
-                    grassRadius = 45f; grassDensity = 4f;
+                    grassRadius = 40f; grassDensity = 1.8f;
                     break;
             }
 
@@ -150,9 +150,9 @@ namespace Oxfall.Game.Rendering
             {
                 // Filmic tone mapping only with HDR; without it, ACES just crushes the colours.
                 _tonemapping.mode.Override(hdr ? TonemappingMode.ACES : TonemappingMode.None);
-                _colour.postExposure.Override(hdr ? 0.3f : 0f);
-                _colour.contrast.Override(hdr ? 16f : 12f);
-                _colour.saturation.Override(hdr ? -8f : -12f);
+                _colour.postExposure.Override(hdr ? 0.45f : 0.1f);
+                _colour.contrast.Override(hdr ? 12f : 10f);
+                _colour.saturation.Override(hdr ? -4f : -6f);
                 _bloom.active = tier == QualityTier.High;
             }
             if (_volume != null) _volume.enabled = post;

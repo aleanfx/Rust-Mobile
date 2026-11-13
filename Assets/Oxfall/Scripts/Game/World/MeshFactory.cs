@@ -44,10 +44,23 @@ namespace Oxfall.Game.World
             var b = new FlatMeshBuilder(2);
             float trunkHeight = 4.2f;
             b.AddCylinder(BarkSubmesh, Vector3.zero, 0.3f, 0.2f, trunkHeight, 6, Rand(random, 0f, 60f));
-            var crownSize = new Vector3(Rand(random, 2.4f, 3.0f), Rand(random, 2.0f, 2.6f), Rand(random, 2.4f, 3.0f));
-            b.AddBlob(LeavesSubmesh, new Vector3(0f, trunkHeight + crownSize.y * 0.55f, 0f), crownSize, random, 0.22f);
-            b.AddBlob(LeavesSubmesh, new Vector3(Rand(random, -1f, 1f), trunkHeight + 0.2f, Rand(random, -1f, 1f)),
-                crownSize * 0.6f, random, 0.2f);
+            // A crown of several overlapping clumps reads as foliage rather than one ball on a stick.
+            var crownSize = new Vector3(Rand(random, 2.2f, 2.7f), Rand(random, 1.7f, 2.1f), Rand(random, 2.2f, 2.7f));
+            float crownY = trunkHeight + crownSize.y * 0.45f;
+            b.AddBlob(LeavesSubmesh, new Vector3(0f, crownY + 0.5f, 0f), crownSize * 0.85f, random, 0.18f);
+            for (int i = 0; i < 4; i++)
+            {
+                float angle = (i * 90f + Rand(random, -25f, 25f)) * Mathf.Deg2Rad;
+                var offset = new Vector3(Mathf.Cos(angle), 0f, Mathf.Sin(angle)) * Rand(random, 1.1f, 1.5f);
+                b.AddBlob(LeavesSubmesh, new Vector3(offset.x, crownY + Rand(random, -0.5f, 0.3f), offset.z),
+                    crownSize * Rand(random, 0.55f, 0.7f), random, 0.2f);
+            }
+            // Two short boughs carry the side clumps.
+            for (int i = 0; i < 2; i++)
+            {
+                var lean = Quaternion.Euler(Rand(random, 35f, 50f), i * 180f + Rand(random, -30f, 30f), 0f);
+                b.AddCylinder(BarkSubmesh, new Vector3(0f, trunkHeight - 0.9f, 0f), 0.13f, 0.06f, 1.5f, 5, 0f, lean);
+            }
             return b.Build("Broadleaf", 75f);
         }
 

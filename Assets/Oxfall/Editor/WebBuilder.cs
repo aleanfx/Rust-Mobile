@@ -73,7 +73,7 @@ namespace Oxfall.Editor
 
         /// <summary>
         /// Phones on mobile data struggle with a big download, so the web build favours size: the
-        /// "Disk Size with LTO" code optimisation. It lives in the WebGL editor module, which only the
+        /// "Disk Size" code optimisation. It lives in the WebGL editor module, which only the
         /// web image has, so it is set by reflection and skipped with a warning if it is not there.
         /// </summary>
         private static void PreferSmallDownload()
@@ -91,7 +91,8 @@ namespace Oxfall.Editor
                     return;
                 }
                 var names = Enum.GetNames(property.PropertyType);
-                string wanted = names.Contains("DiskSizeLTO") ? "DiskSizeLTO" : names.Contains("DiskSize") ? "DiskSize" : null;
+                // Plain DiskSize: with LTO the link step took over half an hour on the build machine.
+                string wanted = names.Contains("DiskSize") ? "DiskSize" : null;
                 if (wanted == null)
                 {
                     Debug.LogWarning($"[Oxfall] No disk-size code optimisation among: {string.Join(", ", names)}");

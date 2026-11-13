@@ -44,7 +44,10 @@ namespace Oxfall.Game.World
             _viewer = viewer;
         }
 
-        /// <summary>How far the grass reaches (0 turns it off) and how many blades per square metre.</summary>
+        /// <summary>Blades in each tuft.</summary>
+        private const int TuftBlades = 4;
+
+        /// <summary>How far the grass reaches (0 turns it off) and how many tufts per square metre.</summary>
         public void SetQuality(float radius, float density)
         {
             if (Mathf.Approximately(radius, _radius) && Mathf.Approximately(density, _density)) return;
@@ -119,28 +122,34 @@ namespace Oxfall.Game.World
                 float amount = _shape.GrassAmount(x, z, h);
                 if (roll >= amount) continue;
 
-                // Thin tapered blades, shorter where the grass thins out.
-                float height = Mathf.Lerp(0.28f, 0.7f, size) * Mathf.Lerp(0.6f, 1f, amount);
-                float halfWidth = Mathf.Lerp(0.035f, 0.06f, size);
-                var right = new Vector3(Mathf.Cos(yaw), 0f, Mathf.Sin(yaw)) * halfWidth;
-                var root = new Vector3(lx, h - 0.04f, lz);
-                var tip = root + new Vector3(leanX * height * 0.6f, height, leanZ * height * 0.6f);
-
-                int start = Vertices.Count;
-                Vertices.Add(root - right);
-                Vertices.Add(tip);
-                Vertices.Add(root + right);
-                // Normals point up so blades light like the ground they stand on.
-                Normals.Add(Vector3.up);
-                Normals.Add(Vector3.up);
-                Normals.Add(Vector3.up);
+                // A tuft: a few short blades fanning out from one spot, shorter where grass thins out.
+                float tuftHeight = Mathf.Lerp(0.2f, 0.45f, size) * Mathf.Lerp(0.7f, 1f, amount);
                 float u = (Mathf.Floor(tint * 8f) + 0.5f) / 8f;
-                Uvs.Add(new Vector2(u, 0.03f));
-                Uvs.Add(new Vector2(u, 0.97f));
-                Uvs.Add(new Vector2(u, 0.03f));
-                Triangles.Add(start);
-                Triangles.Add(start + 1);
-                Triangles.Add(start + 2);
+                for (int k = 0; k < TuftBlades; k++)
+                {
+                    float angle = yaw + k * (Mathf.PI * 2f / TuftBlades) + leanX;
+                    var outward = new Vector3(Mathf.Cos(angle), 0f, Mathf.Sin(angle));
+                    var side = new Vector3(-outward.z, 0f, outward.x);
+                    float height = tuftHeight * (0.75f + 0.25f * Mathf.Sin(k * 2.1f + leanZ * 6f));
+                    float halfWidth = Mathf.Lerp(0.045f, 0.075f, size);
+                    var root = new Vector3(lx, h - 0.03f, lz) + outward * 0.05f;
+                    var tip = root + outward * (height * 0.45f) + Vector3.up * height;
+
+                    int start = Vertices.Count;
+                    Vertices.Add(root - side * halfWidth);
+                    Vertices.Add(tip);
+                    Vertices.Add(root + side * halfWidth);
+                    // Normals point up so blades light like the ground they stand on.
+                    Normals.Add(Vector3.up);
+                    Normals.Add(Vector3.up);
+                    Normals.Add(Vector3.up);
+                    Uvs.Add(new Vector2(u, 0.03f));
+                    Uvs.Add(new Vector2(u, 0.97f));
+                    Uvs.Add(new Vector2(u, 0.03f));
+                    Triangles.Add(start);
+                    Triangles.Add(start + 1);
+                    Triangles.Add(start + 2);
+                }
             }
 
             var go = new GameObject($"Grass {key.x},{key.y}");

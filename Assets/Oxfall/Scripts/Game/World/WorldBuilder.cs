@@ -27,7 +27,7 @@ namespace Oxfall.Game.World
         // muted colours of its semi-realistic option. The horizon and the fog are the same colour so
         // the far land melts into the sky.
         public static readonly Color FogColour = new Color(0.79f, 0.76f, 0.69f);
-        public static readonly Color SkyTop = new Color(0.33f, 0.47f, 0.64f);
+        public static readonly Color SkyTop = new Color(0.36f, 0.54f, 0.76f);
         public static readonly Color SkyBelowHorizon = new Color(0.66f, 0.64f, 0.58f);
         public static readonly Color SunColour = new Color(1f, 0.86f, 0.68f);
 
@@ -55,16 +55,16 @@ namespace Oxfall.Game.World
             var sun = sunObject.AddComponent<Light>();
             sun.type = LightType.Directional;
             sun.color = SunColour;
-            sun.intensity = 1.55f;
+            sun.intensity = 1.9f;
             sun.shadows = LightShadows.Hard;
             sun.shadowStrength = 0.7f;
             RenderSettings.sun = sun;
 
             // Three-colour ambient: cheap, needs no baking, and keeps shadows blue-ish rather than black.
             RenderSettings.ambientMode = AmbientMode.Trilight;
-            RenderSettings.ambientSkyColor = new Color(0.47f, 0.54f, 0.64f);
-            RenderSettings.ambientEquatorColor = new Color(0.50f, 0.47f, 0.41f);
-            RenderSettings.ambientGroundColor = new Color(0.22f, 0.19f, 0.16f);
+            RenderSettings.ambientSkyColor = new Color(0.58f, 0.64f, 0.74f);
+            RenderSettings.ambientEquatorColor = new Color(0.58f, 0.55f, 0.48f);
+            RenderSettings.ambientGroundColor = new Color(0.28f, 0.25f, 0.20f);
 
             // Exponential-squared haze: clear near the player, thick far away, hides the far clip.
             // GraphicsQuality sets the density per level.
