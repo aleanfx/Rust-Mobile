@@ -247,16 +247,11 @@ namespace Oxfall.Game.Player
                 return;
             }
 
-            _text.Clear();
-            foreach (var y in yields)
-            {
-                int left = _inventory.Add(y.ItemId, y.Amount);
-                int got = y.Amount - left;
-                if (_text.Length > 0) _text.Append("   ");
-                _text.Append('+').Append(got).Append(' ').Append(_catalog.Get(y.ItemId).DisplayName);
-                if (left > 0) _text.Append(" (inventario lleno)");
-            }
-            Message?.Invoke(_text.ToString());
+            // What was gathered shows in the pickup feed (it follows the inventory); only a full
+            // inventory needs saying.
+            bool full = false;
+            foreach (var y in yields) full |= _inventory.Add(y.ItemId, y.Amount) > 0;
+            if (full) Message?.Invoke("Inventario lleno: parte se perdió");
         }
 
         /// <summary>A quick chop: the held item tips forward and down about the grip, then back.</summary>

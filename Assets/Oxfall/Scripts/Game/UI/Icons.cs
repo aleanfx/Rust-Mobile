@@ -1,0 +1,205 @@
+using System;
+using System.Collections.Generic;
+using UnityEngine;
+
+namespace Oxfall.Game.UI
+{
+    /// <summary>
+    /// The interface's pictograms, drawn once at start-up from signed distance shapes into small
+    /// white textures (tinted by the Image that shows them). No image files, crisp at any size the
+    /// HUD uses, and every icon shares one stroke weight so the set reads as one family.
+    /// </summary>
+    public static class Icons
+    {
+        private const int Size = 128;
+        private static readonly Dictionary<string, Sprite> Cache = new Dictionary<string, Sprite>();
+
+        // Shapes are drawn in a box from -1 to 1, y up. Distances are negative inside.
+        private const float Stroke = 0.11f;
+
+        public static Sprite Heart => Get("heart", p =>
+            Min(Circle(p, new Vector2(-0.34f, 0.26f), 0.38f), Circle(p, new Vector2(0.34f, 0.26f), 0.38f),
+                // Sides tangent to the two lobes, so the outline runs smooth into the point.
+                Polygon(p, new Vector2(-0.638f, 0.024f), new Vector2(0f, -0.78f), new Vector2(0.638f, 0.024f), new Vector2(0f, 0.3f))));
+
+        public static Sprite Drop => Get("drop", p =>
+            Mathf.Min(Circle(p, new Vector2(0f, -0.28f), 0.52f),
+                Polygon(p, new Vector2(-0.47f, -0.10f), new Vector2(0.47f, -0.10f), new Vector2(0f, 0.86f))));
+
+        public static Sprite Food => Get("food", p =>
+            Min(Circle(p, new Vector2(0.22f, 0.24f), 0.5f),
+                Segment(p, new Vector2(0.05f, 0.05f), new Vector2(-0.5f, -0.5f), 0.13f),
+                Circle(p, new Vector2(-0.62f, -0.44f), 0.15f), Circle(p, new Vector2(-0.44f, -0.62f), 0.15f)));
+
+        public static Sprite Bag => Get("bag", p =>
+        {
+            float body = RoundBox(p, new Vector2(0f, -0.12f), new Vector2(0.58f, 0.62f), 0.22f);
+            float handle = Mathf.Abs(Circle(p, new Vector2(0f, 0.55f), 0.26f)) - Stroke * 0.8f;
+            float pocket = RoundBox(p, new Vector2(0f, -0.38f), new Vector2(0.36f, 0.2f), 0.08f);
+            float flap = Segment(p, new Vector2(-0.58f, 0.12f), new Vector2(0.58f, 0.12f), 0.05f);
+            return Mathf.Max(Mathf.Min(body, Mathf.Max(handle, -(p.y - 0.5f))), -Mathf.Min(Mathf.Abs(pocket) - 0.04f, flap));
+        });
+
+        public static Sprite Hammer => Get("hammer", p =>
+            Mathf.Min(Segment(p, new Vector2(0.18f, 0.18f), new Vector2(-0.64f, -0.64f), 0.1f),
+                RotatedBox(p, new Vector2(0.28f, 0.28f), new Vector2(0.52f, 0.2f), -45f, 0.05f)));
+
+        public static Sprite Jump => Get("jump", p =>
+            Mathf.Min(Chevron(p, 0.5f, 0.48f), Chevron(p, -0.02f, 0.48f)));
+
+        public static Sprite Gear => Get("gear", p =>
+        {
+            float ring = Mathf.Max(Circle(p, Vector2.zero, 0.58f), -Circle(p, Vector2.zero, 0.24f));
+            float teeth = float.MaxValue;
+            for (int i = 0; i < 8; i++)
+            {
+                float a = i * 45f;
+                var c = Quaternion.Euler(0f, 0f, a) * new Vector3(0.66f, 0f, 0f);
+                teeth = Mathf.Min(teeth, RotatedBox(p, c, new Vector2(0.17f, 0.15f), a, 0.04f));
+            }
+            return Mathf.Max(Mathf.Min(ring, teeth), -Circle(p, Vector2.zero, 0.24f));
+        });
+
+        public static Sprite Door => Get("door", p =>
+            Mathf.Min(Mathf.Abs(RoundBox(p, new Vector2(0f, 0f), new Vector2(0.46f, 0.78f), 0.06f)) - Stroke * 0.8f,
+                Circle(p, new Vector2(0.22f, -0.02f), 0.1f)));
+
+        public static Sprite Sun => Get("sun", p =>
+        {
+            float d = Circle(p, Vector2.zero, 0.36f);
+            for (int i = 0; i < 8; i++)
+            {
+                var dir = (Vector2)(Quaternion.Euler(0f, 0f, i * 45f) * Vector3.right);
+                d = Mathf.Min(d, Segment(p, dir * 0.58f, dir * 0.8f, 0.08f));
+            }
+            return d;
+        });
+
+        public static Sprite Moon => Get("moon", p =>
+            Mathf.Max(Circle(p, Vector2.zero, 0.66f), -Circle(p, new Vector2(0.34f, 0.22f), 0.56f)));
+
+        public static Sprite Close => Get("close", p =>
+            Mathf.Min(Segment(p, new Vector2(-0.5f, -0.5f), new Vector2(0.5f, 0.5f), Stroke),
+                Segment(p, new Vector2(-0.5f, 0.5f), new Vector2(0.5f, -0.5f), Stroke)));
+
+        public static Sprite Hand => Get("hand", p =>
+            Min(RoundBox(p, new Vector2(0f, -0.3f), new Vector2(0.42f, 0.38f), 0.2f),
+                Segment(p, new Vector2(-0.3f, -0.1f), new Vector2(-0.3f, 0.5f), 0.1f),
+                Segment(p, new Vector2(-0.1f, -0.1f), new Vector2(-0.1f, 0.68f), 0.1f),
+                Segment(p, new Vector2(0.1f, -0.1f), new Vector2(0.1f, 0.62f), 0.1f),
+                Segment(p, new Vector2(0.3f, -0.1f), new Vector2(0.3f, 0.46f), 0.1f),
+                Segment(p, new Vector2(-0.4f, -0.3f), new Vector2(-0.68f, 0.05f), 0.1f)));
+
+        public static Sprite Check => Get("check", p =>
+            Mathf.Min(Segment(p, new Vector2(-0.55f, 0.02f), new Vector2(-0.15f, -0.4f), Stroke),
+                Segment(p, new Vector2(-0.15f, -0.4f), new Vector2(0.6f, 0.45f), Stroke)));
+
+        public static Sprite Clock => Get("clock", p =>
+            Min(Mathf.Abs(Circle(p, Vector2.zero, 0.66f)) - Stroke * 0.7f,
+                Segment(p, Vector2.zero, new Vector2(0f, 0.42f), 0.08f),
+                Segment(p, Vector2.zero, new Vector2(0.3f, -0.1f), 0.08f)));
+
+        /// <summary>A soft round glow, bright in the middle and fading to nothing at the edge.</summary>
+        public static Sprite Glow
+        {
+            get
+            {
+                if (Cache.TryGetValue("glow", out var s)) return s;
+                var pixels = new Color32[Size * Size];
+                for (int y = 0; y < Size; y++)
+                for (int x = 0; x < Size; x++)
+                {
+                    float d = new Vector2((x + 0.5f) / Size * 2f - 1f, (y + 0.5f) / Size * 2f - 1f).magnitude;
+                    float a = Mathf.Clamp01(1f - d);
+                    pixels[y * Size + x] = new Color(1f, 1f, 1f, a * a);
+                }
+                return Cache["glow"] = Make("glow", pixels);
+            }
+        }
+
+        // ---- Drawing
+
+        private static Sprite Get(string name, Func<Vector2, float> shape)
+        {
+            if (Cache.TryGetValue(name, out var sprite)) return sprite;
+            var pixels = new Color32[Size * Size];
+            float pixel = 2f / Size;
+            for (int y = 0; y < Size; y++)
+            for (int x = 0; x < Size; x++)
+            {
+                // Inset a little so strokes never touch the texture's edge.
+                var p = new Vector2((x + 0.5f) / Size * 2f - 1f, (y + 0.5f) / Size * 2f - 1f) * 1.08f;
+                float d = shape(p);
+                float a = Mathf.Clamp01(0.5f - d / (pixel * 1.08f));
+                pixels[y * Size + x] = new Color(1f, 1f, 1f, a);
+            }
+            sprite = Make(name, pixels);
+            Cache[name] = sprite;
+            return sprite;
+        }
+
+        private static Sprite Make(string name, Color32[] pixels)
+        {
+            var texture = new Texture2D(Size, Size, TextureFormat.RGBA32, true)
+            {
+                name = "Icon " + name,
+                wrapMode = TextureWrapMode.Clamp,
+                filterMode = FilterMode.Trilinear,
+            };
+            texture.SetPixels32(pixels);
+            texture.Apply(true, true);
+            return Sprite.Create(texture, new Rect(0, 0, Size, Size), new Vector2(0.5f, 0.5f), 100f);
+        }
+
+        private static float Min(params float[] d)
+        {
+            float m = d[0];
+            for (int i = 1; i < d.Length; i++) m = Mathf.Min(m, d[i]);
+            return m;
+        }
+
+        private static float Circle(Vector2 p, Vector2 c, float r) => (p - c).magnitude - r;
+
+        private static float Segment(Vector2 p, Vector2 a, Vector2 b, float r)
+        {
+            var pa = p - a;
+            var ba = b - a;
+            float h = Mathf.Clamp01(Vector2.Dot(pa, ba) / Vector2.Dot(ba, ba));
+            return (pa - ba * h).magnitude - r;
+        }
+
+        private static float RoundBox(Vector2 p, Vector2 c, Vector2 half, float r)
+        {
+            var q = new Vector2(Mathf.Abs(p.x - c.x), Mathf.Abs(p.y - c.y)) - half + new Vector2(r, r);
+            return new Vector2(Mathf.Max(q.x, 0f), Mathf.Max(q.y, 0f)).magnitude + Mathf.Min(Mathf.Max(q.x, q.y), 0f) - r;
+        }
+
+        private static float RotatedBox(Vector2 p, Vector2 c, Vector2 half, float degrees, float r)
+        {
+            var local = (Vector2)(Quaternion.Euler(0f, 0f, -degrees) * (Vector3)(p - c));
+            return RoundBox(local, Vector2.zero, half, r);
+        }
+
+        private static float Chevron(Vector2 p, float y, float width) =>
+            Mathf.Min(Segment(p, new Vector2(-width, y - width), new Vector2(0f, y), Stroke),
+                Segment(p, new Vector2(width, y - width), new Vector2(0f, y), Stroke));
+
+        /// <summary>A convex polygon, its corners given counter-clockwise or clockwise.</summary>
+        private static float Polygon(Vector2 p, params Vector2[] v)
+        {
+            // Exact distance for convex and concave polygons (sign by winding crossings).
+            float d = Vector2.Dot(p - v[0], p - v[0]);
+            float s = 1f;
+            for (int i = 0, j = v.Length - 1; i < v.Length; j = i, i++)
+            {
+                var e = v[j] - v[i];
+                var w = p - v[i];
+                var b = w - e * Mathf.Clamp01(Vector2.Dot(w, e) / Vector2.Dot(e, e));
+                d = Mathf.Min(d, Vector2.Dot(b, b));
+                bool c1 = p.y >= v[i].y, c2 = p.y < v[j].y, c3 = e.x * w.y > e.y * w.x;
+                if ((c1 && c2 && c3) || (!c1 && !c2 && !c3)) s = -s;
+            }
+            return s * Mathf.Sqrt(d);
+        }
+    }
+}

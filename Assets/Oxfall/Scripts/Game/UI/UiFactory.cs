@@ -13,8 +13,10 @@ namespace Oxfall.Game.UI
         private static Sprite _circle;
         private static Sprite _ring;
         private static Sprite _rounded;
+        private static Sprite _soft;
+        private static Sprite _outline;
 
-        public static Font Font => _font != null ? _font : (_font = Resources.GetBuiltinResource<Font>("LegacyRuntime.ttf"));
+        public static Font Font => _font != null ? _font : (_font = UiTheme.Regular);
 
         /// <summary>A filled circle with a soft edge.</summary>
         public static Sprite Circle => _circle != null ? _circle : (_circle = MakeCircle(128, 0f));
@@ -23,7 +25,13 @@ namespace Oxfall.Game.UI
         public static Sprite Ring => _ring != null ? _ring : (_ring = MakeCircle(256, 0.1f));
 
         /// <summary>A rounded rectangle that stretches without blurring its corners (9-sliced).</summary>
-        public static Sprite Rounded => _rounded != null ? _rounded : (_rounded = MakeRounded());
+        public static Sprite Rounded => _rounded != null ? _rounded : (_rounded = MakeRounded(64, 22f, 0f));
+
+        /// <summary>A rectangle with small rounded corners (8 px at full size): panels, slots, buttons.</summary>
+        public static Sprite Soft => _soft != null ? _soft : (_soft = MakeRounded(32, 9f, 0f));
+
+        /// <summary>The outline of <see cref="Soft"/>, 3 px wide: selection frames.</summary>
+        public static Sprite Outline => _outline != null ? _outline : (_outline = MakeRounded(32, 9f, 3f));
 
         public static RectTransform NewRect(string name, Transform parent, Vector2 anchor, Vector2 pivot,
             Vector2 position, Vector2 size)
@@ -49,10 +57,10 @@ namespace Oxfall.Game.UI
             return image;
         }
 
-        public static Text AddText(RectTransform rt, string value, int size, TextAnchor alignment, Color colour)
+        public static Text AddText(RectTransform rt, string value, int size, TextAnchor alignment, Color colour, bool bold = false)
         {
             var text = rt.gameObject.AddComponent<Text>();
-            text.font = Font;
+            text.font = bold ? UiTheme.Bold : Font;
             text.text = value;
             text.fontSize = size;
             text.alignment = alignment;
@@ -61,9 +69,31 @@ namespace Oxfall.Game.UI
             text.horizontalOverflow = HorizontalWrapMode.Overflow;
             text.verticalOverflow = VerticalWrapMode.Overflow;
             var shadow = rt.gameObject.AddComponent<Shadow>();
-            shadow.effectColor = new Color(0f, 0f, 0f, 0.6f);
-            shadow.effectDistance = new Vector2(2f, -2f);
+            shadow.effectColor = new Color(0f, 0f, 0f, 0.45f);
+            shadow.effectDistance = new Vector2(1.5f, -1.5f);
             return text;
+        }
+
+        /// <summary>A rect stretched over its parent with a margin on every side.</summary>
+        public static RectTransform Inset(string name, Transform parent, float margin)
+        {
+            var rt = NewRect(name, parent, Vector2.zero, new Vector2(0.5f, 0.5f), Vector2.zero, Vector2.zero);
+            rt.anchorMin = Vector2.zero;
+            rt.anchorMax = Vector2.one;
+            rt.offsetMin = new Vector2(margin, margin);
+            rt.offsetMax = new Vector2(-margin, -margin);
+            return rt;
+        }
+
+        /// <summary>An icon sprite in a square, tinted.</summary>
+        public static Image AddIcon(RectTransform parent, Sprite icon, Vector2 position, float size, Color colour,
+            Vector2? anchor = null)
+        {
+            var a = anchor ?? new Vector2(0.5f, 0.5f);
+            var rt = NewRect("Icon", parent, a, new Vector2(0.5f, 0.5f), position, new Vector2(size, size));
+            var image = AddImage(rt, icon, colour);
+            image.preserveAspect = true;
+            return image;
         }
 
         /// <summary>Stretches a RectTransform over its whole parent.</summary>
@@ -104,10 +134,9 @@ namespace Oxfall.Game.UI
             return Sprite.Create(texture, new Rect(0, 0, size, size), new Vector2(0.5f, 0.5f), 100f);
         }
 
-        private static Sprite MakeRounded()
+        /// <param name="ring">0 for a filled shape, else the width of an outline in texture pixels.</param>
+        private static Sprite MakeRounded(int size, float radius, float ring)
         {
-            const int size = 64;
-            const float radius = 22f;
             var texture = new Texture2D(size, size, TextureFormat.RGBA32, false)
             {
                 wrapMode = TextureWrapMode.Clamp,
@@ -120,12 +149,15 @@ namespace Oxfall.Game.UI
                 float px = Mathf.Clamp(x + 0.5f, radius, size - radius);
                 float py = Mathf.Clamp(y + 0.5f, radius, size - radius);
                 float d = Vector2.Distance(new Vector2(x + 0.5f, y + 0.5f), new Vector2(px, py));
-                pixels[y * size + x] = new Color(1f, 1f, 1f, Mathf.Clamp01(radius - d));
+                float alpha = Mathf.Clamp01(radius - d);
+                if (ring > 0f) alpha *= Mathf.Clamp01(d - (radius - ring) + 0.5f);
+                pixels[y * size + x] = new Color(1f, 1f, 1f, alpha);
             }
             texture.SetPixels32(pixels);
             texture.Apply(false, true);
+            float border = radius + 2f;
             return Sprite.Create(texture, new Rect(0, 0, size, size), new Vector2(0.5f, 0.5f), 100f, 0,
-                SpriteMeshType.FullRect, new Vector4(radius + 2, radius + 2, radius + 2, radius + 2));
+                SpriteMeshType.FullRect, new Vector4(border, border, border, border));
         }
     }
 }

@@ -52,6 +52,11 @@ namespace Oxfall.Game
         private float _respawnTimer;
         private float _vitalsTimer;
         private bool _warnedHungry, _warnedThirsty;
+        // How many of each item the player had, to show what was just picked up or made.
+        private readonly System.Collections.Generic.Dictionary<string, int> _owned =
+            new System.Collections.Generic.Dictionary<string, int>();
+        private readonly System.Collections.Generic.Dictionary<string, int> _counting =
+            new System.Collections.Generic.Dictionary<string, int>();
 
         /// <summary>
         /// Runs on its own once the first scene has loaded. No scene object or reference is needed,
@@ -102,6 +107,7 @@ namespace Oxfall.Game
             _gatherer = gatherer;
 
             _hud = Hud.Create();
+            _hud.HeadingSource = player.Head;
             var controls = _hud.gameObject.AddComponent<TouchControls>();
             controls.Init(input, _hud);
 
@@ -109,7 +115,12 @@ namespace Oxfall.Game
             _inventoryUi = new InventoryUi(_hud, _inventory, _hotbar);
             controls.SlotKey += slot => _hotbar.Select(slot);
             controls.InventoryKey += _inventoryUi.Toggle;
-            ItemIcons.Render(models, _world.Sun).Ready += _inventoryUi.Refresh;
+            ItemIcons.Render(models, _world.Sun).Ready += () =>
+            {
+                _inventoryUi.Refresh();
+                _hud.RefreshCraftPanel();
+                OnHeldChanged();
+            };
 
             // Sounds, all made at start-up.
             var audio = GameAudio.Create(playerObject.transform, _world.Shape);
@@ -133,18 +144,23 @@ namespace Oxfall.Game
             _grass = grass;
 
             _quality = new GraphicsQuality(camera, _world.Sun, grass, materials.Ground);
-            _hud.SetQualityLabel(GraphicsQuality.Name(_quality.Tier));
+            _hud.SetQuality((int)_quality.Tier);
             controls.QualityTapped += () =>
             {
                 _quality.Next();
-                _hud.SetQualityLabel(GraphicsQuality.Name(_quality.Tier));
+                _hud.SetQuality((int)_quality.Tier);
+                _hud.ShowToast("Gráficos: " + GraphicsQuality.Name(_quality.Tier));
+            };
+            _hud.QualityChosen += tier =>
+            {
+                SetQuality((QualityTier)tier);
                 _hud.ShowToast("Gráficos: " + GraphicsQuality.Name(_quality.Tier));
             };
 
             gatherer.Message += message =>
             {
                 _hud.ShowToast(message);
-                Debug.Log("[Oxfall] Gathered " + message);
+                Debug.Log("[Oxfall] Gatherer: " + message);
             };
             // Crafting: the Core queue takes the ingredients up front and hands the item over when done.
             _recipes = RecipeBook.CreateDefault(_catalog);
@@ -155,12 +171,12 @@ namespace Oxfall.Game
                 var made = _catalog.Get(recipe.OutputItemId);
                 bool onBar = false;
                 for (int i = 0; i < Inventory.HotbarSize; i++) onBar |= _inventory[i].ItemId == made.Id;
-                _hud.ShowToast("Fabricado: " + made.DisplayName + (onBar && made.Category != ItemCategory.Resource
-                    ? " (tócalo en la barra para usarlo)" : ""));
+                if (onBar && made.Category != ItemCategory.Resource)
+                    _hud.ShowToast(made.DisplayName + ": tócalo en la barra para usarlo");
                 Debug.Log("[Oxfall] Crafted " + made.DisplayName);
             };
             _crafting.Overflow = (itemId, amount) => _hud.ShowToast("Inventario lleno");
-            _hud.BuildCraftPanel(_recipes, _catalog, _inventory, TryCraft);
+            _hud.BuildCraftPanel(_recipes, _catalog, _inventory, _crafting, TryCraft);
 
             // Building: the Core grid holds what stands where and BuildingViews draws it. The plan in
             // hand places twig pieces, the hammer upgrades and demolishes them, a door in hand hangs it.
@@ -198,12 +214,12 @@ namespace Oxfall.Game
 
             _inventory.Changed += _ =>
             {
-                _hud.RefreshResources(_inventory, _catalog);
+                ShowPickups();
                 _hud.RefreshCraftPanel();
                 OnHeldChanged();
             };
             _hotbar.SelectionChanged += _ => OnHeldChanged();
-            _hud.RefreshResources(_inventory, _catalog);
+            CountOwned(_owned);
             _hud.ShowToast("Bienvenido a Oxfall: golpea árboles y rocas");
         }
 
@@ -225,8 +241,43 @@ namespace Oxfall.Game
             if (fire) _campfires.SetActive(true);
             if (hammer) { _hammer.SetActive(true); _hammer.Refresh(); }
             if (door) _doorPlacer.SetActive(true);
-            bool food = _hotbar.HeldDefinition?.Category == ItemCategory.Food;
+            var held = _hotbar.HeldDefinition;
+            bool food = held?.Category == ItemCategory.Food;
             _hud.SetAttackLabel(plan || fire || door ? "COLOCAR" : hammer ? "MEJORAR" : food ? "COMER" : "GOLPEAR");
+            _hud.SetAttackIcon(held != null ? ItemIcons.Get(held.Id) : null);
+        }
+
+        /// <summary>Adds up what the inventory holds, item by item.</summary>
+        private void CountOwned(System.Collections.Generic.Dictionary<string, int> counts)
+        {
+            counts.Clear();
+            for (int i = 0; i < _inventory.SlotCount; i++)
+            {
+                var stack = _inventory[i];
+                if (stack.IsEmpty) continue;
+                counts.TryGetValue(stack.ItemId, out int n);
+                counts[stack.ItemId] = n + stack.Amount;
+            }
+        }
+
+        /// <summary>
+        /// After the inventory changes: everything there is more of than before goes in the pickup
+        /// feed (gathered, crafted, refunded). Moving items between slots changes no totals.
+        /// </summary>
+        private void ShowPickups()
+        {
+            CountOwned(_counting);
+            foreach (var pair in _counting)
+            {
+                _owned.TryGetValue(pair.Key, out int before);
+                if (pair.Value <= before) continue;
+                int gained = pair.Value - before;
+                var def = _catalog.Get(pair.Key);
+                _hud.ShowPickup(pair.Key, ItemIcons.Get(pair.Key), gained, def.DisplayName);
+                Debug.Log($"[Oxfall] Gathered +{gained} {def.DisplayName}");
+            }
+            _owned.Clear();
+            foreach (var pair in _counting) _owned[pair.Key] = pair.Value;
         }
 
         private void OnDied()
@@ -450,7 +501,7 @@ namespace Oxfall.Game
         private void SetQuality(QualityTier tier)
         {
             _quality.Apply(tier);
-            _hud.SetQualityLabel(GraphicsQuality.Name(tier));
+            _hud.SetQuality((int)tier);
         }
 
         /// <summary>Stands the player a step from the nearest resource of a kind, looking at it.</summary>
@@ -556,6 +607,7 @@ namespace Oxfall.Game
         private void Update()
         {
             TickVitals(Time.deltaTime);
+            _vitalsUi?.Tick();
 
             // Trees and rocks grow back on their own timers; checking once a second is plenty.
             _crafting?.Tick(Time.deltaTime);

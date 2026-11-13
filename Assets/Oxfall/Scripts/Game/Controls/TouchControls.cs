@@ -49,7 +49,6 @@ namespace Oxfall.Game.Controls
             _input = input;
             _hud = hud;
             UnityEngine.Input.multiTouchEnabled = true;
-            _hud.TapTargets.Add(new Hud.TapTarget { Rect = _hud.QualityButton, OnTap = () => QualityTapped?.Invoke() });
         }
 
         private void Update()

@@ -1,5 +1,4 @@
 using System.Collections.Generic;
-using System.Text;
 using Oxfall.Core.Crafting;
 using Oxfall.Core.Items;
 using UnityEngine;
@@ -8,30 +7,43 @@ using UnityEngine.UI;
 namespace Oxfall.Game.UI
 {
     /// <summary>
-    /// The on-screen layer: joystick, buttons, resource counts, FPS and short messages. Built in
-    /// code over the phone's safe area (clear of notches and rounded corners).
+    /// The on-screen layer, built in code over the phone's safe area (clear of notches and rounded
+    /// corners). Kept to what a survivor needs at a glance, the way the PC game does it: a compass
+    /// and the clock up top, vitals in a corner, the belt along the bottom, pickups sliding in at
+    /// the side, and the thumb controls. Everything else lives in panels opened on demand.
     /// </summary>
     public sealed class Hud : MonoBehaviour
     {
         public const float JoystickRadius = 130f;
 
-        // The warm dark panels and rust accent of the style mock-up.
-        internal static readonly Color Panel = new Color(0.08f, 0.063f, 0.05f, 0.62f);
-        internal static readonly Color Soft = new Color(0.10f, 0.08f, 0.06f, 0.42f);
-        internal static readonly Color Accent = new Color(0.78f, 0.39f, 0.16f, 0.88f);
-        internal static readonly Color Ready = new Color(0.40f, 0.52f, 0.26f, 0.92f);
-        internal static readonly Color Title = new Color(0.85f, 0.73f, 0.54f);
-        internal static readonly Color Muted = new Color(0.72f, 0.68f, 0.62f);
-        internal static readonly Color Sheet = new Color(0.08f, 0.063f, 0.05f, 0.9f);
+        // Kept for the panels that still use the older names.
+        internal static Color Panel => UiTheme.Panel;
+        internal static Color Soft => UiTheme.Button;
+        internal static Color Accent => UiTheme.Accent;
+        internal static Color Ready => UiTheme.GoodFill;
+        internal static Color Title => UiTheme.Text;
+        internal static Color Muted => UiTheme.TextMuted;
+        internal static Color Sheet => UiTheme.PanelSolid;
 
         private RectTransform _safeArea;
         private Rect _appliedSafeArea;
         private Text _fps;
         private Text _clock;
-        private Text _resources;
+        private Image _clockIcon;
+        private bool _clockNight;
+        private RectTransform _toastChip;
         private Text _toast;
+        private CanvasGroup _toastGroup;
         private float _toastTimer;
-        private Text _quality;
+        private RectTransform _aimChip;
+        private Text _aimInfo;
+        private RectTransform _settings;
+        private readonly Image[] _qualityButtons = new Image[3];
+        private Text _fpsToggleLabel;
+        private bool _showFps = true;
+        private Compass _compass;
+        private PickupFeed _feed;
+        private CraftUi _craft;
 
         private int _frames;
         private float _elapsed;
@@ -44,15 +56,31 @@ namespace Oxfall.Game.UI
         public Vector2 JoystickHome { get; private set; }
         public RectTransform AttackButton { get; private set; }
         public RectTransform JumpButton { get; private set; }
+        /// <summary>The settings button (top right): graphics level and the frame counter.</summary>
         public RectTransform QualityButton { get; private set; }
         public Image AttackImage { get; private set; }
         public Image JumpImage { get; private set; }
+        public RectTransform CraftButton { get; private set; }
+        public RectTransform PieceButton { get; private set; }
+        public RectTransform UseButton { get; private set; }
 
         /// <summary>The area clear of notches and rounded corners; everything on screen hangs from it.</summary>
         public RectTransform SafeArea => _safeArea;
 
+        /// <summary>Whose heading the compass shows (the player's head).</summary>
+        public Transform HeadingSource;
+
         private Text _attackLabel;
-        private Color _attackIdle = Soft;
+        private Image _attackIcon;
+        private Color _attackIdle = UiTheme.Button;
+        private Text _pieceLabel;
+        private Text _useLabel;
+
+        public event System.Action PieceTapped;
+        public event System.Action UseTapped;
+        public event System.Action CraftPanelOpened;
+        /// <summary>A graphics level was chosen in settings: 0 low, 1 medium, 2 high.</summary>
+        public event System.Action<int> QualityChosen;
 
         public static Hud Create()
         {
@@ -78,84 +106,128 @@ namespace Oxfall.Game.UI
             _safeArea = UiFactory.NewRect("Safe area", transform, Vector2.zero, new Vector2(0.5f, 0.5f), Vector2.zero, Vector2.zero);
             ApplySafeArea();
 
-            // Top left: frame rate.
-            var fps = UiFactory.NewRect("FPS", _safeArea, new Vector2(0f, 1f), new Vector2(0f, 1f), new Vector2(28f, -18f), new Vector2(420f, 44f));
-            _fps = UiFactory.AddText(fps, "", 30, TextAnchor.UpperLeft, Color.white);
-            var clock = UiFactory.NewRect("Clock", _safeArea, new Vector2(0f, 1f), new Vector2(0f, 1f), new Vector2(28f, -62f), new Vector2(420f, 44f));
-            _clock = UiFactory.AddText(clock, "", 30, TextAnchor.UpperLeft, Title);
+            var centre = new Vector2(0.5f, 0.5f);
+            var topLeft = new Vector2(0f, 1f);
+            var topRight = new Vector2(1f, 1f);
+            var bottomRight = new Vector2(1f, 0f);
 
-            // Top centre: what the player is carrying.
-            var resPanel = UiFactory.NewRect("Resources panel", _safeArea, new Vector2(0.5f, 1f), new Vector2(0.5f, 1f), new Vector2(0f, -14f), new Vector2(820f, 64f));
-            UiFactory.AddImage(resPanel, UiFactory.Rounded, Panel);
-            var res = UiFactory.NewRect("Resources", resPanel, new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), Vector2.zero, new Vector2(800f, 60f));
-            _resources = UiFactory.AddText(res, "", 32, TextAnchor.MiddleCenter, Color.white);
+            // Top left: the time of day on a small chip; the vitals hang under it (VitalsUi).
+            var clockChip = UiFactory.NewRect("Clock", _safeArea, topLeft, topLeft, new Vector2(24f, -20f), new Vector2(176f, 48f));
+            UiFactory.AddImage(clockChip, UiFactory.Soft, UiTheme.Panel);
+            _clockIcon = UiFactory.AddIcon(clockChip, Icons.Sun, new Vector2(28f, 0f), 28f, UiTheme.Food, new Vector2(0f, 0.5f));
+            var clockText = UiFactory.NewRect("Time", clockChip, new Vector2(0f, 0.5f), new Vector2(0f, 0.5f), new Vector2(54f, 0f), new Vector2(116f, 44f));
+            _clock = UiFactory.AddText(clockText, "--:--", 30, TextAnchor.MiddleLeft, UiTheme.Text, true);
 
-            // Top right: graphics quality, tap to change.
-            QualityButton = UiFactory.NewRect("Quality", _safeArea, new Vector2(1f, 1f), new Vector2(1f, 1f), new Vector2(-24f, -14f), new Vector2(300f, 70f));
-            UiFactory.AddImage(QualityButton, UiFactory.Rounded, Panel);
-            var q = UiFactory.NewRect("Label", QualityButton, new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), Vector2.zero, new Vector2(290f, 60f));
-            _quality = UiFactory.AddText(q, "", 28, TextAnchor.MiddleCenter, Color.white);
+            // Top centre: the compass.
+            _compass = Compass.Create(_safeArea);
 
-            // Centre: a small dot to aim with.
-            var dot = UiFactory.NewRect("Crosshair", _safeArea, new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), Vector2.zero, new Vector2(10f, 10f));
-            UiFactory.AddImage(dot, UiFactory.Circle, new Color(1f, 1f, 1f, 0.8f));
+            // Top right: settings, with the frame counter beside it.
+            QualityButton = UiFactory.NewRect("Settings", _safeArea, topRight, topRight, new Vector2(-24f, -20f), new Vector2(64f, 64f));
+            UiFactory.AddImage(QualityButton, UiFactory.Soft, UiTheme.Panel);
+            UiFactory.AddIcon(QualityButton, Icons.Gear, Vector2.zero, 36f, UiTheme.Text);
+            TapTargets.Add(new TapTarget { Rect = QualityButton, OnTap = ToggleSettings });
+            var fps = UiFactory.NewRect("FPS", _safeArea, topRight, topRight, new Vector2(-100f, -20f), new Vector2(260f, 64f));
+            _fps = UiFactory.AddText(fps, "", 22, TextAnchor.MiddleRight, UiTheme.TextFaint);
 
-            // Lower centre: short messages ("+15 Madera").
-            var toast = UiFactory.NewRect("Toast", _safeArea, new Vector2(0.5f, 0f), new Vector2(0.5f, 0f), new Vector2(0f, 250f), new Vector2(900f, 60f));
-            _toast = UiFactory.AddText(toast, "", 38, TextAnchor.MiddleCenter, Color.white);
+            // Right, under settings: what was just picked up or made.
+            _feed = PickupFeed.Create(_safeArea);
+
+            // Centre: a small dot to aim with, ringed so it shows on snow and sky alike.
+            var ring = UiFactory.NewRect("Crosshair ring", _safeArea, centre, centre, Vector2.zero, new Vector2(12f, 12f));
+            UiFactory.AddImage(ring, UiFactory.Circle, new Color(0f, 0f, 0f, 0.35f));
+            var dot = UiFactory.NewRect("Crosshair", _safeArea, centre, centre, Vector2.zero, new Vector2(7f, 7f));
+            UiFactory.AddImage(dot, UiFactory.Circle, new Color(1f, 1f, 1f, 0.9f));
+
+            // Under the crosshair: what is aimed at (the hammer's view of a piece).
+            _aimChip = Chip("Aim info", centre, new Vector2(0f, -78f), 26, out _aimInfo);
+            _aimChip.gameObject.SetActive(false);
+
+            // Above the belt: hints and warnings.
+            _toastChip = Chip("Toast", new Vector2(0.5f, 0f), new Vector2(0f, 168f), 30, out _toast);
+            _toastChip.gameObject.AddComponent<Canvas>();
+            _toastGroup = _toastChip.gameObject.AddComponent<CanvasGroup>();
+            _toastGroup.alpha = 0f;
 
             // Bottom left: the movement stick. It follows the thumb, and rests here.
-            JoystickHome = new Vector2(300f, 270f);
-            JoystickBase = UiFactory.NewRect("Joystick", _safeArea, Vector2.zero, new Vector2(0.5f, 0.5f), JoystickHome, new Vector2(JoystickRadius * 2f, JoystickRadius * 2f));
-            UiFactory.AddImage(JoystickBase, UiFactory.Ring, new Color(0.95f, 0.92f, 0.88f, 0.5f));
-            JoystickKnob = UiFactory.NewRect("Knob", JoystickBase, new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), Vector2.zero, new Vector2(120f, 120f));
-            UiFactory.AddImage(JoystickKnob, UiFactory.Circle, new Color(0.95f, 0.92f, 0.88f, 0.45f));
+            JoystickHome = new Vector2(300f, 300f);
+            JoystickBase = UiFactory.NewRect("Joystick", _safeArea, Vector2.zero, centre, JoystickHome, new Vector2(JoystickRadius * 2f, JoystickRadius * 2f));
+            UiFactory.AddImage(JoystickBase, UiFactory.Ring, new Color(1f, 1f, 1f, 0.32f));
+            JoystickKnob = UiFactory.NewRect("Knob", JoystickBase, centre, centre, Vector2.zero, new Vector2(112f, 112f));
+            UiFactory.AddImage(JoystickKnob, UiFactory.Circle, new Color(1f, 1f, 1f, 0.38f));
 
-            // Bottom right: attack (hold to keep hitting) and jump.
-            AttackButton = UiFactory.NewRect("Attack", _safeArea, new Vector2(1f, 0f), new Vector2(0.5f, 0.5f), new Vector2(-210f, 230f), new Vector2(230f, 230f));
-            AttackImage = UiFactory.AddImage(AttackButton, UiFactory.Circle, Soft);
-            var attackLabel = UiFactory.NewRect("Label", AttackButton, new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), Vector2.zero, new Vector2(220f, 60f));
-            _attackLabel = UiFactory.AddText(attackLabel, "GOLPEAR", 34, TextAnchor.MiddleCenter, Color.white);
+            // Bottom right: attack (hold to keep hitting), with what it does under the held item.
+            AttackButton = UiFactory.NewRect("Attack", _safeArea, bottomRight, centre, new Vector2(-200f, 230f), new Vector2(220f, 220f));
+            AttackImage = UiFactory.AddImage(AttackButton, UiFactory.Circle, UiTheme.Button);
+            AddRing(AttackButton, 220f);
+            _attackIcon = UiFactory.AddIcon(AttackButton, Icons.Hand, new Vector2(0f, 18f), 92f, UiTheme.Text);
+            var attackLabel = UiFactory.NewRect("Label", AttackButton, centre, centre, new Vector2(0f, -58f), new Vector2(200f, 40f));
+            _attackLabel = UiFactory.AddText(attackLabel, "GOLPEAR", 28, TextAnchor.MiddleCenter, UiTheme.Text, true);
 
-            JumpButton = UiFactory.NewRect("Jump", _safeArea, new Vector2(1f, 0f), new Vector2(0.5f, 0.5f), new Vector2(-450f, 140f), new Vector2(160f, 160f));
-            JumpImage = UiFactory.AddImage(JumpButton, UiFactory.Circle, Soft);
-            var jumpLabel = UiFactory.NewRect("Label", JumpButton, new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), Vector2.zero, new Vector2(160f, 50f));
-            UiFactory.AddText(jumpLabel, "SALTAR", 28, TextAnchor.MiddleCenter, Color.white);
+            JumpButton = UiFactory.NewRect("Jump", _safeArea, bottomRight, centre, new Vector2(-440f, 130f), new Vector2(148f, 148f));
+            JumpImage = UiFactory.AddImage(JumpButton, UiFactory.Circle, UiTheme.Button);
+            AddRing(JumpButton, 148f);
+            UiFactory.AddIcon(JumpButton, Icons.Jump, Vector2.zero, 60f, UiTheme.Text);
 
-            // Right side, above attack: opens the crafting panel.
-            CraftButton = UiFactory.NewRect("Craft", _safeArea, new Vector2(1f, 0f), new Vector2(0.5f, 0.5f), new Vector2(-120f, 470f), new Vector2(170f, 170f));
-            UiFactory.AddImage(CraftButton, UiFactory.Circle, Soft);
-            var craftLabel = UiFactory.NewRect("Label", CraftButton, new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), Vector2.zero, new Vector2(170f, 50f));
-            UiFactory.AddText(craftLabel, "FABRICAR", 24, TextAnchor.MiddleCenter, Color.white);
+            // Above attack: crafting.
+            CraftButton = UiFactory.NewRect("Craft", _safeArea, bottomRight, centre, new Vector2(-118f, 456f), new Vector2(132f, 132f));
+            UiFactory.AddImage(CraftButton, UiFactory.Circle, UiTheme.Button);
+            AddRing(CraftButton, 132f);
+            UiFactory.AddIcon(CraftButton, Icons.Hammer, new Vector2(0f, 10f), 56f, UiTheme.Text);
+            var craftLabel = UiFactory.NewRect("Label", CraftButton, centre, centre, new Vector2(0f, -38f), new Vector2(130f, 30f));
+            UiFactory.AddText(craftLabel, "FABRICAR", 20, TextAnchor.MiddleCenter, UiTheme.TextMuted, true);
             TapTargets.Add(new TapTarget { Rect = CraftButton, OnTap = ToggleCraftPanel });
 
-            // Above attack, only in building mode: which piece to build. Attack places it.
-            var centre = new Vector2(0.5f, 0.5f);
-            PieceButton = UiFactory.NewRect("Piece", _safeArea, new Vector2(1f, 0f), centre, new Vector2(-400f, 410f), new Vector2(320f, 90f));
-            UiFactory.AddImage(PieceButton, UiFactory.Rounded, Panel);
-            var pieceLabel = UiFactory.NewRect("Label", PieceButton, centre, centre, Vector2.zero, new Vector2(310f, 60f));
-            _pieceLabel = UiFactory.AddText(pieceLabel, "", 26, TextAnchor.MiddleCenter, Color.white);
+            // Above attack, while placing or with the hammer: the next piece, or DEMOLER.
+            PieceButton = UiFactory.NewRect("Piece", _safeArea, bottomRight, centre, new Vector2(-400f, 400f), new Vector2(300f, 76f));
+            UiFactory.AddImage(PieceButton, UiFactory.Rounded, UiTheme.Panel);
+            var pieceLabel = UiFactory.NewRect("Label", PieceButton, centre, centre, Vector2.zero, new Vector2(290f, 60f));
+            _pieceLabel = UiFactory.AddText(pieceLabel, "", 28, TextAnchor.MiddleCenter, UiTheme.Text, true);
             TapTargets.Add(new TapTarget { Rect = PieceButton, OnTap = () => PieceTapped?.Invoke() });
-
             PieceButton.gameObject.SetActive(false);
 
             // Left of jump, only while looking at something to use (a door): ABRIR or CERRAR.
-            UseButton = UiFactory.NewRect("Use", _safeArea, new Vector2(1f, 0f), centre, new Vector2(-680f, 230f), new Vector2(180f, 180f));
-            UiFactory.AddImage(UseButton, UiFactory.Circle, Soft);
-            var useLabel = UiFactory.NewRect("Label", UseButton, centre, centre, Vector2.zero, new Vector2(180f, 50f));
-            _useLabel = UiFactory.AddText(useLabel, "", 30, TextAnchor.MiddleCenter, Color.white);
+            UseButton = UiFactory.NewRect("Use", _safeArea, bottomRight, centre, new Vector2(-660f, 220f), new Vector2(160f, 160f));
+            UiFactory.AddImage(UseButton, UiFactory.Circle, UiTheme.Accent.WithAlpha(0.85f));
+            UiFactory.AddIcon(UseButton, Icons.Door, new Vector2(0f, 16f), 58f, Color.white);
+            var useLabel = UiFactory.NewRect("Label", UseButton, centre, centre, new Vector2(0f, -40f), new Vector2(160f, 36f));
+            _useLabel = UiFactory.AddText(useLabel, "", 26, TextAnchor.MiddleCenter, Color.white, true);
             TapTargets.Add(new TapTarget { Rect = UseButton, OnTap = () => UseTapped?.Invoke() });
             UseButton.gameObject.SetActive(false);
 
-            // Under the crosshair: what is aimed at, and what the hammer would do to it.
-            var aim = UiFactory.NewRect("Aim info", _safeArea, centre, centre, new Vector2(0f, -86f), new Vector2(1100f, 50f));
-            _aimInfo = UiFactory.AddText(aim, "", 28, TextAnchor.MiddleCenter, Color.white);
+            BuildSettings();
+        }
+
+        // ---- Small pieces
+
+        /// <summary>A dark rounded chip that grows to fit its one line of text.</summary>
+        private RectTransform Chip(string name, Vector2 anchor, Vector2 position, int size, out Text text)
+        {
+            var chip = UiFactory.NewRect(name, _safeArea, anchor, new Vector2(0.5f, 0.5f), position, new Vector2(200f, size + 22f));
+            UiFactory.AddImage(chip, UiFactory.Rounded, UiTheme.Panel);
+            var layout = chip.gameObject.AddComponent<HorizontalLayoutGroup>();
+            layout.padding = new RectOffset(26, 26, 8, 8);
+            layout.childAlignment = TextAnchor.MiddleCenter;
+            layout.childControlWidth = true;
+            layout.childControlHeight = true;
+            var fitter = chip.gameObject.AddComponent<ContentSizeFitter>();
+            fitter.horizontalFit = ContentSizeFitter.FitMode.PreferredSize;
+            fitter.verticalFit = ContentSizeFitter.FitMode.PreferredSize;
+            var label = UiFactory.NewRect("Text", chip, new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), Vector2.zero, Vector2.zero);
+            text = UiFactory.AddText(label, "", size, TextAnchor.MiddleCenter, UiTheme.Text);
+            return chip;
+        }
+
+        /// <summary>A faint ring around a round button, so it reads over bright ground too.</summary>
+        private static void AddRing(RectTransform button, float size)
+        {
+            var ring = UiFactory.NewRect("Ring", button, new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), Vector2.zero, new Vector2(size, size));
+            UiFactory.AddImage(ring, UiFactory.Ring, new Color(1f, 1f, 1f, 0.22f));
         }
 
         public void SetPressed(Image image, bool pressed)
         {
             // Only on change: touching a graphic's colour makes its canvas rebuild.
-            var target = pressed ? Accent : image == AttackImage ? _attackIdle : Soft;
+            var target = pressed ? UiTheme.ButtonPressed : image == AttackImage ? _attackIdle : UiTheme.Button;
             if (image.color != target) image.color = target;
         }
 
@@ -183,15 +255,7 @@ namespace Oxfall.Game.UI
             return false;
         }
 
-        public event System.Action PieceTapped;
-        public event System.Action UseTapped;
-        public event System.Action CraftPanelOpened;
-
-        public RectTransform PieceButton { get; private set; }
-        public RectTransform UseButton { get; private set; }
-        private Text _pieceLabel;
-        private Text _useLabel;
-        private Text _aimInfo;
+        // ---- Buttons that change with what is in hand
 
         /// <summary>The button above attack with this label (DEMOLER, "Pieza: Pared"), or hidden for null.</summary>
         public void SetPieceButton(string label)
@@ -209,11 +273,12 @@ namespace Oxfall.Game.UI
             if (show && _useLabel.text != label) _useLabel.text = label;
         }
 
-        /// <summary>A line under the crosshair about what is aimed at; empty or null clears it.</summary>
+        /// <summary>A line under the crosshair about what is aimed at; empty or null hides it.</summary>
         public void SetAimInfo(string text)
         {
-            text = text ?? "";
-            if (_aimInfo.text != text) _aimInfo.text = text;
+            bool show = !string.IsNullOrEmpty(text);
+            if (_aimChip.gameObject.activeSelf != show) _aimChip.gameObject.SetActive(show);
+            if (show && _aimInfo.text != text) _aimInfo.text = text;
         }
 
         /// <summary>
@@ -222,131 +287,156 @@ namespace Oxfall.Game.UI
         /// </summary>
         public void SetBuildMode(bool on, string pieceName)
         {
-            SetPieceButton(on && pieceName != null ? "Pieza: " + pieceName : null);
+            SetPieceButton(on && pieceName != null ? "PIEZA: " + pieceName.ToUpperInvariant() : null);
             if (!on) SetPlaceValid(false);
         }
 
-        /// <summary>What the attack button does with what is in hand: GOLPEAR, COLOCAR or COMER.</summary>
+        /// <summary>What the attack button does with what is in hand: GOLPEAR, COLOCAR, COMER, MEJORAR.</summary>
         public void SetAttackLabel(string label) => _attackLabel.text = label;
+
+        /// <summary>The picture on the attack button: the held item's icon, or an open hand.</summary>
+        public void SetAttackIcon(Sprite icon)
+        {
+            var sprite = icon != null ? icon : Icons.Hand;
+            if (_attackIcon.sprite != sprite) _attackIcon.sprite = sprite;
+            // Item icons are full-colour pictures; the hand is a white pictogram.
+            _attackIcon.color = icon != null ? Color.white : UiTheme.Text;
+            _attackIcon.rectTransform.sizeDelta = icon != null ? new Vector2(118f, 118f) : new Vector2(92f, 92f);
+        }
 
         /// <summary>Greens the attack button (COLOCAR) while the piece fits where it is aimed.</summary>
         public void SetPlaceValid(bool valid)
         {
-            _attackIdle = valid ? Ready : Soft;
-            if (AttackImage.color != Accent && AttackImage.color != _attackIdle) AttackImage.color = _attackIdle;
+            _attackIdle = valid ? UiTheme.GoodFill : UiTheme.Button;
+            if (AttackImage.color != UiTheme.ButtonPressed && AttackImage.color != _attackIdle) AttackImage.color = _attackIdle;
         }
 
-        public RectTransform CraftButton { get; private set; }
-        public RectTransform CraftPanel { get; private set; }
-        public bool CraftPanelOpen => CraftPanel != null && CraftPanel.gameObject.activeSelf;
+        // ---- Crafting (the panel itself is CraftUi)
 
-        private readonly List<Recipe> _craftRecipes = new List<Recipe>();
-        private readonly List<Image> _craftButtons = new List<Image>();
-        private Inventory _craftInventory;
+        public RectTransform CraftPanel => _craft?.Panel;
+        public bool CraftPanelOpen => _craft != null && _craft.IsOpen;
 
-        /// <summary>The crafting panel: one row per recipe with what it costs and a button to make it.</summary>
-        public void BuildCraftPanel(RecipeBook book, ItemCatalog catalog, Inventory inventory, System.Action<Recipe> onCraft)
+        public void BuildCraftPanel(RecipeBook book, ItemCatalog catalog, Inventory inventory, CraftingQueue queue,
+            System.Action<Recipe> onCraft)
         {
-            _craftInventory = inventory;
-            var half = new Vector2(0.5f, 0.5f);
-            var topLeft = new Vector2(0f, 1f);
-            var topRight = new Vector2(1f, 1f);
-            const float rowHeight = 96f;
-
-            CraftPanel = UiFactory.NewRect("Craft panel", _safeArea, half, half, new Vector2(0f, 20f),
-                new Vector2(1040f, 120f + book.All.Count * rowHeight));
-            UiFactory.AddImage(CraftPanel, UiFactory.Rounded, Sheet);
-            Blockers.Add(CraftPanel);
-
-            var title = UiFactory.NewRect("Title", CraftPanel, new Vector2(0.5f, 1f), new Vector2(0.5f, 1f), new Vector2(0f, -22f), new Vector2(600f, 60f));
-            UiFactory.AddText(title, "FABRICAR", 40, TextAnchor.MiddleCenter, Title);
-
-            var close = UiFactory.NewRect("Close", CraftPanel, topRight, topRight, new Vector2(-18f, -18f), new Vector2(84f, 72f));
-            UiFactory.AddImage(close, UiFactory.Rounded, Soft);
-            var closeLabel = UiFactory.NewRect("Label", close, half, half, Vector2.zero, new Vector2(80f, 60f));
-            UiFactory.AddText(closeLabel, "X", 36, TextAnchor.MiddleCenter, Color.white);
-            TapTargets.Add(new TapTarget { Rect = close, OnTap = ToggleCraftPanel });
-
-            for (int i = 0; i < book.All.Count; i++)
-            {
-                var recipe = book.All[i];
-                float y = -110f - i * rowHeight;
-
-                var nameRect = UiFactory.NewRect("Name", CraftPanel, topLeft, topLeft, new Vector2(36f, y), new Vector2(380f, 80f));
-                UiFactory.AddText(nameRect, catalog.Get(recipe.OutputItemId).DisplayName, 32, TextAnchor.MiddleLeft, Color.white);
-
-                var cost = new StringBuilder();
-                foreach (var ingredient in recipe.Ingredients)
-                {
-                    if (cost.Length > 0) cost.Append(" + ");
-                    cost.Append(ingredient.Amount).Append(' ').Append(catalog.Get(ingredient.ItemId).DisplayName);
-                }
-                var costRect = UiFactory.NewRect("Cost", CraftPanel, topLeft, topLeft, new Vector2(420f, y), new Vector2(400f, 80f));
-                UiFactory.AddText(costRect, cost.ToString(), 26, TextAnchor.MiddleLeft, Muted);
-
-                var button = UiFactory.NewRect("Make", CraftPanel, topRight, topRight, new Vector2(-30f, y - 4f), new Vector2(190f, 72f));
-                _craftButtons.Add(UiFactory.AddImage(button, UiFactory.Rounded, Soft));
-                var label = UiFactory.NewRect("Label", button, half, half, Vector2.zero, new Vector2(180f, 60f));
-                UiFactory.AddText(label, "HACER", 30, TextAnchor.MiddleCenter, Color.white);
-
-                _craftRecipes.Add(recipe);
-                TapTargets.Add(new TapTarget { Rect = button, OnTap = () => onCraft(recipe) });
-            }
-
-            CraftPanel.gameObject.SetActive(false);
+            _craft = new CraftUi(this, book, catalog, inventory, queue, onCraft);
         }
 
         public void ToggleCraftPanel()
         {
-            if (CraftPanel == null) return;
-            bool open = !CraftPanel.gameObject.activeSelf;
-            CraftPanel.gameObject.SetActive(open);
+            if (_craft == null) return;
+            bool open = !_craft.IsOpen;
+            if (open) CloseSettings();
+            _craft.SetOpen(open);
             if (open) CraftPanelOpened?.Invoke();
-            RefreshCraftPanel();
         }
 
-        public void CloseCraftPanel()
-        {
-            if (CraftPanelOpen) CraftPanel.gameObject.SetActive(false);
-        }
+        public void CloseCraftPanel() => _craft?.SetOpen(false);
 
-        /// <summary>Greens the button of every recipe the player can afford right now.</summary>
-        public void RefreshCraftPanel()
+        /// <summary>Redraws what can be afforded (after the inventory changes).</summary>
+        public void RefreshCraftPanel() => _craft?.Refresh();
+
+        // ---- Settings
+
+        private void BuildSettings()
         {
-            if (!CraftPanelOpen) return;
-            for (int i = 0; i < _craftRecipes.Count; i++)
+            var centre = new Vector2(0.5f, 0.5f);
+            var top = new Vector2(0.5f, 1f);
+            _settings = UiFactory.NewRect("Settings panel", _safeArea, centre, centre, new Vector2(0f, 20f), new Vector2(720f, 400f));
+            UiFactory.AddImage(_settings, UiFactory.Rounded, UiTheme.PanelSolid);
+            Blockers.Add(_settings);
+
+            var title = UiFactory.NewRect("Title", _settings, new Vector2(0f, 1f), new Vector2(0f, 1f), new Vector2(40f, -28f), new Vector2(400f, 50f));
+            UiFactory.AddText(title, "AJUSTES", 40, TextAnchor.MiddleLeft, UiTheme.Text, true);
+            CloseButton(_settings, CloseSettings);
+
+            var graphics = UiFactory.NewRect("Graphics", _settings, new Vector2(0f, 1f), new Vector2(0f, 1f), new Vector2(40f, -118f), new Vector2(400f, 40f));
+            UiFactory.AddText(graphics, "GRÁFICOS", 26, TextAnchor.MiddleLeft, UiTheme.TextMuted, true);
+            string[] names = { "BAJO", "MEDIO", "ALTO" };
+            for (int i = 0; i < 3; i++)
             {
-                var target = _craftRecipes[i].CanAfford(_craftInventory) ? Ready : Soft;
-                if (_craftButtons[i].color != target) _craftButtons[i].color = target;
+                int tier = i;
+                var b = UiFactory.NewRect(names[i], _settings, top, top, new Vector2(-212f + i * 212f, -200f), new Vector2(200f, 76f));
+                _qualityButtons[i] = UiFactory.AddImage(b, UiFactory.Soft, UiTheme.Slot);
+                var l = UiFactory.NewRect("Label", b, centre, centre, Vector2.zero, new Vector2(190f, 60f));
+                UiFactory.AddText(l, names[i], 28, TextAnchor.MiddleCenter, UiTheme.Text, true);
+                TapTargets.Add(new TapTarget { Rect = b, OnTap = () => QualityChosen?.Invoke(tier) });
             }
+
+            var fpsRow = UiFactory.NewRect("FPS row", _settings, new Vector2(0f, 1f), new Vector2(0f, 1f), new Vector2(40f, -300f), new Vector2(400f, 40f));
+            UiFactory.AddText(fpsRow, "MOSTRAR FPS", 26, TextAnchor.MiddleLeft, UiTheme.TextMuted, true);
+            var toggle = UiFactory.NewRect("FPS toggle", _settings, new Vector2(1f, 1f), new Vector2(1f, 1f), new Vector2(-40f, -282f), new Vector2(200f, 76f));
+            UiFactory.AddImage(toggle, UiFactory.Soft, UiTheme.Slot);
+            var tl = UiFactory.NewRect("Label", toggle, centre, centre, Vector2.zero, new Vector2(190f, 60f));
+            _fpsToggleLabel = UiFactory.AddText(tl, "SÍ", 28, TextAnchor.MiddleCenter, UiTheme.Text, true);
+            TapTargets.Add(new TapTarget
+            {
+                Rect = toggle,
+                OnTap = () =>
+                {
+                    _showFps = !_showFps;
+                    _fpsToggleLabel.text = _showFps ? "SÍ" : "NO";
+                    _fps.text = "";
+                },
+            });
+            _settings.gameObject.SetActive(false);
         }
 
-        public void SetQualityLabel(string tierName) => _quality.text = "Gráficos: " + tierName;
+        /// <summary>The round X in a panel's top right corner.</summary>
+        internal void CloseButton(RectTransform panel, System.Action onTap)
+        {
+            var topRight = new Vector2(1f, 1f);
+            var close = UiFactory.NewRect("Close", panel, topRight, topRight, new Vector2(-20f, -20f), new Vector2(68f, 68f));
+            UiFactory.AddImage(close, UiFactory.Soft, UiTheme.Slot);
+            UiFactory.AddIcon(close, Icons.Close, Vector2.zero, 30f, UiTheme.Text);
+            TapTargets.Add(new TapTarget { Rect = close, OnTap = onTap });
+        }
 
-        public void SetClock(string text) => _clock.text = text;
+        private void ToggleSettings()
+        {
+            bool open = !_settings.gameObject.activeSelf;
+            if (open) CloseCraftPanel();
+            _settings.gameObject.SetActive(open);
+        }
 
+        private void CloseSettings() => _settings.gameObject.SetActive(false);
+
+        /// <summary>Marks the current graphics level in settings (0 low, 1 medium, 2 high).</summary>
+        public void SetQuality(int tier)
+        {
+            for (int i = 0; i < _qualityButtons.Length; i++)
+                _qualityButtons[i].color = i == tier ? UiTheme.Accent.WithAlpha(0.9f) : UiTheme.Slot;
+        }
+
+        public void SetQualityLabel(string tierName) { }
+
+        // ---- Status
+
+        /// <summary>The clock, as DayNight words it ("Día 09:30", "Noche 22:10").</summary>
+        public void SetClock(string text)
+        {
+            bool night = text.StartsWith("Noche");
+            int space = text.IndexOf(' ');
+            _clock.text = space >= 0 ? text.Substring(space + 1) : text;
+            if (night == _clockNight && _clockIcon.sprite != null) return;
+            _clockNight = night;
+            _clockIcon.sprite = night ? Icons.Moon : Icons.Sun;
+            _clockIcon.color = night ? new Color(0.72f, 0.8f, 1f) : UiTheme.Food;
+        }
+
+        /// <summary>A hint or a warning above the belt, for a moment.</summary>
         public void ShowToast(string message)
         {
             _toast.text = message;
-            _toastTimer = 1.6f;
-            _toast.color = Color.white;
+            _toastTimer = 2.2f;
+            _toastGroup.alpha = 1f;
         }
 
-        public void RefreshResources(Inventory inventory, ItemCatalog catalog)
-        {
-            var sb = new StringBuilder();
-            Append(sb, inventory, catalog, ItemIds.Wood);
-            Append(sb, inventory, catalog, ItemIds.Stone);
-            Append(sb, inventory, catalog, ItemIds.MetalOre);
-            Append(sb, inventory, catalog, ItemIds.Cloth);
-            _resources.text = sb.ToString();
-        }
-
-        private static void Append(StringBuilder sb, Inventory inventory, ItemCatalog catalog, string id)
-        {
-            if (sb.Length > 0) sb.Append("     ");
-            sb.Append(catalog.Get(id).DisplayName).Append(' ').Append(inventory.Count(id));
-        }
+        /// <summary>
+        /// Items picked up, made or given back: slide in at the side with their icon. The same item
+        /// again while its line still shows adds to that line.
+        /// </summary>
+        public void ShowPickup(string key, Sprite icon, int amount, string name) => _feed.Add(key, icon, amount, name);
 
         private void Update()
         {
@@ -360,9 +450,10 @@ namespace Oxfall.Game.UI
             if (dt > _worstFrame) _worstFrame = dt;
             if (_elapsed >= 0.5f)
             {
-                _fps.text = $"{Mathf.RoundToInt(_frames / _elapsed)} FPS   peor {Mathf.RoundToInt(_worstFrame * 1000f)} ms";
+                string fps = $"{Mathf.RoundToInt(_frames / _elapsed)} FPS · {Mathf.RoundToInt(_worstFrame * 1000f)} ms";
+                if (_showFps) _fps.text = fps;
                 // Every 5 s into the log too, so automated runs can read the frame rate.
-                if (++_windows % 10 == 0) Debug.Log("[Oxfall] " + _fps.text);
+                if (++_windows % 10 == 0) Debug.Log("[Oxfall] " + fps);
                 _frames = 0;
                 _elapsed = 0f;
                 _worstFrame = 0f;
@@ -371,10 +462,12 @@ namespace Oxfall.Game.UI
             if (_toastTimer > 0f)
             {
                 _toastTimer -= dt;
-                var c = _toast.color;
-                c.a = Mathf.Clamp01(_toastTimer / 0.4f);
-                _toast.color = c;
+                _toastGroup.alpha = Mathf.Clamp01(_toastTimer / 0.4f);
             }
+
+            if (HeadingSource != null) _compass.SetHeading(HeadingSource.eulerAngles.y);
+            _feed.Tick(dt);
+            _craft?.Tick();
         }
 
         private void ApplySafeArea()
@@ -386,6 +479,175 @@ namespace Oxfall.Game.UI
             _safeArea.anchorMax = new Vector2(area.xMax / Screen.width, area.yMax / Screen.height);
             _safeArea.offsetMin = Vector2.zero;
             _safeArea.offsetMax = Vector2.zero;
+        }
+    }
+
+    /// <summary>
+    /// A strip across the top of the screen: the heading in degrees in the middle, cardinal letters
+    /// and ticks sliding past as the player turns. On its own canvas, so turning redraws only it.
+    /// </summary>
+    public sealed class Compass
+    {
+        private const float Width = 560f;
+        private const float PixelsPerDegree = 4f;
+        private readonly List<RectTransform> _marks = new List<RectTransform>();
+        private readonly List<float> _angles = new List<float>();
+        private Text _degrees;
+        private float _shown = float.NaN;
+
+        public static Compass Create(RectTransform parent)
+        {
+            var c = new Compass();
+            var top = new Vector2(0.5f, 1f);
+            var root = UiFactory.NewRect("Compass", parent, top, top, new Vector2(0f, -18f), new Vector2(Width, 74f));
+            root.gameObject.AddComponent<Canvas>();
+            var strip = UiFactory.NewRect("Strip", root, top, top, Vector2.zero, new Vector2(Width, 44f));
+            UiFactory.AddImage(strip, UiFactory.Soft, UiTheme.Panel.WithAlpha(0.55f));
+            strip.gameObject.AddComponent<RectMask2D>();
+            string[] letters = { "N", "NE", "E", "SE", "S", "SO", "O", "NO" };
+            for (int a = 0; a < 360; a += 15)
+            {
+                bool major = a % 45 == 0;
+                RectTransform mark;
+                if (major)
+                {
+                    mark = UiFactory.NewRect(letters[a / 45], strip, new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), Vector2.zero, new Vector2(60f, 40f));
+                    UiFactory.AddText(mark, letters[a / 45], a % 90 == 0 ? 28 : 22, TextAnchor.MiddleCenter,
+                        a == 0 ? UiTheme.Accent : UiTheme.Text, true);
+                }
+                else
+                {
+                    mark = UiFactory.NewRect("Tick", strip, new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), Vector2.zero, new Vector2(2f, 12f));
+                    UiFactory.AddImage(mark, null, UiTheme.TextFaint);
+                }
+                c._marks.Add(mark);
+                c._angles.Add(a);
+            }
+            var pointer = UiFactory.NewRect("Pointer", root, top, top, new Vector2(0f, -40f), new Vector2(3f, 10f));
+            UiFactory.AddImage(pointer, null, UiTheme.Accent);
+            var degrees = UiFactory.NewRect("Degrees", root, top, top, new Vector2(0f, -50f), new Vector2(120f, 26f));
+            c._degrees = UiFactory.AddText(degrees, "", 20, TextAnchor.MiddleCenter, UiTheme.TextMuted, true);
+            return c;
+        }
+
+        public void SetHeading(float yaw)
+        {
+            if (!float.IsNaN(_shown) && Mathf.Abs(Mathf.DeltaAngle(_shown, yaw)) < 0.25f) return;
+            _shown = yaw;
+            float half = Width * 0.5f + 30f;
+            for (int i = 0; i < _marks.Count; i++)
+            {
+                float x = Mathf.DeltaAngle(yaw, _angles[i]) * PixelsPerDegree;
+                bool show = Mathf.Abs(x) < half;
+                if (_marks[i].gameObject.activeSelf != show) _marks[i].gameObject.SetActive(show);
+                if (show) _marks[i].anchoredPosition = new Vector2(x, 0f);
+            }
+            _degrees.text = Mathf.RoundToInt(Mathf.Repeat(yaw, 360f)).ToString();
+        }
+    }
+
+    /// <summary>
+    /// Pickups on the right edge, newest on top: an icon and "+30 Madera" that slide in, stay a few
+    /// seconds and fade. The same item picked up again while shown adds to its line.
+    /// </summary>
+    public sealed class PickupFeed
+    {
+        private const int Lines = 5;
+        private const float Stay = 3.2f;
+        private const float LineHeight = 58f;
+
+        private sealed class Line
+        {
+            public RectTransform Rect;
+            public CanvasGroup Group;
+            public Image Icon;
+            public Text Text;
+            public string Key;
+            public string Name;
+            public int Amount;
+            public float Age = 99f;
+        }
+
+        private readonly Line[] _lines = new Line[Lines];
+        private RectTransform _root;
+
+        public static PickupFeed Create(RectTransform parent)
+        {
+            var feed = new PickupFeed();
+            var topRight = new Vector2(1f, 1f);
+            feed._root = UiFactory.NewRect("Pickups", parent, topRight, topRight, new Vector2(-24f, -104f), new Vector2(380f, Lines * LineHeight));
+            feed._root.gameObject.AddComponent<Canvas>();
+            for (int i = 0; i < Lines; i++)
+            {
+                var line = new Line();
+                line.Rect = UiFactory.NewRect("Pickup", feed._root, topRight, topRight, new Vector2(0f, -i * LineHeight), new Vector2(380f, 50f));
+                line.Group = line.Rect.gameObject.AddComponent<CanvasGroup>();
+                line.Group.alpha = 0f;
+                var back = UiFactory.NewRect("Back", line.Rect, topRight, topRight, Vector2.zero, new Vector2(300f, 50f));
+                UiFactory.AddImage(back, UiFactory.Soft, UiTheme.Panel);
+                var accent = UiFactory.NewRect("Edge", back, new Vector2(1f, 0.5f), new Vector2(1f, 0.5f), Vector2.zero, new Vector2(4f, 38f));
+                UiFactory.AddImage(accent, null, UiTheme.Good);
+                line.Icon = UiFactory.AddIcon(back, null, new Vector2(30f, 0f), 42f, Color.white, new Vector2(0f, 0.5f));
+                var text = UiFactory.NewRect("Text", back, new Vector2(0f, 0.5f), new Vector2(0f, 0.5f), new Vector2(60f, 0f), new Vector2(226f, 46f));
+                line.Text = UiFactory.AddText(text, "", 26, TextAnchor.MiddleLeft, UiTheme.Text, true);
+                feed._lines[i] = line;
+            }
+            return feed;
+        }
+
+        public void Add(string key, Sprite icon, int amount, string name)
+        {
+            // Still showing: count it on the same line.
+            foreach (var line in _lines)
+            {
+                if (line.Key != key || line.Age > Stay) continue;
+                line.Amount += amount;
+                line.Text.text = "+" + line.Amount + " " + line.Name;
+                line.Age = 0f;
+                line.Group.alpha = 1f;
+                if (icon != null) { line.Icon.sprite = icon; line.Icon.enabled = true; }
+                return;
+            }
+            // Newest on top: everything moves down one line.
+            for (int i = Lines - 1; i > 0; i--) Copy(_lines[i - 1], _lines[i]);
+            var top = _lines[0];
+            top.Icon.sprite = icon;
+            top.Icon.enabled = icon != null;
+            top.Key = key;
+            top.Name = name;
+            top.Amount = amount;
+            top.Text.text = "+" + amount + " " + name;
+            top.Age = 0f;
+            top.Group.alpha = 1f;
+            top.Rect.anchoredPosition = new Vector2(40f, 0f);
+        }
+
+        private static void Copy(Line from, Line to)
+        {
+            to.Icon.sprite = from.Icon.sprite;
+            to.Icon.enabled = from.Icon.enabled;
+            to.Text.text = from.Text.text;
+            to.Key = from.Key;
+            to.Name = from.Name;
+            to.Amount = from.Amount;
+            to.Age = from.Age;
+            to.Rect.anchoredPosition = from.Rect.anchoredPosition;
+            to.Group.alpha = from.Group.alpha;
+        }
+
+        public void Tick(float dt)
+        {
+            for (int i = 0; i < Lines; i++)
+            {
+                var line = _lines[i];
+                if (line.Age > Stay + 0.5f) continue;
+                line.Age += dt;
+                float alpha = Mathf.Clamp01((Stay + 0.5f - line.Age) / 0.5f);
+                if (!Mathf.Approximately(line.Group.alpha, alpha)) line.Group.alpha = alpha;
+                var target = new Vector2(0f, -i * LineHeight);
+                if (line.Rect.anchoredPosition != target)
+                    line.Rect.anchoredPosition = Vector2.MoveTowards(line.Rect.anchoredPosition, target, 400f * dt);
+            }
         }
     }
 }

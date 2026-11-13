@@ -17,8 +17,9 @@ namespace Oxfall.Game.UI
         private const float Pitch = SlotSize + Gap;
         private const int Columns = Inventory.HotbarSize;
 
-        private static readonly Color Picked = new Color(0.95f, 0.86f, 0.62f, 0.95f);
-        private static readonly Color SlotBack = new Color(0.12f, 0.10f, 0.08f, 0.72f);
+        // The slot held in hand is framed in the accent; one picked up to move, in white.
+        private static Color Picked => UiTheme.Text;
+        private static Color Held => UiTheme.Accent;
 
         private readonly Hud _hud;
         private readonly Inventory _inventory;
@@ -30,6 +31,8 @@ namespace Oxfall.Game.UI
         private RectTransform _panel;
         private Text _name;
         private Text _detail;
+        private Image _bigIcon;
+        private RectTransform _art;
         private RectTransform _quickButton;
         private Text _quickLabel;
         private RectTransform _splitButton;
@@ -42,6 +45,7 @@ namespace Oxfall.Game.UI
         private sealed class SlotView
         {
             public RectTransform Rect;
+            public Image Back;
             public Image Frame;
             public Image Icon;
             public Text Label;
@@ -102,11 +106,11 @@ namespace Oxfall.Game.UI
         {
             if (_picked >= 0 && _inventory[_picked].IsEmpty) _picked = -1;
             for (int i = 0; i < _bar.Length; i++)
-                Draw(_bar[i], _inventory[i], i == _hotbar.Selected ? Hud.Accent : Color.clear);
+                Draw(_bar[i], _inventory[i], i == _hotbar.Selected ? Held : Color.clear);
             if (!IsOpen) return;
             for (int i = 0; i < _grid.Length; i++)
             {
-                var frame = i == _picked ? Picked : i == _hotbar.Selected ? Hud.Accent : Color.clear;
+                var frame = i == _picked ? Picked : i == _hotbar.Selected ? Held : Color.clear;
                 Draw(_grid[i], _inventory[i], frame);
             }
             DrawDetails();
@@ -115,6 +119,8 @@ namespace Oxfall.Game.UI
         private void Draw(SlotView view, ItemStack stack, Color frame)
         {
             if (view.Frame.color != frame) view.Frame.color = frame;
+            var back = frame == Color.clear ? UiTheme.Slot : UiTheme.SlotHover;
+            if (view.Back.color != back) view.Back.color = back;
             if (stack.IsEmpty)
             {
                 view.Icon.enabled = false;
@@ -136,6 +142,7 @@ namespace Oxfall.Game.UI
             bool any = _picked >= 0;
             _quickButton.gameObject.SetActive(any);
             _splitButton.gameObject.SetActive(any && _inventory[_picked].Amount > 1);
+            _art.gameObject.SetActive(any);
             if (!any)
             {
                 _name.text = "";
@@ -146,6 +153,9 @@ namespace Oxfall.Game.UI
             var stack = _inventory[_picked];
             var def = _inventory.Catalog.Get(stack.ItemId);
             _name.text = def.DisplayName + (stack.Amount > 1 ? "  x" + stack.Amount : "");
+            var icon = ItemIcons.Get(stack.ItemId);
+            _bigIcon.sprite = icon;
+            _bigIcon.enabled = icon != null;
             _detail.text = def.Description + "\n\nToca otra casilla para moverlo.";
             _quickLabel.text = Inventory.IsHotbarSlot(_picked) ? "A LA MOCHILA" : "A LA BARRA";
         }
@@ -182,9 +192,10 @@ namespace Oxfall.Game.UI
             // Left of the hotbar: opens the inventory. The joystick rests above it, clear of it.
             BagButton = UiFactory.NewRect("Bag", _hud.SafeArea, bottom, Vector2.zero,
                 new Vector2(-width * 0.5f - 16f - SlotSize, 16f), new Vector2(SlotSize, SlotSize));
-            UiFactory.AddImage(BagButton, UiFactory.Rounded, Hud.Panel);
-            var label = UiFactory.NewRect("Label", BagButton, new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), Vector2.zero, new Vector2(SlotSize, 50f));
-            UiFactory.AddText(label, "MOCHILA", 22, TextAnchor.MiddleCenter, Hud.Title);
+            UiFactory.AddImage(BagButton, UiFactory.Soft, UiTheme.Panel);
+            UiFactory.AddIcon(BagButton, Icons.Bag, new Vector2(0f, 12f), 58f, UiTheme.Text);
+            var label = UiFactory.NewRect("Label", BagButton, new Vector2(0.5f, 0f), new Vector2(0.5f, 0f), new Vector2(0f, 8f), new Vector2(SlotSize, 28f));
+            UiFactory.AddText(label, "MOCHILA", 20, TextAnchor.MiddleCenter, UiTheme.TextMuted, true);
             _hud.TapTargets.Add(new Hud.TapTarget { Rect = BagButton, OnTap = Toggle });
         }
 
@@ -192,7 +203,6 @@ namespace Oxfall.Game.UI
         {
             var half = new Vector2(0.5f, 0.5f);
             var topLeft = new Vector2(0f, 1f);
-            var topRight = new Vector2(1f, 1f);
             const float left = 40f, top = -100f;
             float gridWidth = Columns * Pitch - Gap;
             float detailsX = left + gridWidth + 40f;
@@ -200,17 +210,14 @@ namespace Oxfall.Game.UI
 
             _panel = UiFactory.NewRect("Inventory panel", _hud.SafeArea, half, half, new Vector2(0f, 10f),
                 new Vector2(detailsX + detailsWidth + 40f, 800f));
-            UiFactory.AddImage(_panel, UiFactory.Rounded, Hud.Sheet);
+            UiFactory.AddImage(_panel, UiFactory.Rounded, UiTheme.PanelSolid);
             _hud.Blockers.Add(_panel);
 
-            var title = UiFactory.NewRect("Title", _panel, topLeft, topLeft, new Vector2(left, -22f), new Vector2(500f, 60f));
-            UiFactory.AddText(title, "INVENTARIO", 40, TextAnchor.MiddleLeft, Hud.Title);
-
-            var close = UiFactory.NewRect("Close", _panel, topRight, topRight, new Vector2(-18f, -18f), new Vector2(84f, 72f));
-            UiFactory.AddImage(close, UiFactory.Rounded, Hud.Soft);
-            var closeLabel = UiFactory.NewRect("Label", close, half, half, Vector2.zero, new Vector2(80f, 60f));
-            UiFactory.AddText(closeLabel, "X", 36, TextAnchor.MiddleCenter, Color.white);
-            _hud.TapTargets.Add(new Hud.TapTarget { Rect = close, OnTap = Close });
+            var title = UiFactory.NewRect("Title", _panel, topLeft, topLeft, new Vector2(left, -24f), new Vector2(500f, 54f));
+            UiFactory.AddText(title, "INVENTARIO", 42, TextAnchor.MiddleLeft, UiTheme.Text, true);
+            var accent = UiFactory.NewRect("Accent", _panel, topLeft, topLeft, new Vector2(left, -80f), new Vector2(56f, 4f));
+            UiFactory.AddImage(accent, null, UiTheme.Accent);
+            _hud.CloseButton(_panel, Close);
 
             // The backpack: four rows above the hotbar row.
             int backpackRows = (_grid.Length - Inventory.HotbarSize) / Columns;
@@ -221,15 +228,22 @@ namespace Oxfall.Game.UI
             }
             float barTop = top - backpackRows * Pitch - 34f;
             var barLabel = UiFactory.NewRect("Hotbar label", _panel, topLeft, topLeft, new Vector2(left, barTop + 32f), new Vector2(gridWidth, 30f));
-            UiFactory.AddText(barLabel, "BARRA RÁPIDA", 22, TextAnchor.MiddleLeft, Hud.Muted);
+            UiFactory.AddText(barLabel, "BARRA RÁPIDA", 22, TextAnchor.MiddleLeft, UiTheme.TextMuted, true);
             for (int i = 0; i < Inventory.HotbarSize; i++)
                 AddGridSlot(i, new Vector2(left + i * Pitch, barTop));
 
             // Right: what the picked item is, and what can be done with it.
-            var name = UiFactory.NewRect("Name", _panel, topLeft, topLeft, new Vector2(detailsX, top), new Vector2(detailsWidth, 50f));
-            _name = UiFactory.AddText(name, "", 32, TextAnchor.UpperLeft, Color.white);
-            var detail = UiFactory.NewRect("Detail", _panel, topLeft, topLeft, new Vector2(detailsX, top - 60f), new Vector2(detailsWidth, 300f));
-            _detail = UiFactory.AddText(detail, "", 24, TextAnchor.UpperLeft, Hud.Muted);
+            var pane = UiFactory.NewRect("Details", _panel, topLeft, topLeft, new Vector2(detailsX - 20f, top + 10f), new Vector2(detailsWidth + 40f, 680f));
+            UiFactory.AddImage(pane, UiFactory.Soft, new Color(1f, 1f, 1f, 0.035f));
+            _art = UiFactory.NewRect("Art", _panel, topLeft, topLeft, new Vector2(detailsX, top - 6f), new Vector2(150f, 150f));
+            UiFactory.AddImage(_art, UiFactory.Soft, UiTheme.Slot);
+            var glow = UiFactory.NewRect("Glow", _art, half, half, Vector2.zero, new Vector2(170f, 170f));
+            UiFactory.AddImage(glow, Icons.Glow, UiTheme.Accent.WithAlpha(0.18f));
+            _bigIcon = UiFactory.AddIcon(_art, null, Vector2.zero, 132f, Color.white);
+            var name = UiFactory.NewRect("Name", _panel, topLeft, topLeft, new Vector2(detailsX, top - 170f), new Vector2(detailsWidth, 50f));
+            _name = UiFactory.AddText(name, "", 36, TextAnchor.UpperLeft, UiTheme.Text, true);
+            var detail = UiFactory.NewRect("Detail", _panel, topLeft, topLeft, new Vector2(detailsX, top - 224f), new Vector2(detailsWidth, 200f));
+            _detail = UiFactory.AddText(detail, "", 24, TextAnchor.UpperLeft, UiTheme.TextMuted);
             _detail.horizontalOverflow = HorizontalWrapMode.Wrap;
 
             _quickButton = MakeButton("Quick move", new Vector2(detailsX, barTop + 100f), detailsWidth, "", out _quickLabel);
@@ -251,10 +265,10 @@ namespace Oxfall.Game.UI
         {
             var topLeft = new Vector2(0f, 1f);
             var half = new Vector2(0.5f, 0.5f);
-            var button = UiFactory.NewRect(name, _panel, topLeft, topLeft, position, new Vector2(width, 90f));
-            UiFactory.AddImage(button, UiFactory.Rounded, Hud.Accent);
+            var button = UiFactory.NewRect(name, _panel, topLeft, topLeft, position, new Vector2(width, 84f));
+            UiFactory.AddImage(button, UiFactory.Soft, UiTheme.Accent);
             var labelRect = UiFactory.NewRect("Label", button, half, half, Vector2.zero, new Vector2(width - 20f, 60f));
-            label = UiFactory.AddText(labelRect, text, 30, TextAnchor.MiddleCenter, Color.white);
+            label = UiFactory.AddText(labelRect, text, 30, TextAnchor.MiddleCenter, Color.white, true);
             return button;
         }
 
@@ -265,11 +279,8 @@ namespace Oxfall.Game.UI
             var view = new SlotView();
             view.Rect = UiFactory.NewRect("Slot", parent, anchor, anchor, position, new Vector2(SlotSize, SlotSize));
 
-            // The frame is a slightly larger rounded square behind the slot, shown in a colour when chosen.
-            var frame = UiFactory.NewRect("Frame", view.Rect, half, half, Vector2.zero, new Vector2(SlotSize + 10f, SlotSize + 10f));
-            view.Frame = UiFactory.AddImage(frame, UiFactory.Rounded, Color.clear);
             var back = UiFactory.NewRect("Back", view.Rect, half, half, Vector2.zero, new Vector2(SlotSize, SlotSize));
-            UiFactory.AddImage(back, UiFactory.Rounded, SlotBack);
+            view.Back = UiFactory.AddImage(back, UiFactory.Soft, UiTheme.Slot);
 
             var icon = UiFactory.NewRect("Icon", view.Rect, half, half, new Vector2(0f, 4f), new Vector2(SlotSize - 14f, SlotSize - 14f));
             view.Icon = UiFactory.AddImage(icon, null, Color.white);
@@ -280,14 +291,18 @@ namespace Oxfall.Game.UI
             view.Label = UiFactory.AddText(label, "", 20, TextAnchor.MiddleCenter, Color.white);
             view.Label.horizontalOverflow = HorizontalWrapMode.Wrap;
 
-            var amount = UiFactory.NewRect("Amount", view.Rect, new Vector2(1f, 0f), new Vector2(1f, 0f), new Vector2(-8f, 4f), new Vector2(SlotSize - 12f, 34f));
-            view.Amount = UiFactory.AddText(amount, "", 24, TextAnchor.LowerRight, Color.white);
+            var amount = UiFactory.NewRect("Amount", view.Rect, new Vector2(1f, 0f), new Vector2(1f, 0f), new Vector2(-10f, 4f), new Vector2(SlotSize - 12f, 34f));
+            view.Amount = UiFactory.AddText(amount, "", 26, TextAnchor.LowerRight, UiTheme.Text, true);
 
             if (number > 0)
             {
-                var key = UiFactory.NewRect("Key", view.Rect, new Vector2(0f, 1f), new Vector2(0f, 1f), new Vector2(8f, -4f), new Vector2(30f, 28f));
-                UiFactory.AddText(key, number.ToString(), 20, TextAnchor.UpperLeft, new Color(1f, 1f, 1f, 0.45f));
+                var key = UiFactory.NewRect("Key", view.Rect, new Vector2(0f, 1f), new Vector2(0f, 1f), new Vector2(10f, -4f), new Vector2(30f, 28f));
+                UiFactory.AddText(key, number.ToString(), 20, TextAnchor.UpperLeft, UiTheme.TextFaint, true);
             }
+
+            // The frame: an outline over the slot, in a colour when chosen.
+            var frame = UiFactory.NewRect("Frame", view.Rect, half, half, Vector2.zero, new Vector2(SlotSize, SlotSize));
+            view.Frame = UiFactory.AddImage(frame, UiFactory.Outline, Color.clear);
             return view;
         }
     }
