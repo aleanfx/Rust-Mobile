@@ -1,0 +1,204 @@
+# Builds the web (WebGL) version of the same game and publishes it:
+#   * on GitHub Pages, to play on any phone's browser (iPhone included):
+#       https://<owner>.github.io/<repo>/
+#     (needs Settings -> Pages -> Source: "GitHub Actions" once);
+#   * as oxfall-web.zip on the "web-latest" pre-release, which is what automated tests download.
+#
+# It never commits: the Android build commits whatever Unity generates.
+
+name: Web build
+
+on:
+  push:
+    paths:
+      - 'Assets/**'
+      - 'Packages/**'
+      - 'ProjectSettings/**'
+      - '.github/workflows/web-build.yml'
+  workflow_dispatch:
+
+concurrency:
+  group: unity-licence
+  cancel-in-progress: false
+
+permissions:
+  contents: write
+  pages: write
+  id-token: write
+
+jobs:
+  build:
+    name: WebGL
+    runs-on: ubuntu-24.04
+    timeout-minutes: 90
+    container:
+      image: unityci/editor:ubuntu-6000.3.28f1-webgl-3
+      options: --user root
+      volumes:
+        - /usr/share/dotnet:/host/dotnet
+        - /usr/local/lib/android:/host/android
+        - /opt/ghc:/host/ghc
+        - /usr/local/share/boost:/host/boost
+
+    env:
+      LICENSING_CLIENT: /opt/unity/Editor/Data/Resources/Licensing/Client/Unity.Licensing.Client
+      OUT: Builds/WebGL
+
+    defaults:
+      run:
+        shell: bash
+
+    steps:
+      - name: Free disk space
+        run: rm -rf /host/dotnet/* /host/android/* /host/ghc/* /host/boost/* || true
+
+      - uses: actions/checkout@v4
+
+      - name: Let git use this checkout
+        run: git config --global --add safe.directory "$GITHUB_WORKSPACE"
+
+      - name: The Unity project exists
+        run: |
+          if [ ! -f ProjectSettings/ProjectVersion.txt ] || [ ! -f Packages/manifest.json ]; then
+            echo "::error title=No Unity project yet::the Android build creates it on its first run"
+            exit 1
+          fi
+
+      - name: Restore the Library
+        uses: actions/cache/restore@v4
+        with:
+          path: Library
+          key: library-webgl-${{ hashFiles('Packages/packages-lock.json', 'ProjectSettings/ProjectVersion.txt') }}-${{ github.sha }}
+          restore-keys: |
+            library-webgl-${{ hashFiles('Packages/packages-lock.json', 'ProjectSettings/ProjectVersion.txt') }}-
+            library-webgl-
+
+      - name: Take a Personal seat
+        id: activate
+        env:
+          UNITY_EMAIL: ${{ secrets.UNITY_EMAIL }}
+          UNITY_PASSWORD: ${{ secrets.UNITY_PASSWORD }}
+        run: |
+          set +e
+          output="$("$LICENSING_CLIENT" --activate-all --include-personal \
+                      --username "$UNITY_EMAIL" --password "$UNITY_PASSWORD" 2>&1)"
+          echo "$output" | grep -viE 'password|token'
+          echo "activated=true" >> "$GITHUB_OUTPUT"
+          echo "$output" | grep -q 'Activation processed successfully' || {
+            echo "::error title=Unity licence failed::no seat. Run the 'Unity licence' workflow for the reason."
+            exit 1
+          }
+
+      - name: Configure the project
+        id: configure
+        run: |
+          set +e
+          unity-editor -batchmode -nographics -projectPath . -buildTarget WebGL \
+            -executeMethod Oxfall.Editor.ProjectSetup.ApplyAndExit -logFile /tmp/configure.log
+          code=$?
+          errors="$(grep -E 'error CS[0-9]+' /tmp/configure.log | sort -u | head -60)"
+          if [ -n "$errors" ]; then
+            echo "::group::Compile errors"; echo "$errors"; echo "::endgroup::"
+            echo "$errors" | head -20 | while IFS= read -r line; do echo "::error title=Compile error::$line"; done
+          fi
+          grep -E '\[Oxfall\]' /tmp/configure.log || true
+          if [ "$code" -ne 0 ]; then
+            echo "::group::Unity log (tail)"; tail -150 /tmp/configure.log || true; echo "::endgroup::"
+            echo "::error title=Configuration failed::the editor exited $code"
+            exit 1
+          fi
+
+      - name: Build the web version
+        id: build
+        run: |
+          set +e
+          start=$(date +%s)
+          unity-editor -batchmode -nographics -projectPath . -buildTarget WebGL \
+            -executeMethod Oxfall.Editor.WebBuilder.BuildAndExit \
+            -oxfallOutput "$OUT" -logFile /tmp/web-build.log
+          code=$?
+          echo "minutes=$(( ($(date +%s) - start + 59) / 60 ))" >> "$GITHUB_OUTPUT"
+          grep -E '\[Oxfall\]' /tmp/web-build.log || true
+          if [ "$code" -ne 0 ] || [ ! -f "$OUT/index.html" ]; then
+            echo "::group::Editor log (tail)"; tail -250 /tmp/web-build.log || true; echo "::endgroup::"
+            grep -E 'error CS[0-9]+|BuildFailedException|Exception|error:' /tmp/web-build.log | head -40 || true
+            echo "::error title=Web build failed::editor exit $code"
+            exit 1
+          fi
+          ls -la "$OUT" "$OUT/Build"
+          du -sh "$OUT"
+
+      - name: Save the Library
+        if: always() && steps.configure.outcome == 'success'
+        uses: actions/cache/save@v4
+        with:
+          path: Library
+          key: library-webgl-${{ hashFiles('Packages/packages-lock.json', 'ProjectSettings/ProjectVersion.txt') }}-${{ github.sha }}
+
+      - name: Zip it
+        if: steps.build.outcome == 'success'
+        run: |
+          apt-get -qq update >/dev/null 2>&1 && apt-get -qq install -y zip >/dev/null 2>&1 || true
+          (cd "$OUT" && zip -qr "$GITHUB_WORKSPACE/oxfall-web.zip" .)
+          ls -la oxfall-web.zip
+
+      - name: Publish the zip for automated tests
+        if: steps.build.outcome == 'success'
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: web-latest
+          name: Oxfall web (última)
+          prerelease: true
+          make_latest: false
+          overwrite_files: true
+          files: oxfall-web.zip
+          body: |
+            La versión web más reciente, para pruebas automáticas. Para jugar, usa la página de GitHub Pages.
+            Commit ${{ github.sha }}, corrida ${{ github.run_number }}.
+
+      - name: Hand the site to GitHub Pages
+        if: steps.build.outcome == 'success'
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: Builds/WebGL
+
+      - name: Keep the logs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: unity-web-logs
+          path: /tmp/*.log
+          if-no-files-found: warn
+          retention-days: 14
+
+      - name: Give the seat back
+        if: always() && steps.activate.outputs.activated == 'true'
+        env:
+          UNITY_EMAIL: ${{ secrets.UNITY_EMAIL }}
+          UNITY_PASSWORD: ${{ secrets.UNITY_PASSWORD }}
+        run: |
+          set +e
+          "$LICENSING_CLIENT" --deactivate-all \
+            --username "$UNITY_EMAIL" --password "$UNITY_PASSWORD" 2>&1 \
+            | grep -viE 'password|token' | tail -5
+          echo "Seat returned."
+
+  pages:
+    name: Publish on GitHub Pages
+    needs: build
+    runs-on: ubuntu-24.04
+    # Pages has to be switched on once in the repository settings; until then this job fails on
+    # its own without marking the build as broken.
+    continue-on-error: true
+    environment:
+      name: github-pages
+      url: ${{ steps.deploy.outputs.page_url }}
+    steps:
+      - name: Switch Pages on if it is off
+        uses: actions/configure-pages@v5
+        continue-on-error: true
+        with:
+          enablement: true
+      - name: Deploy
+        id: deploy
+        uses: actions/deploy-pages@v4

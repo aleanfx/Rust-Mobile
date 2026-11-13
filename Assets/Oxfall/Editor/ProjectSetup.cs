@@ -54,6 +54,7 @@ namespace Oxfall.Editor
 
                 ConfigurePipeline();
                 ConfigurePlayer();
+                ConfigureWebGL();
                 ConfigureGraphicsStripping();
                 var sky = CreateSkybox();
                 CreateLitMaterial();
@@ -173,6 +174,23 @@ namespace Oxfall.Editor
             // The classic Activity entry point: the Input Manager's touches are proven there.
             SetInt(player, "androidApplicationEntry", 1, false);
             player.ApplyModifiedPropertiesWithoutUndo();
+        }
+
+        /// <summary>
+        /// The web build: the same game in a browser, so it can be played on an iPhone without the
+        /// App Store and tested automatically in a headless browser.
+        /// </summary>
+        private static void ConfigureWebGL()
+        {
+            // Gzip with the decompression fallback: works on any static host (GitHub Pages included)
+            // without special server headers.
+            PlayerSettings.WebGL.compressionFormat = WebGLCompressionFormat.Gzip;
+            PlayerSettings.WebGL.decompressionFallback = true;
+            PlayerSettings.WebGL.dataCaching = true;
+            PlayerSettings.WebGL.exceptionSupport = WebGLExceptionSupport.None;
+            PlayerSettings.WebGL.nameFilesAsHashes = false;
+            // Assets/WebGLTemplates/Oxfall: full screen, touch-friendly, asks to turn the phone.
+            PlayerSettings.WebGL.template = "PROJECT:Oxfall";
         }
 
         /// <summary>

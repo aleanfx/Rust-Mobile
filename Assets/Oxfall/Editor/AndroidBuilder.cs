@@ -113,10 +113,13 @@ namespace Oxfall.Editor
             }
         }
 
-        public static string OutputPath(string[] arguments)
+        public static string OutputPath(string[] arguments) => OutputPath(arguments, DefaultOutput);
+
+        /// <summary>The value after <see cref="OutputArgument"/>, or the fallback.</summary>
+        public static string OutputPath(string[] arguments, string fallback)
         {
             int index = Array.IndexOf(arguments, OutputArgument);
-            if (index < 0) return DefaultOutput;
+            if (index < 0) return fallback;
             if (index + 1 >= arguments.Length || arguments[index + 1].StartsWith("-"))
                 throw new ArgumentException($"{OutputArgument} needs a path after it.");
             return arguments[index + 1];

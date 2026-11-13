@@ -27,6 +27,7 @@ namespace Oxfall.Game.UI
         private int _frames;
         private float _elapsed;
         private float _worstFrame;
+        private int _windows;
 
         public Canvas Canvas { get; private set; }
         public RectTransform JoystickBase { get; private set; }
@@ -150,6 +151,8 @@ namespace Oxfall.Game.UI
             if (_elapsed >= 0.5f)
             {
                 _fps.text = $"{Mathf.RoundToInt(_frames / _elapsed)} FPS   peor {Mathf.RoundToInt(_worstFrame * 1000f)} ms";
+                // Every 5 s into the log too, so automated runs can read the frame rate.
+                if (++_windows % 10 == 0) Debug.Log("[Oxfall] " + _fps.text);
                 _frames = 0;
                 _elapsed = 0f;
                 _worstFrame = 0f;

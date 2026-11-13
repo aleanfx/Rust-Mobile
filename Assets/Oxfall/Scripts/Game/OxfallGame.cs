@@ -43,8 +43,11 @@ namespace Oxfall.Game
             QualitySettings.vSyncCount = 0;
             Screen.sleepTimeout = SleepTimeout.NeverSleep;
 
+            var clock = System.Diagnostics.Stopwatch.StartNew();
             var materials = new MaterialLibrary();
             _world = WorldBuilder.Build(DefaultSeed, materials);
+            Debug.Log($"[Oxfall] World built in {clock.ElapsedMilliseconds} ms: {_world.Nodes.Count} resources, " +
+                      $"spawn {_world.SpawnPosition}, {SystemInfo.graphicsDeviceName}, {SystemInfo.systemMemorySize} MB RAM.");
 
             _catalog = ItemCatalog.CreateDefault();
             _inventory = new Inventory(_catalog);
@@ -77,7 +80,11 @@ namespace Oxfall.Game
                 _hud.ShowToast("Gráficos: " + GraphicsQuality.Name(_quality.Tier));
             };
 
-            gatherer.Message += _hud.ShowToast;
+            gatherer.Message += message =>
+            {
+                _hud.ShowToast(message);
+                Debug.Log("[Oxfall] Gathered " + message);
+            };
             _inventory.Changed += _ => _hud.RefreshResources(_inventory, _catalog);
             _hud.RefreshResources(_inventory, _catalog);
             _hud.ShowToast("Bienvenido a Oxfall: golpea árboles y rocas");

@@ -77,6 +77,7 @@ namespace Oxfall.Game.Rendering
         public void Apply(QualityTier tier)
         {
             Tier = tier;
+            Debug.Log($"[Oxfall] Graphics quality: {Name(tier)}");
 
             // Always ask for 60: on the low tier the savings below are what make 30+ possible.
             Application.targetFrameRate = 60;
