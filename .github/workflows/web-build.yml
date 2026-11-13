@@ -18,7 +18,9 @@ on:
   workflow_dispatch:
 
 concurrency:
-  group: unity-licence
+  # One run of this workflow at a time. The Android and web builds may run side by side, each
+  # holding one of the account's Personal seats (Personal allows two machines).
+  group: unity-web
   cancel-in-progress: false
 
 permissions:

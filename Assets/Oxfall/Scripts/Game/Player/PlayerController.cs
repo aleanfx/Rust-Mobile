@@ -51,6 +51,19 @@ namespace Oxfall.Game.Player
             transform.rotation = Quaternion.Euler(0f, _yaw, 0f);
         }
 
+        /// <summary>Moves the player instantly, facing the given way (pitch: positive looks down).</summary>
+        public void Teleport(Vector3 feet, float yaw, float pitch)
+        {
+            _body.enabled = false;
+            transform.position = feet;
+            _yaw = yaw;
+            _pitch = Mathf.Clamp(pitch, -85f, 85f);
+            transform.rotation = Quaternion.Euler(0f, _yaw, 0f);
+            Head.localRotation = Quaternion.Euler(_pitch, 0f, 0f);
+            _verticalSpeed = 0f;
+            _body.enabled = true;
+        }
+
         private void Update()
         {
             if (_input == null) return;
