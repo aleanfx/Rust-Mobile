@@ -28,3 +28,8 @@ model fir_sapling twigs
 model pine_sapling_small twig
 model jacaranda_tree leaves
 model island_tree_02 leaves
+model fir_sapling_medium twigs
+model fir_tree_01 twig
+model pine_tree_01 twig
+model grass_bermuda_01 -
+model grass_medium_02 -

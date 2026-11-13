@@ -34,26 +34,28 @@ jobs:
           mkdir -p "$out"
           failed=0
           # Leaf and needle cut-outs from a model's textures: colour + alpha joined into one PNG,
-          # plus the normal map. Line format: "model <asset id> <texture prefix>".
+          # plus the normal map. Line format: "model <asset id> <texture prefix>", with "-" for
+          # models whose maps have no prefix.
           model() {
             local id=$1 part=$2 base="https://dl.polyhaven.org/file/ph-assets/Models"
-            local dest="$out/$id/${id}_${part}.png"
+            local p="_$part"; [ "$part" = "-" ] && p=""
+            local dest="$out/$id/${id}${p}.png"
             mkdir -p "$out/$id"
             if [ ! -f "$dest" ]; then
-              if curl -sSfL --retry 3 -o /tmp/diff.jpg "$base/jpg/1k/$id/${id}_${part}_diff_1k.jpg" \
-                 || curl -sSfL --retry 3 -o /tmp/diff.jpg "$base/png/1k/$id/${id}_${part}_diff_1k.png"; then :
+              if curl -sSfL --retry 3 -o /tmp/diff.jpg "$base/jpg/1k/$id/${id}${p}_diff_1k.jpg" \
+                 || curl -sSfL --retry 3 -o /tmp/diff.jpg "$base/png/1k/$id/${id}${p}_diff_1k.png"; then :
               else echo "::warning::No colour map for $id $part"; failed=1; return; fi
-              if curl -sSfL --retry 3 -o /tmp/alpha.img "$base/png/1k/$id/${id}_${part}_alpha_1k.png" \
-                 || curl -sSfL --retry 3 -o /tmp/alpha.img "$base/jpg/1k/$id/${id}_${part}_alpha_1k.jpg"; then :
+              if curl -sSfL --retry 3 -o /tmp/alpha.img "$base/png/1k/$id/${id}${p}_alpha_1k.png" \
+                 || curl -sSfL --retry 3 -o /tmp/alpha.img "$base/jpg/1k/$id/${id}${p}_alpha_1k.jpg"; then :
               else echo "::warning::No alpha map for $id $part"; failed=1; return; fi
               if $IM /tmp/diff.jpg -alpha off \( /tmp/alpha.img -colorspace gray -alpha off \) \
                    -compose CopyOpacity -composite -resize 512x512 "PNG32:$dest"; then
                 echo "ok   $id $part cut-out ($(stat -c %s "$dest") bytes)"
               else echo "::warning::Could not join $id $part"; rm -f "$dest"; failed=1; fi
             fi
-            local normal="$out/$id/${id}_${part}_nor_gl.jpg"
+            local normal="$out/$id/${id}${p}_nor_gl.jpg"
             if [ ! -f "$normal" ]; then
-              if curl -sSfL --retry 3 -o /tmp/normal.jpg "$base/jpg/1k/$id/${id}_${part}_nor_gl_1k.jpg" \
+              if curl -sSfL --retry 3 -o /tmp/normal.jpg "$base/jpg/1k/$id/${id}${p}_nor_gl_1k.jpg" \
                  && $IM /tmp/normal.jpg -resize 512x512 -quality 90 "$normal"; then
                 echo "ok   $id $part normal"
               else echo "::warning::No normal map for $id $part"; rm -f "$normal"; fi
