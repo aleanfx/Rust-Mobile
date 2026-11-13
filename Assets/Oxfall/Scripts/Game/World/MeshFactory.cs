@@ -101,10 +101,8 @@ namespace Oxfall.Game.World
             float height = Rand(random, 9f, 10.5f);
             b.AddCylinder(BarkSubmesh, Vector3.zero, 0.32f, 0.05f, height, 7, Rand(random, 0f, 60f));
 
+            // No solid core: in the game a cone inside the branches read as a black plastic cone.
             float crownBottom = 1.8f, crownTop = height - 0.6f;
-            // A dark core keeps the crown from looking hollow between the branches.
-            b.AddCone(LeavesSubmesh, new Vector3(0f, crownBottom + 0.3f, 0f), 1.2f, crownTop - crownBottom, 7,
-                Rand(random, 0f, 60f));
 
             const int whorls = 11;
             for (int w = 0; w < whorls; w++)
@@ -242,9 +240,9 @@ namespace Oxfall.Game.World
             {
                 var c = clumpCentres[i];
                 var size = clumpSizes[i];
-                // Dark inner clump: the shade inside the crown, seen through gaps between the sprays.
-                b.AddBlob(LeavesSubmesh, c, size * 0.6f, random, 0.15f);
-                int count = i == 0 ? 16 : 9;
+                // A small inner clump: the shade inside the crown, seen through gaps between sprays.
+                b.AddBlob(LeavesSubmesh, c, size * 0.4f, random, 0.15f);
+                int count = i == 0 ? 22 : 12;
                 for (int j = 0; j < count; j++)
                 {
                     var d = RandomDirection(random);

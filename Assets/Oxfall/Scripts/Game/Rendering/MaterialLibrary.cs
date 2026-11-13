@@ -105,8 +105,8 @@ namespace Oxfall.Game.Rendering
             Leaves = foliage != null
                 ? new[]
                 {
-                    Make("Leaves A", new Color(0.17f, 0.22f, 0.11f), 0.04f),
-                    Make("Leaves B", new Color(0.20f, 0.25f, 0.12f), 0.04f),
+                    Make("Leaves A", new Color(0.21f, 0.27f, 0.13f), 0.04f),
+                    Make("Leaves B", new Color(0.24f, 0.30f, 0.14f), 0.04f),
                 }
                 : new[]
                 {
