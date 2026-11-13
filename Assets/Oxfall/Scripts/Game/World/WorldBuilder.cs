@@ -42,6 +42,8 @@ namespace Oxfall.Game.World
             var splatMap = materials.HasTexturedGround ? TerrainBuilder.BuildSplatMap(world.Shape) : null;
             TerrainBuilder.Build(world.Shape, materials.MakeGround(colourMap, splatMap), world.Root);
             BuildSea(materials, world.Root);
+            materials.SetSeaDepth(TerrainBuilder.BuildDepthMap(world.Shape), IslandShape.WorldSize,
+                TerrainBuilder.DepthMapRange);
             PlaceResources(world, materials, seed);
             FindSpawn(world, seed);
             return world;

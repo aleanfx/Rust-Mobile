@@ -125,6 +125,17 @@ namespace Oxfall.Game.Rendering
             GhostBad = Make("Ghost bad", new Color(0.90f, 0.30f, 0.25f), 0.1f);
         }
 
+        /// <summary>
+        /// Gives the sea the island's depth map (centred on the origin, worldSize across, red =
+        /// depth / range), for shallow colour and shore foam.
+        /// </summary>
+        public void SetSeaDepth(Texture2D depthMap, float worldSize, float range)
+        {
+            if (!Water.HasProperty("_DepthMap")) return;
+            Water.SetTexture("_DepthMap", depthMap);
+            Water.SetVector("_DepthMapScale", new Vector4(1f / worldSize, 0.5f, range, 0f));
+        }
+
         /// <summary>Whether the photo-textured ground (Oxfall/Ground) is in the build.</summary>
         public bool HasTexturedGround => Resources.Load<Material>(TexturedGroundResource) != null;
 

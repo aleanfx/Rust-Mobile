@@ -113,6 +113,40 @@ namespace Oxfall.Game.World
             return texture;
         }
 
+        /// <summary>Metres of water at the deepest value of the depth map.</summary>
+        public const float DepthMapRange = 9f;
+
+        /// <summary>
+        /// How deep the sea is over the island, about 2 m per texel: red = depth / DepthMapRange.
+        /// The sea shader colours shallow water and paints foam on the shore from it, without
+        /// needing the camera's depth texture.
+        /// </summary>
+        public static Texture2D BuildDepthMap(IslandShape shape)
+        {
+            const int size = 256;
+            var pixels = new Color32[size * size];
+            for (int y = 0; y < size; y++)
+            for (int x = 0; x < size; x++)
+            {
+                float wx = -IslandShape.HalfSize + (x + 0.5f) / size * IslandShape.WorldSize;
+                float wz = -IslandShape.HalfSize + (y + 0.5f) / size * IslandShape.WorldSize;
+                float depth = IslandShape.WaterLevel - shape.Height(wx, wz);
+                byte d = (byte)Mathf.RoundToInt(Mathf.Clamp01(depth / DepthMapRange) * 255f);
+                // The outermost texels are open sea, so outside the map (clamped) is deep water.
+                if (x == 0 || y == 0 || x == size - 1 || y == size - 1) d = 255;
+                pixels[y * size + x] = new Color32(d, d, d, 255);
+            }
+            var texture = new Texture2D(size, size, TextureFormat.RGBA32, false, true)
+            {
+                name = "Sea depth",
+                wrapMode = TextureWrapMode.Clamp,
+                filterMode = FilterMode.Bilinear,
+            };
+            texture.SetPixels32(pixels);
+            texture.Apply(false, true);
+            return texture;
+        }
+
         /// <summary>The island's colours, one texel per ~1 m, smoothed by bilinear filtering.</summary>
         public static Texture2D BuildColourMap(IslandShape shape)
         {
