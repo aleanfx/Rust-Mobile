@@ -35,6 +35,7 @@ namespace Oxfall.Game.World
         private static readonly List<Vector3> Vertices = new List<Vector3>();
         private static readonly List<Vector3> Normals = new List<Vector3>();
         private static readonly List<Vector2> Uvs = new List<Vector2>();
+        private static readonly List<Vector2> Wind = new List<Vector2>();
         private static readonly List<int> Triangles = new List<int>();
 
         public int BladeCount { get; private set; }
@@ -125,6 +126,7 @@ namespace Oxfall.Game.World
             Vertices.Clear();
             Normals.Clear();
             Uvs.Clear();
+            Wind.Clear();
             Triangles.Clear();
 
             for (int i = 0; i < attempts; i++)
@@ -192,6 +194,7 @@ namespace Oxfall.Game.World
             mesh.SetVertices(Vertices);
             mesh.SetNormals(Normals);
             mesh.SetUVs(0, Uvs);
+            if (Wind.Count == Vertices.Count) mesh.SetUVs(1, Wind);
             mesh.SetTriangles(Triangles, 0);
             mesh.RecalculateBounds();
             mesh.UploadMeshData(true);
@@ -233,6 +236,11 @@ namespace Oxfall.Game.World
                 Uvs.Add(new Vector2(box.z, box.y));
                 Uvs.Add(new Vector2(box.z, box.w));
                 Uvs.Add(new Vector2(box.x, box.w));
+                // The wind moves the tops, not the roots.
+                Wind.Add(Vector2.zero);
+                Wind.Add(Vector2.zero);
+                Wind.Add(Vector2.right);
+                Wind.Add(Vector2.right);
                 Triangles.Add(start);
                 Triangles.Add(start + 2);
                 Triangles.Add(start + 1);

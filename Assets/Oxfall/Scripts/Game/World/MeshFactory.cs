@@ -169,7 +169,9 @@ namespace Oxfall.Game.World
                     if (axial) away.y = 0f;
                     if (away.sqrMagnitude < 0.04f) away = new Vector3(dir.x, 0f, dir.z);
                     var normal = (away.normalized + Vector3.up * upBias).normalized;
-                    int index = b.CardVertex(p, normal, frond.Uv(c, along));
+                    // Still at the stem, freer towards the tip and higher up the tree.
+                    float wind = Mathf.Clamp01(p.y / 10f) * 0.5f + along * 0.5f;
+                    int index = b.CardVertex(p, normal, frond.Uv(c, along), wind);
                     if (first < 0) first = index;
                 }
             }
@@ -215,50 +217,58 @@ namespace Oxfall.Game.World
         private static Mesh CardBroadleaf(System.Random random)
         {
             var b = new FlatMeshBuilder(3) { UvScale = 1.3f };
-            float trunkHeight = Rand(random, 3.8f, 4.5f);
-            b.AddCylinder(BarkSubmesh, Vector3.zero, 0.3f, 0.14f, trunkHeight + 0.8f, 6, Rand(random, 0f, 60f));
+            // A trunk that forks into a few limbs, under a tall, rounded crown of leafy clumps.
+            float fork = Rand(random, 2.6f, 3.4f);
+            b.AddCylinder(BarkSubmesh, Vector3.zero, 0.3f, 0.2f, fork + 0.3f, 6, Rand(random, 0f, 60f));
+            float radius = Rand(random, 2.3f, 2.9f);
+            float crownHeight = Rand(random, 3.2f, 4.0f);
+            var centre = new Vector3(0f, fork + crownHeight * 0.55f, 0f);
 
-            var crown = new Vector3(Rand(random, 2.4f, 2.9f), Rand(random, 1.8f, 2.2f), Rand(random, 2.4f, 2.9f));
-            var centre = new Vector3(0f, trunkHeight + crown.y * 0.45f, 0f);
-            var clumpCentres = new List<Vector3> { centre + new Vector3(0f, 0.5f, 0f) };
-            var clumpSizes = new List<Vector3> { crown * 0.85f };
-            for (int i = 0; i < 4; i++)
+            int limbs = 3;
+            float limbYaw = Rand(random, 0f, 360f);
+            for (int i = 0; i < limbs; i++)
             {
-                float angle = (i * 90f + Rand(random, -25f, 25f)) * Mathf.Deg2Rad;
-                var offset = new Vector3(Mathf.Cos(angle), 0f, Mathf.Sin(angle)) * Rand(random, 1.1f, 1.5f);
-                var c = new Vector3(offset.x, centre.y + Rand(random, -0.5f, 0.3f), offset.z);
-                clumpCentres.Add(c);
-                clumpSizes.Add(crown * Rand(random, 0.55f, 0.7f));
-                // A bough from the trunk out to the clump.
-                var from = new Vector3(0f, trunkHeight - 0.6f, 0f);
-                var to = c - new Vector3(0f, 0.3f, 0f);
+                float a = (limbYaw + i * 120f + Rand(random, -20f, 20f)) * Mathf.Deg2Rad;
+                var from = new Vector3(0f, fork, 0f);
+                var to = centre + new Vector3(Mathf.Cos(a) * radius * 0.5f, Rand(random, -0.3f, 0.6f), Mathf.Sin(a) * radius * 0.5f);
                 var lean = Quaternion.FromToRotation(Vector3.up, to - from);
-                b.AddCylinder(BarkSubmesh, from, 0.12f, 0.05f, (to - from).magnitude, 5, 0f, lean);
+                b.AddCylinder(BarkSubmesh, from, 0.15f, 0.06f, (to - from).magnitude, 5, 0f, lean);
             }
 
-            for (int i = 0; i < clumpCentres.Count; i++)
+            // Clumps spread over the inside of the crown: a ring low down, a ring higher up, one on top.
+            var clumps = new List<Vector3>();
+            float ringYaw = Rand(random, 0f, 360f);
+            for (int i = 0; i < 4; i++)
             {
-                var c = clumpCentres[i];
-                var size = clumpSizes[i];
-                // A small inner clump: the shade inside the crown, seen through gaps between sprays.
-                b.AddBlob(LeavesSubmesh, c, size * 0.4f, random, 0.15f);
-                int count = i == 0 ? 22 : 12;
-                for (int j = 0; j < count; j++)
+                float a = (ringYaw + i * 90f + Rand(random, -20f, 20f)) * Mathf.Deg2Rad;
+                clumps.Add(centre + new Vector3(Mathf.Cos(a) * radius * 0.6f, -crownHeight * Rand(random, 0.1f, 0.2f), Mathf.Sin(a) * radius * 0.6f));
+            }
+            for (int i = 0; i < 3; i++)
+            {
+                float a = (ringYaw + 45f + i * 120f + Rand(random, -20f, 20f)) * Mathf.Deg2Rad;
+                clumps.Add(centre + new Vector3(Mathf.Cos(a) * radius * 0.4f, crownHeight * Rand(random, 0.12f, 0.22f), Mathf.Sin(a) * radius * 0.4f));
+            }
+            clumps.Add(centre + new Vector3(0f, crownHeight * 0.32f, 0f));
+
+            foreach (var c in clumps)
+            {
+                // No solid clumps inside: in the game they showed as dark balls among the leaves.
+                float size = Rand(random, 1.1f, 1.5f);
+                for (int j = 0; j < 11; j++)
                 {
-                    var d = RandomDirection(random);
-                    d.y = d.y * 0.7f + 0.2f;
-                    d.Normalize();
-                    var p = c + Vector3.Scale(d, size) * Rand(random, 0.45f, 0.75f);
-                    // Sprays point outwards and a little down, faces turned roughly to the sky.
-                    var flat = new Vector3(d.x, 0f, d.z);
-                    if (flat.sqrMagnitude < 0.05f) flat = RandomDirection(random);
-                    flat.y = 0f;
-                    var dir = (flat.normalized + Vector3.down * Rand(random, 0.1f, 0.45f)).normalized;
-                    var side = Quaternion.AngleAxis(Rand(random, -50f, 50f), dir) * Vector3.Cross(Vector3.up, dir).normalized;
+                    // Sprays point away from the middle of the crown and droop a little.
+                    var outward = (c - centre) + RandomDirection(random) * 1.2f;
+                    outward.y = outward.y * 0.5f - Rand(random, 0.1f, 0.4f);
+                    if (outward.sqrMagnitude < 0.01f) outward = RandomDirection(random);
+                    var dir = outward.normalized;
+                    var p = c + RandomDirection(random) * (size * 0.35f);
+                    var flatSide = Vector3.Cross(Vector3.up, dir);
+                    if (flatSide.sqrMagnitude < 1e-4f) flatSide = Vector3.right;
+                    var side = Quaternion.AngleAxis(Rand(random, -45f, 45f), dir) * flatSide.normalized;
                     var frond = AllFronds[random.Next(AllFronds.Length)];
-                    float length = Rand(random, 1.4f, 2.0f) * (frond.Aspect < 1.2f ? 0.7f : 1f);
+                    float length = Rand(random, 1.3f, 1.8f) * (frond.Aspect < 1.2f ? 0.7f : 1f);
                     float width = length / frond.Aspect;
-                    Card(b, p - dir * (length * 0.35f), dir, Rand(random, 5f, 20f), side, length, width, frond,
+                    Card(b, p - dir * (length * 0.3f), dir, Rand(random, 5f, 20f), side, length, width, frond,
                         centre, false, 0.35f);
                 }
             }
@@ -388,6 +398,7 @@ namespace Oxfall.Game.World
             private readonly List<Vector3> _cardVertices = new List<Vector3>();
             private readonly List<Vector3> _cardNormals = new List<Vector3>();
             private readonly List<Vector2> _cardUvs = new List<Vector2>();
+            private readonly List<float> _cardWind = new List<float>();
             private readonly List<int> _cardTriangles = new List<int>();
             private readonly List<int> _cardSubmesh = new List<int>();
 
@@ -403,12 +414,16 @@ namespace Oxfall.Game.World
                 for (int i = 0; i < submeshes; i++) _triangles[i] = new List<int>();
             }
 
-            /// <summary>A vertex for a card, with its own normal and UV. Returns its index among card vertices.</summary>
-            public int CardVertex(Vector3 position, Vector3 normal, Vector2 uv)
+            /// <summary>
+            /// A vertex for a card, with its own normal and UV, and how freely the wind moves it (0 to
+            /// 1, kept in the second UV channel). Returns its index among card vertices.
+            /// </summary>
+            public int CardVertex(Vector3 position, Vector3 normal, Vector2 uv, float wind)
             {
                 _cardVertices.Add(position);
                 _cardNormals.Add(normal);
                 _cardUvs.Add(uv);
+                _cardWind.Add(wind);
                 return _cardVertices.Count - 1;
             }
 
@@ -563,6 +578,13 @@ namespace Oxfall.Game.World
             {
                 if (smoothAngle > 0f) SmoothNormals(smoothAngle);
                 int offset = _vertices.Count;
+                List<Vector2> wind = null;
+                if (_cardVertices.Count > 0)
+                {
+                    wind = new List<Vector2>(offset + _cardVertices.Count);
+                    for (int i = 0; i < offset; i++) wind.Add(Vector2.zero);
+                    foreach (float w in _cardWind) wind.Add(new Vector2(w, 0f));
+                }
                 _vertices.AddRange(_cardVertices);
                 _normals.AddRange(_cardNormals);
                 _uvs.AddRange(_cardUvs);
@@ -578,6 +600,7 @@ namespace Oxfall.Game.World
                 mesh.SetVertices(_vertices);
                 mesh.SetNormals(_normals);
                 mesh.SetUVs(0, _uvs);
+                if (wind != null) mesh.SetUVs(1, wind);
                 mesh.subMeshCount = _triangles.Length;
                 for (int i = 0; i < _triangles.Length; i++) mesh.SetTriangles(_triangles[i], i);
                 mesh.RecalculateBounds();

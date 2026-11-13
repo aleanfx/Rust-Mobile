@@ -28,9 +28,9 @@ namespace Oxfall.Editor
             MakeLit("OxfallPlanks", "weathered_planks", new Color(1.05f, 0.98f, 0.90f), 0.08f);
             MakeGround();
             MakeWater();
-            MakeCutout("OxfallFoliage", "jacaranda_tree/jacaranda_tree_leaves.png", 0.1f);
-            MakeCutout("OxfallNeedles", "oxfall_fir_branch/oxfall_fir_branch.png", 0.1f);
-            MakeCutout("OxfallGrassCards", "grass_bermuda_01/grass_bermuda_01.png", 0.05f);
+            MakeCutout("OxfallFoliage", "jacaranda_tree/jacaranda_tree_leaves.png", 0.1f, 0.15f);
+            MakeCutout("OxfallNeedles", "oxfall_fir_branch/oxfall_fir_branch.png", 0.1f, 0.12f);
+            MakeCutout("OxfallGrassCards", "grass_bermuda_01/grass_bermuda_01.png", 0.05f, 0.07f);
             AssetDatabase.SaveAssets();
             Debug.Log("[Oxfall] Art materials made from the CC0 textures.");
         }
@@ -150,10 +150,11 @@ namespace Oxfall.Editor
         }
 
         /// <summary>
-        /// Leaves, needles or grass on cards: URP Lit, cut out by the alpha of a photo atlas, both
-        /// faces drawn. Saved as an asset so the build keeps the alpha-test shader variants.
+        /// Leaves, needles or grass on cards: the Oxfall/Foliage shader (cut out by the alpha of a
+        /// photo atlas, both faces drawn, swaying in the wind), or URP Lit with alpha clipping if that
+        /// shader is missing. Saved as an asset so the build includes the shader and its variants.
         /// </summary>
-        private static void MakeCutout(string name, string atlasPath, float smoothness)
+        private static void MakeCutout(string name, string atlasPath, float smoothness, float wind)
         {
             var atlas = AssetDatabase.LoadAssetAtPath<Texture2D>($"{TexturesFolder}/{atlasPath}");
             if (atlas == null)
@@ -161,7 +162,24 @@ namespace Oxfall.Editor
                 Debug.LogWarning($"[Oxfall] {atlasPath} missing; {name} not made, the plain look stays.");
                 return;
             }
-            var shader = Shader.Find("Universal Render Pipeline/Lit");
+            var shader = Shader.Find("Oxfall/Foliage");
+            if (shader != null)
+            {
+                var foliage = LoadOrCreate(name, shader);
+                foliage.SetTexture("_BaseMap", atlas);
+                foliage.SetColor("_BaseColor", Color.white);
+                foliage.SetFloat("_Cutoff", 0.5f);
+                foliage.SetFloat("_WindStrength", wind);
+                foliage.SetFloat("_WindSpeed", 1f);
+                foliage.SetFloat("_Translucency", 0.35f);
+                foliage.renderQueue = (int)RenderQueue.AlphaTest;
+                // The shader has no instancing variant; the SRP batcher batches it instead.
+                foliage.enableInstancing = false;
+                EditorUtility.SetDirty(foliage);
+                return;
+            }
+            Debug.LogWarning("[Oxfall] Shader Oxfall/Foliage not found; foliage uses URP Lit without wind.");
+            shader = Shader.Find("Universal Render Pipeline/Lit");
             if (shader == null) return;
 
             var material = LoadOrCreate(name, shader);
