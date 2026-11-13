@@ -5,9 +5,10 @@ using UnityEngine.Rendering;
 namespace Oxfall.Game.World
 {
     /// <summary>
-    /// Low-poly, flat-shaded meshes made in code: trees, rocks, plants. Flat shading reads well at
-    /// phone resolution, costs almost nothing, and gives the stylised look without textures.
-    /// These are placeholders with the right size and collision until real models replace them.
+    /// Low-poly meshes made in code: trees, rocks, plants, building pieces. Plants and rocks are
+    /// smooth-shaded (normals averaged across gentle edges, sharp edges kept), which reads as soft
+    /// and natural rather than faceted; building pieces stay flat. These are placeholders with the
+    /// right size and collision until real models replace them.
     /// </summary>
     public static class MeshFactory
     {
@@ -19,20 +20,22 @@ namespace Oxfall.Game.World
         {
             var b = new FlatMeshBuilder(2);
             float trunkHeight = 7.5f;
-            b.AddCylinder(BarkSubmesh, Vector3.zero, 0.32f, 0.12f, trunkHeight, 6, Rand(random, 0f, 60f));
+            b.AddCylinder(BarkSubmesh, Vector3.zero, 0.34f, 0.12f, trunkHeight, 7, Rand(random, 0f, 60f));
 
-            float y = 1.9f;
-            float radius = 2.3f;
-            float height = 3.4f;
-            for (int i = 0; i < 3; i++)
+            // Four tiers that droop a little and lean a little, so no two pines look stamped out.
+            float y = 1.6f;
+            float radius = 2.4f;
+            float height = 2.9f;
+            for (int i = 0; i < 4; i++)
             {
-                float jitter = Rand(random, 0.9f, 1.1f);
-                b.AddCone(LeavesSubmesh, new Vector3(0f, y, 0f), radius * jitter, height, 7, Rand(random, 0f, 60f));
-                y += height * 0.55f;
-                radius *= 0.72f;
-                height *= 0.85f;
+                float jitter = Rand(random, 0.88f, 1.12f);
+                var offset = new Vector3(Rand(random, -0.12f, 0.12f), 0f, Rand(random, -0.12f, 0.12f));
+                b.AddCone(LeavesSubmesh, new Vector3(0f, y, 0f) + offset, radius * jitter, height, 9, Rand(random, 0f, 60f));
+                y += height * 0.5f;
+                radius *= 0.76f;
+                height *= 0.88f;
             }
-            return b.Build("Pine");
+            return b.Build("Pine", 80f);
         }
 
         /// <summary>A broadleaf tree: a trunk and a lumpy crown.</summary>
@@ -45,7 +48,7 @@ namespace Oxfall.Game.World
             b.AddBlob(LeavesSubmesh, new Vector3(0f, trunkHeight + crownSize.y * 0.55f, 0f), crownSize, random, 0.22f);
             b.AddBlob(LeavesSubmesh, new Vector3(Rand(random, -1f, 1f), trunkHeight + 0.2f, Rand(random, -1f, 1f)),
                 crownSize * 0.6f, random, 0.2f);
-            return b.Build("Broadleaf");
+            return b.Build("Broadleaf", 75f);
         }
 
         /// <summary>A boulder, about a metre across before scaling.</summary>
@@ -53,7 +56,7 @@ namespace Oxfall.Game.World
         {
             var b = new FlatMeshBuilder(1);
             b.AddBlob(0, new Vector3(0f, 0.25f, 0f), new Vector3(1f, 0.7f, 1f), random, 0.28f);
-            return b.Build("Rock");
+            return b.Build("Rock", 42f);
         }
 
         /// <summary>A hemp plant: a few stalks topped with leaves.</summary>
@@ -68,7 +71,7 @@ namespace Oxfall.Game.World
                 b.AddCylinder(0, Vector3.zero, 0.035f, 0.025f, top.magnitude, 4, angle, lean);
                 b.AddCone(0, top - new Vector3(0f, 0.35f, 0f), 0.22f, 0.6f, 5, angle);
             }
-            return b.Build("Hemp");
+            return b.Build("Hemp", 70f);
         }
 
         /// <summary>The rock in the player's hand.</summary>
@@ -76,7 +79,7 @@ namespace Oxfall.Game.World
         {
             var b = new FlatMeshBuilder(1);
             b.AddBlob(0, Vector3.zero, new Vector3(1f, 0.8f, 1.2f), new System.Random(7), 0.2f);
-            return b.Build("HandRock");
+            return b.Build("HandRock", 42f);
         }
 
         /// <summary>One flat-shaded mesh made of boxes. Building pieces are made of these.</summary>
@@ -118,6 +121,8 @@ namespace Oxfall.Game.World
             private readonly List<Vector3> _vertices = new List<Vector3>();
             private readonly List<Vector3> _normals = new List<Vector3>();
             private readonly List<Vector2> _uvs = new List<Vector2>();
+            private readonly List<float> _areas = new List<float>();
+            private readonly List<int> _submeshOf = new List<int>();
             private readonly List<int>[] _triangles;
 
             public FlatMeshBuilder(int submeshes)
@@ -129,11 +134,14 @@ namespace Oxfall.Game.World
             public void Triangle(int submesh, Vector3 a, Vector3 b, Vector3 c)
             {
                 var normal = Vector3.Cross(b - a, c - a);
-                if (normal.sqrMagnitude < 1e-12f) return;
-                normal.Normalize();
+                float area = normal.magnitude;
+                if (area < 1e-6f) return;
+                normal /= area;
                 int start = _vertices.Count;
                 _vertices.Add(a); _vertices.Add(b); _vertices.Add(c);
                 _normals.Add(normal); _normals.Add(normal); _normals.Add(normal);
+                _areas.Add(area); _areas.Add(area); _areas.Add(area);
+                _submeshOf.Add(submesh); _submeshOf.Add(submesh); _submeshOf.Add(submesh);
                 _uvs.Add(new Vector2(0f, 0f)); _uvs.Add(new Vector2(1f, 0f)); _uvs.Add(new Vector2(0.5f, 1f));
                 var list = _triangles[submesh];
                 list.Add(start); list.Add(start + 1); list.Add(start + 2);
@@ -204,8 +212,13 @@ namespace Oxfall.Game.World
                     Triangle(submesh, points[faces[f]], points[faces[f + 1]], points[faces[f + 2]]);
             }
 
-            public Mesh Build(string name)
+            /// <param name="smoothAngle">
+            /// 0 keeps every face flat. Otherwise corners that meet at the same point share a normal
+            /// with the faces whose normals are within this many degrees of their own.
+            /// </param>
+            public Mesh Build(string name, float smoothAngle = 0f)
             {
+                if (smoothAngle > 0f) SmoothNormals(smoothAngle);
                 var mesh = new Mesh { name = name };
                 if (_vertices.Count > 65000) mesh.indexFormat = IndexFormat.UInt32;
                 mesh.SetVertices(_vertices);
@@ -216,6 +229,31 @@ namespace Oxfall.Game.World
                 mesh.RecalculateBounds();
                 mesh.UploadMeshData(true);
                 return mesh;
+            }
+
+            private void SmoothNormals(float maxAngle)
+            {
+                float minDot = Mathf.Cos(maxAngle * Mathf.Deg2Rad);
+                var faceNormals = new List<Vector3>(_normals);
+                var corners = new Dictionary<(Vector3Int, int), List<int>>();
+                for (int i = 0; i < _vertices.Count; i++)
+                {
+                    var p = _vertices[i];
+                    var key = (new Vector3Int(Mathf.RoundToInt(p.x * 1000f), Mathf.RoundToInt(p.y * 1000f),
+                        Mathf.RoundToInt(p.z * 1000f)), _submeshOf[i]);
+                    if (!corners.TryGetValue(key, out var list)) corners[key] = list = new List<int>(6);
+                    list.Add(i);
+                }
+                foreach (var list in corners.Values)
+                {
+                    foreach (int i in list)
+                    {
+                        var sum = Vector3.zero;
+                        foreach (int j in list)
+                            if (Vector3.Dot(faceNormals[i], faceNormals[j]) >= minDot) sum += faceNormals[j] * _areas[j];
+                        if (sum.sqrMagnitude > 1e-12f) _normals[i] = sum.normalized;
+                    }
+                }
             }
 
             private static Vector3 Ring(int i, int sides, float radius, float yawDegrees)

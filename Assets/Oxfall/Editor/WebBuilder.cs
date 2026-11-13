@@ -48,6 +48,7 @@ namespace Oxfall.Editor
                 if (int.TryParse(Environment.GetEnvironmentVariable("GITHUB_RUN_NUMBER"), out int run) && run > 0)
                     PlayerSettings.bundleVersion = $"0.1.{run}";
 
+                PreferSmallDownload();
                 var report = BuildPipeline.BuildPlayer(new BuildPlayerOptions
                 {
                     scenes = scenes,
@@ -67,6 +68,41 @@ namespace Oxfall.Editor
             finally
             {
                 PlayerSettings.bundleVersion = previousVersion;
+            }
+        }
+
+        /// <summary>
+        /// Phones on mobile data struggle with a big download, so the web build favours size: the
+        /// "Disk Size with LTO" code optimisation. It lives in the WebGL editor module, which only the
+        /// web image has, so it is set by reflection and skipped with a warning if it is not there.
+        /// </summary>
+        private static void PreferSmallDownload()
+        {
+            try
+            {
+                var type = AppDomain.CurrentDomain.GetAssemblies()
+                    .Select(a => a.GetType("UnityEditor.WebGL.UserBuildSettings", false))
+                    .FirstOrDefault(t => t != null);
+                var property = type?.GetProperty("codeOptimization",
+                    System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.Static);
+                if (property == null || !property.CanWrite)
+                {
+                    Debug.LogWarning("[Oxfall] WebGL code optimisation setting not found; building with the default.");
+                    return;
+                }
+                var names = Enum.GetNames(property.PropertyType);
+                string wanted = names.Contains("DiskSizeLTO") ? "DiskSizeLTO" : names.Contains("DiskSize") ? "DiskSize" : null;
+                if (wanted == null)
+                {
+                    Debug.LogWarning($"[Oxfall] No disk-size code optimisation among: {string.Join(", ", names)}");
+                    return;
+                }
+                property.SetValue(null, Enum.Parse(property.PropertyType, wanted));
+                Debug.Log($"[Oxfall] WebGL code optimisation: {wanted}");
+            }
+            catch (Exception error)
+            {
+                Debug.LogWarning($"[Oxfall] Could not set the WebGL code optimisation: {error.Message}");
             }
         }
     }

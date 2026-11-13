@@ -28,6 +28,7 @@ namespace Oxfall.Game
         private Inventory _inventory;
         private Hud _hud;
         private GraphicsQuality _quality;
+        private GrassField _grass;
         private PlayerController _player;
         private RecipeBook _recipes;
         private CraftingQueue _crafting;
@@ -79,7 +80,12 @@ namespace Oxfall.Game
             var controls = _hud.gameObject.AddComponent<TouchControls>();
             controls.Init(input, _hud);
 
-            _quality = new GraphicsQuality(camera, _world.Sun);
+            // Grass around the player; how far and how thick depends on the graphics level.
+            var grass = _world.Root.gameObject.AddComponent<GrassField>();
+            grass.Init(_world.Shape, materials.Grass, player.transform);
+            _grass = grass;
+
+            _quality = new GraphicsQuality(camera, _world.Sun, grass);
             _hud.SetQualityLabel(GraphicsQuality.Name(_quality.Tier));
             controls.QualityTapped += () =>
             {
@@ -131,6 +137,8 @@ namespace Oxfall.Game
             switch (command)
             {
                 case "nearest-tree": FaceNearest(ResourceNodeType.Tree); break;
+                case "view-hill": ViewFromHill(); break;
+                case "view-forest": ViewInForest(); break;
                 case "nearest-stone": FaceNearest(ResourceNodeType.Stone); break;
                 case "nearest-ore": FaceNearest(ResourceNodeType.MetalOre); break;
                 case "nearest-hemp": FaceNearest(ResourceNodeType.Hemp); break;
@@ -153,7 +161,7 @@ namespace Oxfall.Game
                               $"ore={_inventory.Count(ItemIds.MetalOre)} cloth={_inventory.Count(ItemIds.Cloth)} " +
                               $"hatchet={_inventory.Count(ItemIds.StoneHatchet)} pickaxe={_inventory.Count(ItemIds.StonePickaxe)} " +
                               $"pos={_player.transform.position} quality={GraphicsQuality.Name(_quality.Tier)} " +
-                              $"screen={Screen.width}x{Screen.height}");
+                              $"screen={Screen.width}x{Screen.height} grass={_grass.BladeCount}");
                     break;
                 default:
                     Debug.LogWarning("[Oxfall] Unknown debug command: " + command);
@@ -185,6 +193,41 @@ namespace Oxfall.Game
         }
 
         /// <summary>Stands the player a step from the nearest resource of a kind, looking at it.</summary>
+        /// <summary>Test view: the highest ground near the middle, looking out over the island.</summary>
+        private void ViewFromHill()
+        {
+            var shape = _world.Shape;
+            var best = Vector3.zero;
+            for (float z = -120f; z <= 120f; z += 6f)
+            for (float x = -120f; x <= 120f; x += 6f)
+            {
+                float h = shape.Height(x, z);
+                if (h > best.y) best = new Vector3(x, h, z);
+            }
+            float yaw = Mathf.Atan2(-best.x, -best.z) * Mathf.Rad2Deg + 180f;
+            _player.Teleport(best + Vector3.up * 0.3f, yaw, 8f);
+            Debug.Log($"[Oxfall] View from the hill at {best}");
+        }
+
+        /// <summary>Test view: standing in grass at the edge of a forest, looking along the ground.</summary>
+        private void ViewInForest()
+        {
+            var shape = _world.Shape;
+            var here = _player.transform.position;
+            var best = here;
+            float bestScore = float.MinValue;
+            for (float z = -150f; z <= 150f; z += 5f)
+            for (float x = -150f; x <= 150f; x += 5f)
+            {
+                float h = shape.Height(x, z);
+                float score = shape.GrassAmount(x, z, h) + shape.Forest(x, z) * 0.6f
+                              - Mathf.Abs(shape.Forest(x, z) - 0.5f) - new Vector2(x - here.x, z - here.z).magnitude * 0.002f;
+                if (score > bestScore) { bestScore = score; best = new Vector3(x, h, z); }
+            }
+            _player.Teleport(best + Vector3.up * 0.3f, 210f, 2f);
+            Debug.Log($"[Oxfall] View in the forest at {best}");
+        }
+
         private void FaceNearest(ResourceNodeType type)
         {
             ResourceNodeView best = null;

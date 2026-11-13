@@ -23,7 +23,13 @@ namespace Oxfall.Game.World
     /// </summary>
     public static class WorldBuilder
     {
-        public static readonly Color FogColour = new Color(0.68f, 0.75f, 0.80f);
+        // Late afternoon, hazy and warm: the "realistic stylised" look of the style mock-up, with the
+        // muted colours of its semi-realistic option. The horizon and the fog are the same colour so
+        // the far land melts into the sky.
+        public static readonly Color FogColour = new Color(0.79f, 0.76f, 0.69f);
+        public static readonly Color SkyTop = new Color(0.33f, 0.47f, 0.64f);
+        public static readonly Color SkyBelowHorizon = new Color(0.66f, 0.64f, 0.58f);
+        public static readonly Color SunColour = new Color(1f, 0.86f, 0.68f);
 
         public static WorldInstance Build(int seed, MaterialLibrary materials)
         {
@@ -44,26 +50,38 @@ namespace Oxfall.Game.World
         {
             var sunObject = new GameObject("Sun");
             sunObject.transform.SetParent(parent, false);
-            sunObject.transform.rotation = Quaternion.Euler(36f, -38f, 0f);
+            // Low enough for long shadows and warm light, high enough that the ground stays readable.
+            sunObject.transform.rotation = Quaternion.Euler(31f, -52f, 0f);
             var sun = sunObject.AddComponent<Light>();
             sun.type = LightType.Directional;
-            sun.color = new Color(1f, 0.94f, 0.84f);
-            sun.intensity = 1.3f;
+            sun.color = SunColour;
+            sun.intensity = 1.55f;
             sun.shadows = LightShadows.Hard;
-            sun.shadowStrength = 0.75f;
+            sun.shadowStrength = 0.7f;
             RenderSettings.sun = sun;
 
             // Three-colour ambient: cheap, needs no baking, and keeps shadows blue-ish rather than black.
             RenderSettings.ambientMode = AmbientMode.Trilight;
-            RenderSettings.ambientSkyColor = new Color(0.55f, 0.64f, 0.76f);
-            RenderSettings.ambientEquatorColor = new Color(0.50f, 0.52f, 0.49f);
-            RenderSettings.ambientGroundColor = new Color(0.26f, 0.23f, 0.19f);
+            RenderSettings.ambientSkyColor = new Color(0.47f, 0.54f, 0.64f);
+            RenderSettings.ambientEquatorColor = new Color(0.50f, 0.47f, 0.41f);
+            RenderSettings.ambientGroundColor = new Color(0.22f, 0.19f, 0.16f);
 
+            // Exponential-squared haze: clear near the player, thick far away, hides the far clip.
+            // GraphicsQuality sets the density per level.
             RenderSettings.fog = true;
-            RenderSettings.fogMode = FogMode.Linear;
+            RenderSettings.fogMode = FogMode.ExponentialSquared;
             RenderSettings.fogColor = FogColour;
-            RenderSettings.fogStartDistance = 40f;
-            RenderSettings.fogEndDistance = 260f;
+            RenderSettings.fogDensity = 0.009f;
+
+            var sky = RenderSettings.skybox;
+            if (sky != null && sky.HasProperty("_HorizonColor"))
+            {
+                sky.SetColor("_TopColor", SkyTop);
+                sky.SetColor("_HorizonColor", FogColour);
+                sky.SetColor("_BottomColor", SkyBelowHorizon);
+                sky.SetColor("_SunColor", SunColour);
+                sky.SetVector("_SunDirection", -sunObject.transform.forward);
+            }
             return sun;
         }
 

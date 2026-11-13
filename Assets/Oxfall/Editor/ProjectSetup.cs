@@ -183,9 +183,9 @@ namespace Oxfall.Editor
         /// </summary>
         private static void ConfigureWebGL()
         {
-            // Gzip with the decompression fallback: works on any static host (GitHub Pages included)
-            // without special server headers.
-            PlayerSettings.WebGL.compressionFormat = WebGLCompressionFormat.Gzip;
+            // Brotli: about a fifth smaller than gzip. GitHub Pages does not mark the files as
+            // compressed, so the loader's decompression fallback unpacks them in JavaScript.
+            PlayerSettings.WebGL.compressionFormat = WebGLCompressionFormat.Brotli;
             PlayerSettings.WebGL.decompressionFallback = true;
             PlayerSettings.WebGL.dataCaching = true;
             PlayerSettings.WebGL.exceptionSupport = WebGLExceptionSupport.None;
@@ -320,10 +320,20 @@ namespace Oxfall.Editor
             return sum / norm;
         }
 
+        /// <summary>
+        /// The sky material. <c>Oxfall/GradientSky</c> (Assets/Oxfall/Shaders) matches the fog at the
+        /// horizon; its colours are set by the game at start-up. Unity's procedural sky is the fallback.
+        /// </summary>
         private static Material CreateSkybox()
         {
-            var shader = Shader.Find("Skybox/Procedural");
-            if (shader == null) throw new InvalidOperationException("The Skybox/Procedural shader was not found.");
+            var shader = Shader.Find("Oxfall/GradientSky");
+            bool gradient = shader != null;
+            if (!gradient)
+            {
+                Debug.LogWarning("[Oxfall] Oxfall/GradientSky was not found; using Skybox/Procedural.");
+                shader = Shader.Find("Skybox/Procedural");
+            }
+            if (shader == null) throw new InvalidOperationException("No sky shader was found.");
 
             var sky = AssetDatabase.LoadAssetAtPath<Material>(SkyboxPath);
             if (sky == null)
@@ -332,17 +342,21 @@ namespace Oxfall.Editor
                 AssetDatabase.CreateAsset(sky, SkyboxPath);
             }
             sky.shader = shader;
-            sky.SetFloat("_SunDisk", 1f);
-            sky.DisableKeyword("_SUNDISK_NONE");
-            sky.DisableKeyword("_SUNDISK_HIGH_QUALITY");
-            sky.EnableKeyword("_SUNDISK_SIMPLE");
-            sky.SetFloat("_SunSize", 0.035f);
-            sky.SetFloat("_SunSizeConvergence", 5f);
-            sky.SetFloat("_AtmosphereThickness", 0.85f);
-            sky.SetColor("_SkyTint", new Color(0.50f, 0.55f, 0.62f));
-            sky.SetColor("_GroundColor", new Color(0.42f, 0.44f, 0.46f));
-            sky.SetFloat("_Exposure", 1.2f);
+            if (!gradient)
+            {
+                sky.SetFloat("_SunDisk", 1f);
+                sky.DisableKeyword("_SUNDISK_NONE");
+                sky.DisableKeyword("_SUNDISK_HIGH_QUALITY");
+                sky.EnableKeyword("_SUNDISK_SIMPLE");
+                sky.SetFloat("_SunSize", 0.035f);
+                sky.SetFloat("_SunSizeConvergence", 5f);
+                sky.SetFloat("_AtmosphereThickness", 0.85f);
+                sky.SetColor("_SkyTint", new Color(0.50f, 0.55f, 0.62f));
+                sky.SetColor("_GroundColor", new Color(0.42f, 0.44f, 0.46f));
+                sky.SetFloat("_Exposure", 1.2f);
+            }
             EditorUtility.SetDirty(sky);
+            Debug.Log($"[Oxfall] Sky shader: {shader.name}");
             return sky;
         }
 
@@ -362,10 +376,10 @@ namespace Oxfall.Editor
             RenderSettings.ambientEquatorColor = new Color(0.50f, 0.52f, 0.49f);
             RenderSettings.ambientGroundColor = new Color(0.26f, 0.23f, 0.19f);
             RenderSettings.fog = true;
-            RenderSettings.fogMode = FogMode.Linear;
-            RenderSettings.fogColor = new Color(0.68f, 0.75f, 0.80f);
-            RenderSettings.fogStartDistance = 40f;
-            RenderSettings.fogEndDistance = 260f;
+            // The game sets the real fog at start-up; this only decides the scene's defaults.
+            RenderSettings.fogMode = FogMode.ExponentialSquared;
+            RenderSettings.fogColor = new Color(0.81f, 0.77f, 0.69f);
+            RenderSettings.fogDensity = 0.009f;
 
             if (!EditorSceneManager.SaveScene(scene, ScenePath))
                 throw new IOException($"Unity could not save {ScenePath}.");

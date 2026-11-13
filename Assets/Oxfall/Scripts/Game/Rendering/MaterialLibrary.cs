@@ -20,6 +20,7 @@ namespace Oxfall.Game.Rendering
         private static readonly int BaseMap = Shader.PropertyToID("_BaseMap");
         private static readonly int Smoothness = Shader.PropertyToID("_Smoothness");
         private static readonly int Metallic = Shader.PropertyToID("_Metallic");
+        private static readonly int Cull = Shader.PropertyToID("_Cull");
 
         private readonly Material _base;
 
@@ -33,6 +34,7 @@ namespace Oxfall.Game.Rendering
         public Material Hemp { get; }
         public Material HandRock { get; }
         public Material Planks { get; }
+        public Material Grass { get; }
         public Material GhostOk { get; }
         public Material GhostBad { get; }
 
@@ -46,23 +48,26 @@ namespace Oxfall.Game.Rendering
                 _base = new Material(shader);
             }
 
-            Water = Make("Water", new Color(0.10f, 0.30f, 0.36f), 0.86f);
-            Bark = Make("Bark", new Color(0.33f, 0.24f, 0.17f), 0.05f);
+            // The muted, rusty palette of the style mock-up ("realistic stylised").
+            Water = Make("Water", new Color(0.20f, 0.31f, 0.33f), 0.82f);
+            Bark = Make("Bark", new Color(0.29f, 0.23f, 0.17f), 0.04f);
             Needles = new[]
             {
-                Make("Needles A", new Color(0.16f, 0.30f, 0.17f), 0.08f),
-                Make("Needles B", new Color(0.20f, 0.34f, 0.18f), 0.08f),
+                Make("Needles A", new Color(0.17f, 0.23f, 0.16f), 0.06f),
+                Make("Needles B", new Color(0.23f, 0.30f, 0.19f), 0.06f),
+                Make("Needles C", new Color(0.21f, 0.26f, 0.15f), 0.06f),
             };
             Leaves = new[]
             {
-                Make("Leaves A", new Color(0.30f, 0.45f, 0.18f), 0.08f),
-                Make("Leaves B", new Color(0.40f, 0.48f, 0.20f), 0.08f),
+                Make("Leaves A", new Color(0.29f, 0.35f, 0.20f), 0.06f),
+                Make("Leaves B", new Color(0.37f, 0.40f, 0.22f), 0.06f),
             };
-            Stone = Make("Stone", new Color(0.50f, 0.49f, 0.46f), 0.12f);
-            MetalOre = Make("Metal ore", new Color(0.52f, 0.36f, 0.26f), 0.25f);
-            Hemp = Make("Hemp", new Color(0.36f, 0.55f, 0.22f), 0.05f);
-            HandRock = Make("Hand rock", new Color(0.55f, 0.53f, 0.50f), 0.15f);
-            Planks = Make("Planks", new Color(0.60f, 0.45f, 0.28f), 0.08f);
+            Stone = Make("Stone", new Color(0.47f, 0.45f, 0.42f), 0.10f);
+            MetalOre = Make("Metal ore", new Color(0.50f, 0.33f, 0.22f), 0.22f);
+            Hemp = Make("Hemp", new Color(0.36f, 0.43f, 0.22f), 0.05f);
+            HandRock = Make("Hand rock", new Color(0.50f, 0.48f, 0.45f), 0.12f);
+            Planks = Make("Planks", new Color(0.49f, 0.36f, 0.25f), 0.06f);
+            Grass = MakeGrass();
             GhostOk = Make("Ghost ok", new Color(0.35f, 0.85f, 0.45f), 0.1f);
             GhostBad = Make("Ghost bad", new Color(0.90f, 0.30f, 0.25f), 0.1f);
         }
@@ -76,6 +81,39 @@ namespace Oxfall.Game.Rendering
             Ground = detailed != null ? new Material(detailed) { name = "Ground" } : Make("Ground", Color.white, 0.04f);
             Ground.SetTexture(BaseMap, colourMap);
             return Ground;
+        }
+
+        /// <summary>
+        /// Grass blades: both faces drawn, coloured by a small texture whose rows go from a dark root to
+        /// a light tip and whose columns are tints from green to dry, picked per blade by its UVs.
+        /// </summary>
+        private Material MakeGrass()
+        {
+            const int tints = 8, rows = 16;
+            var green = new Color(0.36f, 0.42f, 0.22f);
+            var dry = new Color(0.55f, 0.52f, 0.31f);
+            var pixels = new Color32[tints * rows];
+            for (int y = 0; y < rows; y++)
+            for (int x = 0; x < tints; x++)
+            {
+                float v = y / (rows - 1f);
+                var c = Color.Lerp(green, dry, x / (tints - 1f) * 0.8f) * Mathf.Lerp(0.5f, 1.12f, Mathf.Pow(v, 0.8f));
+                c.a = 1f;
+                pixels[y * tints + x] = c;
+            }
+            var texture = new Texture2D(tints, rows, TextureFormat.RGBA32, false)
+            {
+                name = "Grass tints",
+                wrapMode = TextureWrapMode.Clamp,
+                filterMode = FilterMode.Bilinear,
+            };
+            texture.SetPixels32(pixels);
+            texture.Apply(false, true);
+
+            var material = Make("Grass", Color.white, 0f);
+            material.SetTexture(BaseMap, texture);
+            if (material.HasProperty(Cull)) material.SetFloat(Cull, 0f); // both faces
+            return material;
         }
 
         private Material Make(string name, Color colour, float smoothness)

@@ -1,3 +1,4 @@
+using Oxfall.Game.World;
 using UnityEngine;
 using UnityEngine.Rendering;
 #if OXFALL_URP
@@ -20,8 +21,8 @@ namespace Oxfall.Game.Rendering
     /// <remarks>
     /// The levels change the URP asset in memory at run time (render scale, shadows, MSAA, HDR) and
     /// switch the camera's post-processing; nothing is written to disk. The colour grading is the
-    /// "semi-realistic" look: warm light, a little more contrast and colour, filmic tone mapping
-    /// when the phone can afford HDR.
+    /// "semi-realistic" look of the style mock-up: a little less colour and more contrast, warm,
+    /// with a vignette, and filmic tone mapping when the phone can afford HDR.
     /// </remarks>
     public sealed class GraphicsQuality
     {
@@ -29,6 +30,7 @@ namespace Oxfall.Game.Rendering
 
         private readonly Camera _camera;
         private readonly Light _sun;
+        private readonly GrassField _grass;
 #if OXFALL_URP
         private Volume _volume;
         private Tonemapping _tonemapping;
@@ -38,10 +40,11 @@ namespace Oxfall.Game.Rendering
 
         public QualityTier Tier { get; private set; }
 
-        public GraphicsQuality(Camera camera, Light sun)
+        public GraphicsQuality(Camera camera, Light sun, GrassField grass)
         {
             _camera = camera;
             _sun = sun;
+            _grass = grass;
             BuildPostProcessing();
             int saved = PlayerPrefs.GetInt(PrefKey, -1);
             Apply(saved >= 0 && saved <= 2 ? (QualityTier)saved : Recommended());
@@ -101,7 +104,7 @@ namespace Oxfall.Game.Rendering
 
             ApplyFrameRate();
 
-            float fogEnd, far, shadowDistance, renderScale;
+            float fogDensity, far, shadowDistance, renderScale, grassRadius, grassDensity;
             int msaa;
             bool hdr, post;
             LightShadows shadows;
@@ -109,21 +112,26 @@ namespace Oxfall.Game.Rendering
             {
                 case QualityTier.Low:
                     renderScale = 0.75f; shadows = LightShadows.None; shadowDistance = 0f;
-                    msaa = 1; hdr = false; post = false; fogEnd = 170f; far = 210f;
+                    msaa = 1; hdr = false; post = false; fogDensity = 0.0115f; far = 210f;
+                    grassRadius = 20f; grassDensity = 1.6f;
                     break;
                 case QualityTier.Medium:
                     renderScale = 0.9f; shadows = LightShadows.Hard; shadowDistance = 35f;
-                    msaa = 1; hdr = false; post = true; fogEnd = 230f; far = 270f;
+                    msaa = 1; hdr = false; post = true; fogDensity = 0.0095f; far = 270f;
+                    grassRadius = 32f; grassDensity = 3f;
                     break;
                 default:
                     renderScale = 1f; shadows = LightShadows.Hard; shadowDistance = 60f;
-                    msaa = 2; hdr = true; post = true; fogEnd = 300f; far = 340f;
+                    msaa = 2; hdr = true; post = true; fogDensity = 0.008f; far = 340f;
+                    grassRadius = 45f; grassDensity = 4f;
                     break;
             }
 
-            RenderSettings.fogEndDistance = fogEnd;
+            // Exponential-squared fog is all but opaque at the far clip at these densities.
+            RenderSettings.fogDensity = fogDensity;
             _camera.farClipPlane = far;
             _sun.shadows = shadows;
+            _grass?.SetQuality(grassRadius, grassDensity);
 
 #if OXFALL_URP
             if (GraphicsSettings.currentRenderPipeline is UniversalRenderPipelineAsset urp)
@@ -142,9 +150,9 @@ namespace Oxfall.Game.Rendering
             {
                 // Filmic tone mapping only with HDR; without it, ACES just crushes the colours.
                 _tonemapping.mode.Override(hdr ? TonemappingMode.ACES : TonemappingMode.None);
-                _colour.postExposure.Override(hdr ? 0.35f : 0f);
-                _colour.contrast.Override(hdr ? 14f : 8f);
-                _colour.saturation.Override(hdr ? 12f : 8f);
+                _colour.postExposure.Override(hdr ? 0.3f : 0f);
+                _colour.contrast.Override(hdr ? 16f : 12f);
+                _colour.saturation.Override(hdr ? -8f : -12f);
                 _bloom.active = tier == QualityTier.High;
             }
             if (_volume != null) _volume.enabled = post;
@@ -162,10 +170,10 @@ namespace Oxfall.Game.Rendering
             var profile = ScriptableObject.CreateInstance<VolumeProfile>();
             _tonemapping = profile.Add<Tonemapping>();
             _colour = profile.Add<ColorAdjustments>();
-            _colour.colorFilter.Override(new Color(1f, 0.97f, 0.92f));
+            _colour.colorFilter.Override(new Color(1f, 0.97f, 0.93f));
 
             var white = profile.Add<WhiteBalance>();
-            white.temperature.Override(8f);
+            white.temperature.Override(6f);
 
             _bloom = profile.Add<Bloom>();
             _bloom.intensity.Override(0.35f);
@@ -173,8 +181,8 @@ namespace Oxfall.Game.Rendering
             _bloom.scatter.Override(0.6f);
 
             var vignette = profile.Add<Vignette>();
-            vignette.intensity.Override(0.18f);
-            vignette.smoothness.Override(0.4f);
+            vignette.intensity.Override(0.26f);
+            vignette.smoothness.Override(0.45f);
 
             _volume.sharedProfile = profile;
 #endif

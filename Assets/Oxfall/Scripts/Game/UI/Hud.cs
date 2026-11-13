@@ -15,8 +15,11 @@ namespace Oxfall.Game.UI
     {
         public const float JoystickRadius = 130f;
 
-        private static readonly Color Panel = new Color(0f, 0f, 0f, 0.35f);
-        private static readonly Color Soft = new Color(1f, 1f, 1f, 0.22f);
+        // The warm dark panels and rust accent of the style mock-up.
+        private static readonly Color Panel = new Color(0.08f, 0.063f, 0.05f, 0.62f);
+        private static readonly Color Soft = new Color(0.10f, 0.08f, 0.06f, 0.42f);
+        private static readonly Color Accent = new Color(0.78f, 0.39f, 0.16f, 0.88f);
+        private static readonly Color Ready = new Color(0.40f, 0.52f, 0.26f, 0.92f);
 
         private RectTransform _safeArea;
         private Rect _appliedSafeArea;
@@ -92,9 +95,9 @@ namespace Oxfall.Game.UI
             // Bottom left: the movement stick. It follows the thumb, and rests here.
             JoystickHome = new Vector2(300f, 270f);
             JoystickBase = UiFactory.NewRect("Joystick", _safeArea, Vector2.zero, new Vector2(0.5f, 0.5f), JoystickHome, new Vector2(JoystickRadius * 2f, JoystickRadius * 2f));
-            UiFactory.AddImage(JoystickBase, UiFactory.Ring, new Color(1f, 1f, 1f, 0.55f));
+            UiFactory.AddImage(JoystickBase, UiFactory.Ring, new Color(0.95f, 0.92f, 0.88f, 0.5f));
             JoystickKnob = UiFactory.NewRect("Knob", JoystickBase, new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), Vector2.zero, new Vector2(120f, 120f));
-            UiFactory.AddImage(JoystickKnob, UiFactory.Circle, new Color(1f, 1f, 1f, 0.5f));
+            UiFactory.AddImage(JoystickKnob, UiFactory.Circle, new Color(0.95f, 0.92f, 0.88f, 0.45f));
 
             // Bottom right: attack (hold to keep hitting) and jump.
             AttackButton = UiFactory.NewRect("Attack", _safeArea, new Vector2(1f, 0f), new Vector2(0.5f, 0.5f), new Vector2(-210f, 230f), new Vector2(230f, 230f));
@@ -143,7 +146,7 @@ namespace Oxfall.Game.UI
         public void SetPressed(Image image, bool pressed)
         {
             // Only on change: touching a graphic's colour makes its canvas rebuild.
-            var target = pressed ? new Color(1f, 1f, 1f, 0.45f) : Soft;
+            var target = pressed ? Accent : Soft;
             if (image.color != target) image.color = target;
         }
 
@@ -178,7 +181,7 @@ namespace Oxfall.Game.UI
         /// <summary>Greens COLOCAR while the piece fits where it is aimed.</summary>
         public void SetPlaceValid(bool valid)
         {
-            var target = valid ? new Color(0.36f, 0.62f, 0.30f, 0.9f) : Panel;
+            var target = valid ? Ready : Panel;
             if (_placeImage.color != target) _placeImage.color = target;
         }
 
@@ -201,7 +204,7 @@ namespace Oxfall.Game.UI
 
             CraftPanel = UiFactory.NewRect("Craft panel", _safeArea, half, half, new Vector2(0f, 20f),
                 new Vector2(1040f, 120f + book.All.Count * rowHeight));
-            UiFactory.AddImage(CraftPanel, UiFactory.Rounded, new Color(0.05f, 0.06f, 0.07f, 0.86f));
+            UiFactory.AddImage(CraftPanel, UiFactory.Rounded, new Color(0.08f, 0.063f, 0.05f, 0.9f));
 
             var title = UiFactory.NewRect("Title", CraftPanel, new Vector2(0.5f, 1f), new Vector2(0.5f, 1f), new Vector2(0f, -22f), new Vector2(600f, 60f));
             UiFactory.AddText(title, "FABRICAR", 40, TextAnchor.MiddleCenter, new Color(0.85f, 0.73f, 0.54f));
@@ -227,7 +230,7 @@ namespace Oxfall.Game.UI
                     cost.Append(ingredient.Amount).Append(' ').Append(catalog.Get(ingredient.ItemId).DisplayName);
                 }
                 var costRect = UiFactory.NewRect("Cost", CraftPanel, topLeft, topLeft, new Vector2(420f, y), new Vector2(400f, 80f));
-                UiFactory.AddText(costRect, cost.ToString(), 26, TextAnchor.MiddleLeft, new Color(0.8f, 0.82f, 0.84f));
+                UiFactory.AddText(costRect, cost.ToString(), 26, TextAnchor.MiddleLeft, new Color(0.72f, 0.68f, 0.62f));
 
                 var button = UiFactory.NewRect("Make", CraftPanel, topRight, topRight, new Vector2(-30f, y - 4f), new Vector2(190f, 72f));
                 _craftButtons.Add(UiFactory.AddImage(button, UiFactory.Rounded, Soft));
@@ -254,7 +257,7 @@ namespace Oxfall.Game.UI
             if (!CraftPanelOpen) return;
             for (int i = 0; i < _craftRecipes.Count; i++)
             {
-                var target = _craftRecipes[i].CanAfford(_craftInventory) ? new Color(0.36f, 0.62f, 0.30f, 0.9f) : Soft;
+                var target = _craftRecipes[i].CanAfford(_craftInventory) ? Ready : Soft;
                 if (_craftButtons[i].color != target) _craftButtons[i].color = target;
             }
         }

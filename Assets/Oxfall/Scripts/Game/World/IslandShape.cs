@@ -99,13 +99,14 @@ namespace Oxfall.Game.World
             float n = Fbm(x * 0.05f + _colourOffset.x, z * 0.05f + _colourOffset.y, 3);
             float patches = Fbm(x * 0.015f + _colourOffset.y, z * 0.015f + _colourOffset.x, 2);
 
-            var wetSand = new Color(0.55f, 0.49f, 0.36f);
-            var sand = new Color(0.80f, 0.72f, 0.53f);
-            var grassA = new Color(0.30f, 0.42f, 0.18f);
-            var grassB = new Color(0.45f, 0.50f, 0.24f);
-            var dirt = new Color(0.42f, 0.34f, 0.24f);
-            var rock = new Color(0.46f, 0.44f, 0.41f);
-            var highRock = new Color(0.56f, 0.55f, 0.52f);
+            // The muted, rusty palette of the style mock-up.
+            var wetSand = new Color(0.40f, 0.36f, 0.29f);
+            var sand = new Color(0.64f, 0.57f, 0.44f);
+            var grassA = new Color(0.29f, 0.34f, 0.20f);
+            var grassB = new Color(0.42f, 0.44f, 0.26f);
+            var dirt = new Color(0.40f, 0.32f, 0.24f);
+            var rock = new Color(0.46f, 0.44f, 0.40f);
+            var highRock = new Color(0.54f, 0.52f, 0.48f);
 
             Color c;
             if (h < 0.4f) c = Color.Lerp(wetSand, sand, Mathf.InverseLerp(-1.5f, 0.4f, h));
@@ -120,6 +121,22 @@ namespace Oxfall.Game.World
             c = Color.Lerp(c, rock, Mathf.Clamp01((slope - 0.12f) * 6f));
             float shade = 0.9f + n * 0.2f;
             return new Color(c.r * shade, c.g * shade, c.b * shade, 1f);
+        }
+
+        /// <summary>
+        /// 0..1, how much grass grows here: none on sand, rock, dirt patches or steep ground. Uses the
+        /// same rules as <see cref="GroundColour"/> so blades stand where the ground is green.
+        /// </summary>
+        public float GrassAmount(float x, float z, float h)
+        {
+            if (h < 2.0f || h > 20f) return 0f;
+            float slope = Mathf.Abs(Height(x + 1f, z) - h) + Mathf.Abs(Height(x, z + 1f) - h);
+            float n = Fbm(x * 0.05f + _colourOffset.x, z * 0.05f + _colourOffset.y, 3);
+            float amount = Mathf.InverseLerp(2.0f, 2.8f, h)
+                           * (1f - Mathf.InverseLerp(16f, 20f, h))
+                           * (1f - Mathf.Clamp01((n - 0.58f) * 4f))
+                           * (1f - Mathf.InverseLerp(0.35f, 0.7f, slope));
+            return Mathf.Clamp01(amount);
         }
 
         /// <summary>Fractal noise in roughly 0..1.</summary>
