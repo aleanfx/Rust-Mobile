@@ -72,6 +72,21 @@ namespace Oxfall.Game.Rendering
 #endif
         }
 
+        /// <summary>
+        /// Phones are asked for 60 FPS on every tier: on Low, the savings are what make 30+ possible.
+        /// A browser is left to pace itself: it already draws in step with the screen, and a fixed
+        /// target there makes Unity drive frames from a timer instead, which stutters.
+        /// </summary>
+        public static void ApplyFrameRate()
+        {
+#if UNITY_WEBGL && !UNITY_EDITOR
+            Application.targetFrameRate = -1;
+#else
+            Application.targetFrameRate = 60;
+            QualitySettings.vSyncCount = 0;
+#endif
+        }
+
         public void Next()
         {
             Apply((QualityTier)(((int)Tier + 1) % 3));
@@ -84,9 +99,7 @@ namespace Oxfall.Game.Rendering
             Tier = tier;
             Debug.Log($"[Oxfall] Graphics quality: {Name(tier)}");
 
-            // Always ask for 60: on the low tier the savings below are what make 30+ possible.
-            Application.targetFrameRate = 60;
-            QualitySettings.vSyncCount = 0;
+            ApplyFrameRate();
 
             float fogEnd, far, shadowDistance, renderScale;
             int msaa;

@@ -44,8 +44,7 @@ namespace Oxfall.Game
 
         private void Start()
         {
-            Application.targetFrameRate = 60;
-            QualitySettings.vSyncCount = 0;
+            GraphicsQuality.ApplyFrameRate();
             Screen.sleepTimeout = SleepTimeout.NeverSleep;
 
             var clock = System.Diagnostics.Stopwatch.StartNew();
