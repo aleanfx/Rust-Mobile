@@ -1,0 +1,24 @@
+# CC0 textures from Poly Haven (https://polyhaven.com). One per line: <asset id> <maps...>
+# Maps: diff (colour), nor_gl (normal, OpenGL), rough (roughness). Downloaded at 1k and shrunk to
+# 512 px by .github/workflows/fetch-art.yml, into Assets/Oxfall/Art/Textures/<id>/.
+# Only textures a material uses end up in the game.
+
+# Ground
+leafy_grass diff nor_gl
+forest_leaves_02 diff nor_gl
+brown_mud_leaves_01 diff nor_gl
+dry_ground_01 diff nor_gl
+coast_sand_01 diff nor_gl
+rocky_terrain_02 diff nor_gl
+aerial_grass_rock diff nor_gl
+
+# Rocks and trees
+rock_face diff nor_gl
+rock_boulder_dry diff nor_gl
+bark_brown_02 diff nor_gl
+
+# Building
+weathered_planks diff nor_gl
+old_planks_02 diff nor_gl
+rusty_corrugated_iron diff nor_gl
+rusty_metal_02 diff nor_gl

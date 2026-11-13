@@ -1,0 +1,71 @@
+# Downloads the CC0 textures listed in tools/art/polyhaven.txt, shrinks them for phones and
+# commits them under Assets/Oxfall/Art/Textures. Runs when the list changes. Files already there
+# are kept, so adding a line only downloads the new texture.
+name: Fetch art (CC0)
+
+on:
+  push:
+    branches: [claude/project-thread-v0it3s]
+    paths:
+      - tools/art/polyhaven.txt
+      - .github/workflows/fetch-art.yml
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: fetch-art
+
+jobs:
+  fetch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Download and shrink
+        shell: bash
+        run: |
+          set -uo pipefail
+          if command -v magick >/dev/null; then IM=magick
+          elif command -v convert >/dev/null; then IM=convert
+          else sudo apt-get -qq update && sudo apt-get -qq install -y imagemagick >/dev/null; IM=convert; fi
+          out=Assets/Oxfall/Art/Textures
+          mkdir -p "$out"
+          failed=0
+          while read -r id maps; do
+            [[ -z "${id:-}" || "$id" == \#* ]] && continue
+            mkdir -p "$out/$id"
+            for map in $maps; do
+              dest="$out/$id/${id}_${map}.jpg"
+              [ -f "$dest" ] && continue
+              url="https://dl.polyhaven.org/file/ph-assets/Textures/jpg/1k/$id/${id}_${map}_1k.jpg"
+              if curl -sSfL --retry 3 -o /tmp/texture.jpg "$url" && $IM /tmp/texture.jpg -resize 512x512 -quality 90 "$dest"; then
+                echo "ok   $id $map ($(stat -c %s "$dest") bytes)"
+              else
+                echo "::warning::Could not get $url"
+                rm -f "$dest"
+                failed=1
+              fi
+            done
+          done < tools/art/polyhaven.txt
+          {
+            echo "# Textures"
+            echo
+            echo "CC0 (public domain) textures from Poly Haven, https://polyhaven.com, downloaded by"
+            echo "\`.github/workflows/fetch-art.yml\` from the list in \`tools/art/polyhaven.txt\` and shrunk to 512 px."
+          } > "$out/SOURCES.md"
+          du -sh "$out"
+          exit $failed
+
+      - name: Commit the textures
+        if: always()
+        shell: bash
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add Assets/Oxfall/Art
+          if git diff --cached --quiet; then echo "Nothing new."; exit 0; fi
+          git commit -q -m "Art: CC0 textures from Poly Haven"
+          for i in 1 2 3; do git pull -q --rebase && git push -q && exit 0; sleep 5; done
+          exit 1
