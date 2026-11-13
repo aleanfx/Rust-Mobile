@@ -70,6 +70,7 @@ Material:
     - _NormalStrength: 1
     - _TintStrength: 0.3
     m_Colors:
+    - _GrassColor: {r: 0.82, g: 0.95, b: 0.74, a: 1}
     - _Tiling: {r: 3, g: 2.5, b: 3, a: 4}
   m_BuildTextureStacks: []
   m_AllowLocking: 1
