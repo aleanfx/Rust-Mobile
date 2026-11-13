@@ -39,7 +39,11 @@ namespace Oxfall.Game
         private PlayerController _player;
         private RecipeBook _recipes;
         private CraftingQueue _crafting;
+        private BuildingViews _buildings;
         private BuildSystem _build;
+        private HammerTool _hammer;
+        private DoorPlacer _doorPlacer;
+        private DoorUser _doorUser;
         private CampfirePlacer _campfires;
         private DayNight _dayNight;
         private Vitals _vitals;
@@ -158,12 +162,29 @@ namespace Oxfall.Game
             _crafting.Overflow = (itemId, amount) => _hud.ShowToast("Inventario lleno");
             _hud.BuildCraftPanel(_recipes, _catalog, _inventory, TryCraft);
 
-            // Building: the Core grid holds what stands where; BuildSystem aims, checks terrain and draws.
-            // Holding the building plan is building mode.
+            // Building: the Core grid holds what stands where and BuildingViews draws it. The plan in
+            // hand places twig pieces, the hammer upgrades and demolishes them, a door in hand hangs it.
+            var grid = new BuildingGrid();
+            _buildings = new BuildingViews(grid, materials) { Viewer = player.transform };
             _build = playerObject.AddComponent<BuildSystem>();
-            _build.Init(new BuildingGrid(), input, _inventory, _world.Shape, player, materials, _hud);
-            _hud.PieceTapped += _build.CyclePiece;
+            _build.Init(_buildings, input, _inventory, _world.Shape, player, materials, _hud);
             _build.Placed += () => audio.Play(SoundCue.Place);
+            _hammer = playerObject.AddComponent<HammerTool>();
+            _hammer.Init(grid, input, _inventory, _catalog, player.Head, _hud);
+            _hammer.Upgraded += () => { audio.Play(SoundCue.Place); _gatherer.PlaySwing(); };
+            _hammer.Demolished += () => audio.Play(SoundCue.Wood);
+            _hud.PieceTapped += () =>
+            {
+                if (_hammer.Active) _hammer.Demolish();
+                else if (_build.Active) _build.CyclePiece();
+            };
+            _doorPlacer = playerObject.AddComponent<DoorPlacer>();
+            _doorPlacer.Init(_buildings, input, _inventory, player.Head, _hud, materials);
+            _doorPlacer.Placed += () => audio.Play(SoundCue.Place);
+            _doorUser = playerObject.AddComponent<DoorUser>();
+            _doorUser.Init(grid, player.Head, _hud);
+            _doorUser.Used += () => audio.Play(SoundCue.Wood);
+            _hud.UseTapped += _doorUser.Use;
 
             // Holding a campfire shows where it would go; attack puts it down.
             var campfire = models[ItemIds.Campfire];
@@ -194,12 +215,18 @@ namespace Oxfall.Game
             // Leave the old mode before entering the new one: both drive the attack button's label.
             bool plan = _hotbar.IsHolding(ItemIds.BuildingPlan);
             bool fire = _hotbar.IsHolding(ItemIds.Campfire);
+            bool hammer = _hotbar.IsHolding(ItemIds.Hammer);
+            bool door = _hotbar.IsHolding(ItemIds.WoodenDoor);
             if (!plan) _build.SetActive(false);
             if (!fire) _campfires.SetActive(false);
+            if (!hammer) _hammer.SetActive(false);
+            if (!door) _doorPlacer.SetActive(false);
             if (plan) _build.SetActive(true);
             if (fire) _campfires.SetActive(true);
+            if (hammer) { _hammer.SetActive(true); _hammer.Refresh(); }
+            if (door) _doorPlacer.SetActive(true);
             bool food = _hotbar.HeldDefinition?.Category == ItemCategory.Food;
-            _hud.SetAttackLabel(plan || fire ? "COLOCAR" : food ? "COMER" : "GOLPEAR");
+            _hud.SetAttackLabel(plan || fire || door ? "COLOCAR" : hammer ? "MEJORAR" : food ? "COMER" : "GOLPEAR");
         }
 
         private void OnDied()
@@ -268,12 +295,25 @@ namespace Oxfall.Game
                     _inventory.Add(ItemIds.StonePickaxe, 1);
                     _inventory.Add(ItemIds.BuildingPlan, 1);
                     _inventory.Add(ItemIds.Campfire, 2);
+                    _inventory.Add(ItemIds.Hammer, 1);
+                    _inventory.Add(ItemIds.WoodenDoor, 1);
                     _inventory.Add(ItemIds.Wood, 1500);
                     _inventory.Add(ItemIds.Stone, 700);
                     _inventory.Add(ItemIds.MetalOre, 240);
                     _inventory.Add(ItemIds.Cloth, 40);
                     break;
                 case "build": _hotbar.SelectItem(ItemIds.BuildingPlan); break;
+                case "hammer": _hotbar.SelectItem(ItemIds.Hammer); break;
+                case "door": _hotbar.SelectItem(ItemIds.WoodenDoor); break;
+                case "upgrade": _hammer.Upgrade(); break;
+                case "demolish": _hammer.Demolish(); break;
+                case "place-door": _doorPlacer.Place(); break;
+                case "use-door": _doorUser.Use(); break;
+                case "build-hut": BuildTestHut(); break;
+                case "aim-wall": AimAtPiece(PieceType.Wall, 1.5f); break;
+                case "aim-door": AimAtPiece(PieceType.Doorway, 1.1f); break;
+                case "upgrade-all-1": UpgradeAll(BuildingTier.Wood); break;
+                case "upgrade-all-2": UpgradeAll(BuildingTier.Stone); break;
                 case "piece": _build.CyclePiece(); break;
                 case "place": _build.Place(); break;
                 case "inventory": _inventoryUi.Toggle(); break;
@@ -298,6 +338,7 @@ namespace Oxfall.Game
                               $"held={_hotbar.Held} building={_build.Active} campfires={_campfires.PlacedCount} " +
                               $"time={_dayNight.Cycle.Clock} health={_vitals.Health:0} food={_vitals.Food:0} water={_vitals.Water:0} " +
                               $"ponds={_world.Shape.Ponds.Count} berries={_inventory.Count(ItemIds.Berries)} " +
+                              $"pieces={_buildings.Grid.PieceCount} views={_buildings.Count} doorLook={_doorUser.LookingAtDoor} " +
                               $"pos={_player.transform.position} quality={GraphicsQuality.Name(_quality.Tier)} " +
                               $"screen={Screen.width}x{Screen.height} grass={_grass.BladeCount}");
                     break;
@@ -315,6 +356,64 @@ namespace Oxfall.Game
                         Debug.LogWarning("[Oxfall] Unknown debug command: " + command);
                     break;
             }
+        }
+
+        /// <summary>
+        /// For tests: a one-room twig hut ahead of the player (floor, two walls, a doorway facing the
+        /// player, a roof), free, and the player turned to face its doorway from outside.
+        /// </summary>
+        private void BuildTestHut()
+        {
+            var grid = _buildings.Grid;
+            var p = _player.transform.position;
+            var forward = _player.transform.forward;
+            forward.y = 0f;
+            var ahead = p + forward.normalized * 5f;
+            var cell = BuildingGrid.CellAt(ahead.x, ahead.z);
+            float x0 = cell.X * BuildingGrid.CellSize, z0 = cell.Z * BuildingGrid.CellSize, s = BuildingGrid.CellSize;
+            float top = Mathf.Max(Mathf.Max(_world.Shape.Height(x0, z0), _world.Shape.Height(x0 + s, z0)),
+                Mathf.Max(_world.Shape.Height(x0, z0 + s), _world.Shape.Height(x0 + s, z0 + s))) + 0.25f;
+            grid.PlaceFoundation(cell, top);
+            // The doorway on the side facing the player.
+            var toPlayer = new Vector3(p.x - (x0 + s * 0.5f), 0f, p.z - (z0 + s * 0.5f));
+            Edge doorway = Mathf.Abs(toPlayer.x) > Mathf.Abs(toPlayer.z)
+                ? (toPlayer.x > 0f ? cell.East : cell.West)
+                : (toPlayer.z > 0f ? cell.North : cell.South);
+            foreach (var edge in cell.Edges)
+                grid.PlaceEdge(edge, edge.Equals(doorway) ? PieceType.Doorway : PieceType.Wall);
+            grid.PlaceRoof(cell);
+            Debug.Log($"[Oxfall] Test hut at {cell}, doorway {doorway}, pieces={grid.PieceCount}");
+        }
+
+        /// <summary>For tests: turns the player, where they stand, to look at the nearest wall or doorway.</summary>
+        private void AimAtPiece(PieceType type, float height)
+        {
+            var eye = _player.Head.position;
+            float best = float.MaxValue;
+            Vector3 target = Vector3.zero;
+            foreach (var pair in _buildings.Grid.EdgePieces)
+            {
+                if (pair.Value != type) continue;
+                var mid = BuildingViews.EdgeMid(pair.Key);
+                mid.y = _buildings.Grid.EdgeBaseHeight(pair.Key) + height;
+                float d = (mid - eye).sqrMagnitude;
+                if (d < best) { best = d; target = mid; }
+            }
+            if (best == float.MaxValue) return;
+            var to = target - eye;
+            float yaw = Mathf.Atan2(to.x, to.z) * Mathf.Rad2Deg;
+            float pitch = -Mathf.Atan2(to.y, new Vector2(to.x, to.z).magnitude) * Mathf.Rad2Deg;
+            _player.Teleport(_player.transform.position, yaw, pitch);
+        }
+
+        /// <summary>For tests: raises every piece to a tier, free.</summary>
+        private void UpgradeAll(BuildingTier tier)
+        {
+            var pieces = new System.Collections.Generic.List<PieceRef>();
+            foreach (var f in _buildings.Grid.Foundations) pieces.Add(PieceRef.Foundation(f.Key));
+            foreach (var e in _buildings.Grid.EdgePieces) pieces.Add(PieceRef.OnEdge(e.Key, e.Value));
+            foreach (var r in _buildings.Grid.Roofs) pieces.Add(PieceRef.Roof(r));
+            foreach (var piece in pieces) _buildings.Grid.Upgrade(piece, tier);
         }
 
         private void TryCraft(Recipe recipe)

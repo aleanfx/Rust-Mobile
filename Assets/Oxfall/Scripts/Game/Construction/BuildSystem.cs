@@ -12,9 +12,10 @@ namespace Oxfall.Game.Construction
 {
     /// <summary>
     /// Building mode, while the building plan is in hand: shows a ghost of the chosen piece where
-    /// it would go, green when it can be placed, and places it when attack is pressed. Where pieces may go and what they cost is decided by the Core's
-    /// <see cref="BuildingGrid"/> and <see cref="BuildCosts"/>; this adds the terrain checks and the
-    /// visuals.
+    /// it would go, green when it can be placed, and places it when attack is pressed. Where pieces
+    /// may go and what they cost is decided by the Core's <see cref="BuildingGrid"/> and
+    /// <see cref="BuildCosts"/>; this adds the terrain checks. <see cref="BuildingViews"/> draws
+    /// what gets built.
     /// </summary>
     public sealed class BuildSystem : MonoBehaviour
     {
@@ -27,16 +28,14 @@ namespace Oxfall.Game.Construction
             { PieceType.Foundation, PieceType.Wall, PieceType.Doorway, PieceType.Roof };
 
         private BuildingGrid _grid;
+        private BuildingViews _views;
         private PlayerInput _input;
         private Inventory _inventory;
         private IslandShape _shape;
         private PlayerController _player;
         private MaterialLibrary _materials;
         private Hud _hud;
-        private Transform _pieces;
 
-        private readonly Mesh[] _meshes = new Mesh[4];
-        private readonly Bounds[][] _boxes = new Bounds[4][];
         private MeshFilter _ghostFilter;
         private MeshRenderer _ghostRenderer;
 
@@ -53,30 +52,17 @@ namespace Oxfall.Game.Construction
         public bool Active { get; private set; }
         public PieceType Current => Order[_index];
 
-        public void Init(BuildingGrid grid, PlayerInput input, Inventory inventory, IslandShape shape, PlayerController player,
+        public void Init(BuildingViews views, PlayerInput input, Inventory inventory, IslandShape shape, PlayerController player,
             MaterialLibrary materials, Hud hud)
         {
-            _grid = grid;
+            _views = views;
+            _grid = views.Grid;
             _input = input;
             _inventory = inventory;
             _shape = shape;
             _player = player;
             _materials = materials;
             _hud = hud;
-            _pieces = new GameObject("Buildings").transform;
-
-            // Each piece is a few boxes: the same list makes its mesh and its colliders.
-            _boxes[(int)PieceType.Foundation] = new[] { Box(0f, -1.25f, 0f, S, 2.5f, S) };
-            _boxes[(int)PieceType.Wall] = new[] { Box(0f, 1.5f, 0f, S, BuildingGrid.WallHeight, 0.2f) };
-            _boxes[(int)PieceType.Doorway] = new[]
-            {
-                Box(-1.05f, 1.5f, 0f, 0.9f, BuildingGrid.WallHeight, 0.2f),
-                Box(1.05f, 1.5f, 0f, 0.9f, BuildingGrid.WallHeight, 0.2f),
-                Box(0f, 2.6f, 0f, 1.2f, 0.8f, 0.2f),
-            };
-            _boxes[(int)PieceType.Roof] = new[] { Box(0f, 0.1f, 0f, S + 0.2f, 0.2f, S + 0.2f) };
-            for (int i = 0; i < _meshes.Length; i++)
-                _meshes[i] = MeshFactory.Boxes(((PieceType)i).ToString(), _boxes[i]);
 
             var ghost = new GameObject("Build ghost");
             _ghostFilter = ghost.AddComponent<MeshFilter>();
@@ -104,7 +90,7 @@ namespace Oxfall.Game.Construction
             Active = on;
             _ghostFilter.gameObject.SetActive(Active);
             _hud.SetBuildMode(Active, Name(Current));
-            if (Active) _hud.ShowToast("Modo construcción: apunta y toca COLOCAR");
+            if (Active) _hud.ShowToast("Apunta y toca COLOCAR. Luego mejóralo con el martillo");
         }
 
         public void CyclePiece()
@@ -124,7 +110,7 @@ namespace Oxfall.Game.Construction
             }
             if (!BuildCosts.CanAfford(_inventory, Current))
             {
-                _hud.ShowToast("Faltan materiales: cada pieza cuesta 50 de Madera");
+                _hud.ShowToast($"Faltan materiales: cada pieza cuesta {BuildCosts.TwigWood} de Madera");
                 return;
             }
 
@@ -142,24 +128,12 @@ namespace Oxfall.Game.Construction
             }
             BuildCosts.TryPay(_inventory, Current);
 
-            var piece = new GameObject(Current.ToString());
-            piece.transform.SetParent(_pieces, false);
-            piece.transform.SetPositionAndRotation(_ghostFilter.transform.position, _ghostFilter.transform.rotation);
-            piece.AddComponent<MeshFilter>().sharedMesh = _meshes[(int)Current];
-            piece.AddComponent<MeshRenderer>().sharedMaterial = _materials.Planks;
-            foreach (var box in _boxes[(int)Current])
-            {
-                var collider = piece.AddComponent<BoxCollider>();
-                collider.center = box.center;
-                collider.size = box.size;
-            }
-
             // A floor built under the player's feet lifts them onto it instead of trapping them.
             if (Current == PieceType.Foundation && BuildingGrid.CellAt(_player.transform.position.x,
                     _player.transform.position.z).Equals(_cell))
                 _player.LiftTo(_top + 0.05f);
 
-            Debug.Log($"[Oxfall] Built {Current} at {piece.transform.position}");
+            Debug.Log($"[Oxfall] Built {Current} at {_ghostFilter.transform.position}");
             Placed?.Invoke();
         }
 
@@ -208,14 +182,14 @@ namespace Oxfall.Game.Construction
                 default:
                     _edge = NearestEdge(_cell, point);
                     Check(_grid.CanPlaceEdge(_edge));
-                    var mid = EdgeMid(_edge);
+                    var mid = BuildingViews.EdgeMid(_edge);
                     float baseHeight = _valid ? _grid.EdgeBaseHeight(_edge) : _shape.Height(mid.x, mid.z);
                     position = new Vector3(mid.x, baseHeight, mid.z);
-                    if (_edge.Axis == EdgeAxis.AlongZ) rotation = Quaternion.Euler(0f, 90f, 0f);
+                    rotation = BuildingViews.EdgeRotation(_edge);
                     break;
             }
 
-            _ghostFilter.sharedMesh = _meshes[(int)Current];
+            _ghostFilter.sharedMesh = _views.MeshFor(Current);
             _ghostFilter.transform.SetPositionAndRotation(position, rotation);
         }
 
@@ -272,18 +246,12 @@ namespace Oxfall.Game.Construction
             float bestDistance = float.MaxValue;
             foreach (var edge in cell.Edges)
             {
-                var mid = EdgeMid(edge);
+                var mid = BuildingViews.EdgeMid(edge);
                 float d = (mid.x - point.x) * (mid.x - point.x) + (mid.z - point.z) * (mid.z - point.z);
                 if (d < bestDistance) { bestDistance = d; best = edge; }
             }
             return best;
         }
 
-        private static Vector3 EdgeMid(Edge edge) => edge.Axis == EdgeAxis.AlongX
-            ? new Vector3((edge.X + 0.5f) * S, 0f, edge.Z * S)
-            : new Vector3(edge.X * S, 0f, (edge.Z + 0.5f) * S);
-
-        private static Bounds Box(float cx, float cy, float cz, float sx, float sy, float sz) =>
-            new Bounds(new Vector3(cx, cy, cz), new Vector3(sx, sy, sz));
     }
 }

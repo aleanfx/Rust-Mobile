@@ -21,6 +21,11 @@ weathered_planks diff nor_gl
 old_planks_02 diff nor_gl
 rusty_corrugated_iron diff nor_gl
 rusty_metal_02 diff nor_gl
+# Stone tier walls: the first that downloads is used (ArtSetup).
+castle_wall_slates diff nor_gl
+stone_wall diff nor_gl
+medieval_blocks_02 diff nor_gl
+stone_brick_wall_001 diff nor_gl
 
 # Leaves and needles: cut-outs (colour + alpha) from Poly Haven tree models.
 # Format: model <asset id> <texture prefix>

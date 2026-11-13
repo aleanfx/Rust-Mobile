@@ -416,6 +416,112 @@ namespace Oxfall.Game.World
             return b.Build("Torch", 55f);
         }
 
+        /// <summary>
+        /// A hammer for building: a short haft and a squat stone head across it, lashed on.
+        /// Submeshes: wood, stone, lashing (like the hatchet, so it shares its materials).
+        /// </summary>
+        public static Mesh Hammer()
+        {
+            var b = new FlatMeshBuilder(3) { UvScale = 0.25f };
+            b.AddTube(0, new Vector3(0f, -0.04f, 0f), new Vector3(0f, 0.44f, 0f), 0.017f, 0.016f, 7, 0);
+            b.AddTube(1, new Vector3(-0.085f, 0.43f, 0f), new Vector3(0.085f, 0.43f, 0f), 0.038f, 0.036f, 8, 1);
+            b.AddTube(1, new Vector3(0.085f, 0.43f, 0f), new Vector3(0.1f, 0.43f, 0f), 0.036f, 0.03f, 8, 1);
+            b.AddTube(2, new Vector3(0f, 0.385f, 0f), new Vector3(0f, 0.405f, 0f), 0.024f, 0.024f, 7, 2);
+            b.AddTube(2, new Vector3(-0.03f, 0.43f, 0f), new Vector3(0.03f, 0.43f, 0f), 0.041f, 0.041f, 8, 2);
+            return b.Build("Hammer", 55f);
+        }
+
+        /// <summary>
+        /// A twig wall or doorway frame: posts and rails with thin sticks woven between them, see-through
+        /// in places, so a twig base reads as unfinished. Same footprint as the solid wall (3 x 3 m,
+        /// standing on the origin, along X).
+        /// </summary>
+        public static Mesh TwigWall(bool doorway)
+        {
+            var b = new FlatMeshBuilder(1) { UvScale = 0.6f };
+            var random = new System.Random(doorway ? 31 : 17);
+            const float post = 0.07f, stick = 0.035f;
+            Stick(b, -1.42f, 0f, -1.42f, 3f, 0f, post);
+            Stick(b, 1.42f, 0f, 1.42f, 3f, 0f, post);
+            Stick(b, -1.5f, 0.1f, 1.5f, 0.1f, 0f, post);
+            Stick(b, -1.5f, 2.9f, 1.5f, 2.9f, 0f, post);
+            if (!doorway)
+            {
+                for (int i = 0; i < 9; i++)
+                {
+                    float x = -1.2f + i * 0.3f + Rand(random, -0.04f, 0.04f);
+                    Stick(b, x + Rand(random, -0.05f, 0.05f), 0.1f, x + Rand(random, -0.05f, 0.05f), 2.9f, i % 2 == 0 ? 0.035f : -0.035f, stick);
+                }
+                Stick(b, -1.42f, 1.0f, 1.42f, 1.05f, 0.06f, stick);
+                Stick(b, -1.42f, 2.0f, 1.42f, 1.95f, -0.06f, stick);
+                Stick(b, -1.38f, 0.15f, 1.38f, 2.85f, 0.075f, 0.045f);
+                Stick(b, 1.38f, 0.15f, -1.38f, 2.85f, -0.075f, 0.045f);
+            }
+            else
+            {
+                Stick(b, -0.62f, 0f, -0.62f, 2.9f, 0f, post);
+                Stick(b, 0.62f, 0f, 0.62f, 2.9f, 0f, post);
+                Stick(b, -1.5f, 2.2f, 1.5f, 2.2f, 0f, post);
+                foreach (float side in new[] { -1f, 1f })
+                {
+                    for (int i = 0; i < 3; i++)
+                    {
+                        float x = side * (0.84f + i * 0.22f);
+                        Stick(b, x, 0.1f, x + Rand(random, -0.04f, 0.04f), 2.9f, i % 2 == 0 ? 0.035f : -0.035f, stick);
+                    }
+                    Stick(b, side * 0.66f, 0.15f, side * 1.38f, 2.15f, 0.075f, 0.045f);
+                }
+                for (int i = 0; i < 4; i++)
+                {
+                    float x = -0.45f + i * 0.3f;
+                    Stick(b, x, 2.2f, x + Rand(random, -0.03f, 0.03f), 2.9f, i % 2 == 0 ? 0.035f : -0.035f, stick);
+                }
+            }
+            return b.Build(doorway ? "TwigDoorway" : "TwigWall", 50f);
+        }
+
+        /// <summary>A twig roof: a square frame with sticks laid across, 3.2 m square on the origin.</summary>
+        public static Mesh TwigRoof()
+        {
+            var b = new FlatMeshBuilder(1) { UvScale = 0.6f };
+            var random = new System.Random(23);
+            const float h = 1.55f, beam = 0.07f;
+            b.AddTube(0, new Vector3(-h, 0.05f, -h), new Vector3(h, 0.05f, -h), beam, beam, 6);
+            b.AddTube(0, new Vector3(-h, 0.05f, h), new Vector3(h, 0.05f, h), beam, beam, 6);
+            b.AddTube(0, new Vector3(-h, 0.05f, -h), new Vector3(-h, 0.05f, h), beam, beam, 6);
+            b.AddTube(0, new Vector3(h, 0.05f, -h), new Vector3(h, 0.05f, h), beam, beam, 6);
+            b.AddTube(0, new Vector3(0f, 0.08f, -h), new Vector3(0f, 0.08f, h), beam, beam, 6);
+            for (int i = 0; i < 11; i++)
+            {
+                float z = -1.4f + i * 0.28f + Rand(random, -0.03f, 0.03f);
+                float y = 0.14f + Rand(random, -0.01f, 0.02f);
+                b.AddTube(0, new Vector3(-h, y, z + Rand(random, -0.05f, 0.05f)), new Vector3(h, y, z + Rand(random, -0.05f, 0.05f)), 0.04f, 0.035f, 5);
+            }
+            return b.Build("TwigRoof", 50f);
+        }
+
+        /// <summary>
+        /// A plank door with braces and a handle, hinged at the origin: 1.16 m wide along +X, 2.17 m
+        /// tall, so it fills the doorway's opening.
+        /// </summary>
+        public static Mesh Door()
+        {
+            var b = new FlatMeshBuilder(1) { UvScale = 1.2f };
+            b.AddBox(0, new Vector3(0.01f, 0f, -0.035f), new Vector3(1.15f, 2.16f, 0.035f));
+            foreach (float z in new[] { 1f, -1f })
+            {
+                float lo = z > 0f ? 0.035f : -0.07f, hi = z > 0f ? 0.07f : -0.035f;
+                b.AddBox(0, new Vector3(0.06f, 0.3f, lo), new Vector3(1.1f, 0.44f, hi));
+                b.AddBox(0, new Vector3(0.06f, 1.72f, lo), new Vector3(1.1f, 1.86f, hi));
+                b.AddTube(0, new Vector3(0.14f, 0.42f, z * 0.052f), new Vector3(1.02f, 1.74f, z * 0.052f), 0.045f, 0.045f, 4);
+                b.AddBox(0, new Vector3(0.96f, 0.98f, z > 0f ? 0.07f : -0.13f), new Vector3(1.04f, 1.06f, z > 0f ? 0.13f : -0.07f));
+            }
+            return b.Build("Door");
+        }
+
+        private static void Stick(FlatMeshBuilder b, float x0, float y0, float x1, float y1, float z, float radius) =>
+            b.AddTube(0, new Vector3(x0, y0, z), new Vector3(x1, y1, z), radius, radius * 0.85f, 5);
+
         /// <summary>The flame of a torch or a campfire: two crossed tapering shapes, about 0.25 m tall.</summary>
         public static Mesh Flame()
         {

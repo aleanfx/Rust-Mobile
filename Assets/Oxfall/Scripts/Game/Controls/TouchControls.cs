@@ -212,6 +212,15 @@ namespace Oxfall.Game.Controls
             for (int i = 0; i < 6; i++)
                 if (UnityEngine.Input.GetKeyDown(KeyCode.Alpha1 + i)) SlotKey?.Invoke(i);
             if (UnityEngine.Input.GetKeyDown(KeyCode.Tab) || UnityEngine.Input.GetKeyDown(KeyCode.I)) InventoryKey?.Invoke();
+            // E uses (doors), R presses the button above attack (next piece, demolish).
+            if (UnityEngine.Input.GetKeyDown(KeyCode.E) && _hud.UseButton.gameObject.activeInHierarchy) PressTarget(_hud.UseButton);
+            if (UnityEngine.Input.GetKeyDown(KeyCode.R) && _hud.PieceButton.gameObject.activeInHierarchy) PressTarget(_hud.PieceButton);
+        }
+
+        private void PressTarget(RectTransform rect)
+        {
+            foreach (var target in _hud.TapTargets)
+                if (target.Rect == rect) { target.OnTap?.Invoke(); return; }
         }
 #endif
     }

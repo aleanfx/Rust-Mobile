@@ -54,6 +54,18 @@ namespace Oxfall.Game.Items
                 },
                 [ItemIds.StoneHatchet] = Tool(MeshFactory.Hatchet(), new[] { m.Bark, m.Stone, m.Rope }),
                 [ItemIds.StonePickaxe] = Tool(MeshFactory.Pickaxe(), new[] { m.Bark, m.Stone, m.Rope }),
+                [ItemIds.Hammer] = Tool(MeshFactory.Hammer(), new[] { m.Bark, m.Stone, m.Rope }),
+                [ItemIds.WoodenDoor] = new ItemModel
+                {
+                    Mesh = MeshFactory.Door(),
+                    Materials = new[] { m.Door },
+                    ShowInHand = true,
+                    // A small door carried low on the right, edge on, so it hides little.
+                    HandPosition = new Vector3(0.24f, -0.56f, 0.72f),
+                    HandRotation = Quaternion.Euler(0f, -28f, 0f),
+                    HandScale = 0.22f,
+                    IconRotation = Tilt(-10f, 25f),
+                },
                 [ItemIds.Torch] = new ItemModel
                 {
                     Mesh = MeshFactory.Torch(),

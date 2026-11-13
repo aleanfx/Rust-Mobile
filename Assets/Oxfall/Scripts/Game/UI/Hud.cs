@@ -138,6 +138,18 @@ namespace Oxfall.Game.UI
             TapTargets.Add(new TapTarget { Rect = PieceButton, OnTap = () => PieceTapped?.Invoke() });
 
             PieceButton.gameObject.SetActive(false);
+
+            // Left of jump, only while looking at something to use (a door): ABRIR or CERRAR.
+            UseButton = UiFactory.NewRect("Use", _safeArea, new Vector2(1f, 0f), centre, new Vector2(-680f, 230f), new Vector2(180f, 180f));
+            UiFactory.AddImage(UseButton, UiFactory.Circle, Soft);
+            var useLabel = UiFactory.NewRect("Label", UseButton, centre, centre, Vector2.zero, new Vector2(180f, 50f));
+            _useLabel = UiFactory.AddText(useLabel, "", 30, TextAnchor.MiddleCenter, Color.white);
+            TapTargets.Add(new TapTarget { Rect = UseButton, OnTap = () => UseTapped?.Invoke() });
+            UseButton.gameObject.SetActive(false);
+
+            // Under the crosshair: what is aimed at, and what the hammer would do to it.
+            var aim = UiFactory.NewRect("Aim info", _safeArea, centre, centre, new Vector2(0f, -86f), new Vector2(1100f, 50f));
+            _aimInfo = UiFactory.AddText(aim, "", 28, TextAnchor.MiddleCenter, Color.white);
         }
 
         public void SetPressed(Image image, bool pressed)
@@ -172,10 +184,37 @@ namespace Oxfall.Game.UI
         }
 
         public event System.Action PieceTapped;
+        public event System.Action UseTapped;
         public event System.Action CraftPanelOpened;
 
         public RectTransform PieceButton { get; private set; }
+        public RectTransform UseButton { get; private set; }
         private Text _pieceLabel;
+        private Text _useLabel;
+        private Text _aimInfo;
+
+        /// <summary>The button above attack with this label (DEMOLER, "Pieza: Pared"), or hidden for null.</summary>
+        public void SetPieceButton(string label)
+        {
+            bool show = label != null;
+            if (PieceButton.gameObject.activeSelf != show) PieceButton.gameObject.SetActive(show);
+            if (show && _pieceLabel.text != label) _pieceLabel.text = label;
+        }
+
+        /// <summary>The use button (ABRIR, CERRAR), or hidden for null.</summary>
+        public void SetUseButton(string label)
+        {
+            bool show = label != null;
+            if (UseButton.gameObject.activeSelf != show) UseButton.gameObject.SetActive(show);
+            if (show && _useLabel.text != label) _useLabel.text = label;
+        }
+
+        /// <summary>A line under the crosshair about what is aimed at; empty or null clears it.</summary>
+        public void SetAimInfo(string text)
+        {
+            text = text ?? "";
+            if (_aimInfo.text != text) _aimInfo.text = text;
+        }
 
         /// <summary>
         /// Placing something (the building plan or a campfire in hand): with a piece name the piece
@@ -183,8 +222,7 @@ namespace Oxfall.Game.UI
         /// </summary>
         public void SetBuildMode(bool on, string pieceName)
         {
-            PieceButton.gameObject.SetActive(on && pieceName != null);
-            if (pieceName != null) _pieceLabel.text = "Pieza: " + pieceName;
+            SetPieceButton(on && pieceName != null ? "Pieza: " + pieceName : null);
             if (!on) SetPlaceValid(false);
         }
 

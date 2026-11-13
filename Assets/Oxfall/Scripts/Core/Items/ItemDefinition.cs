@@ -19,6 +19,7 @@ namespace Oxfall.Core.Items
         Hatchet,
         Pickaxe,
         Torch,
+        Hammer,
     }
 
     /// <summary>

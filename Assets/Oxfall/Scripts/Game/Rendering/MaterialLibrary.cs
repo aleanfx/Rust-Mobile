@@ -48,6 +48,12 @@ namespace Oxfall.Game.Rendering
         public Material Hemp { get; }
         public Material HandRock { get; }
         public Material Planks { get; }
+        /// <summary>Twig building pieces: pale, freshly cut sticks.</summary>
+        public Material Twig { get; }
+        /// <summary>Stone building pieces: cut blocks.</summary>
+        public Material StoneWall { get; }
+        /// <summary>Doors: darker, older planks than the walls, so a door stands out.</summary>
+        public Material Door { get; }
         public Material Grass { get; }
         public Material GhostOk { get; }
         public Material GhostBad { get; }
@@ -128,6 +134,10 @@ namespace Oxfall.Game.Rendering
             Hemp = Make("Hemp", new Color(0.36f, 0.43f, 0.22f), 0.05f);
             HandRock = Textured("OxfallStone") ?? Make("Hand rock", new Color(0.50f, 0.48f, 0.45f), 0.12f);
             Planks = Textured("OxfallPlanks") ?? Make("Planks", new Color(0.49f, 0.36f, 0.25f), 0.06f);
+            Twig = Tinted(Bark, "Twig", Bark.HasProperty(BaseMap) && Bark.GetTexture(BaseMap) != null
+                ? new Color(1.25f, 1.12f, 0.88f) : new Color(0.62f, 0.52f, 0.36f));
+            StoneWall = Textured("OxfallStoneWall") ?? Tinted(Stone, "Stone wall", new Color(0.95f, 0.93f, 0.90f));
+            Door = Textured("OxfallDoor") ?? Tinted(Planks, "Door", new Color(0.72f, 0.62f, 0.52f));
             var grassCards = Textured(GrassCardsResource);
             GrassIsCards = grassCards != null;
             Grass = grassCards ?? MakeGrass();

@@ -60,11 +60,15 @@ namespace Oxfall.Core.Items
                 description: "Pica piedra y mineral: el doble que la roca."),
             new ItemDefinition(ItemIds.Torch, "Antorcha", ItemCategory.Tool, 1, ToolKind.Torch, skinnable: true,
                 description: "Alumbra de noche."),
+            new ItemDefinition(ItemIds.Hammer, "Martillo", ItemCategory.Tool, 1, ToolKind.Hammer, skinnable: true,
+                description: "Apunta a lo que construiste y toca MEJORAR: ramas, madera, piedra. También demuele."),
 
             new ItemDefinition(ItemIds.BuildingPlan, "Plano de construcción", ItemCategory.Placeable, 1,
                 description: "Llévalo en la mano para construir."),
             new ItemDefinition(ItemIds.Campfire, "Fogata", ItemCategory.Placeable, 5,
                 description: "Da luz y calor, y cocina."),
+            new ItemDefinition(ItemIds.WoodenDoor, "Puerta de madera", ItemCategory.Placeable, 1,
+                description: "Va en un marco de puerta. Tócala con ABRIR para abrirla o cerrarla."),
         });
     }
 }

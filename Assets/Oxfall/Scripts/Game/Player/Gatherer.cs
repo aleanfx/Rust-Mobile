@@ -117,7 +117,8 @@ namespace Oxfall.Game.Player
             get
             {
                 var def = _hotbar.HeldDefinition;
-                return def == null || def.Category == ItemCategory.Tool;
+                // The hammer builds (HammerTool) instead of gathering.
+                return def == null || (def.Category == ItemCategory.Tool && def.Tool != ToolKind.Hammer);
             }
         }
 
@@ -144,6 +145,9 @@ namespace Oxfall.Game.Player
 
             AnimateHand(dt);
         }
+
+        /// <summary>Plays a swing of what is in hand, without hitting anything (the hammer's blow).</summary>
+        public void PlaySwing() => _swing = 0f;
 
         /// <summary>One swing (or one bite) with what is in hand, as one press of attack. For tests.</summary>
         public void UseOnce()

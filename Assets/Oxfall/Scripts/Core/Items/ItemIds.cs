@@ -17,9 +17,11 @@ namespace Oxfall.Core.Items
         public const string StoneHatchet = "stone_hatchet";
         public const string StonePickaxe = "stone_pickaxe";
         public const string Torch = "torch";
+        public const string Hammer = "hammer";
 
         // Placeables
         public const string BuildingPlan = "building_plan";
         public const string Campfire = "campfire";
+        public const string WoodenDoor = "wooden_door";
     }
 }

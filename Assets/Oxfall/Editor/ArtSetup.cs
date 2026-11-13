@@ -28,6 +28,10 @@ namespace Oxfall.Editor
             MakeLit("OxfallOre", "rock_face", new Color(1f, 0.92f, 0.86f), 0.18f);
             MakeLit("OxfallBark", "bark_brown_02", new Color(0.85f, 0.80f, 0.74f), 0.05f);
             MakeLit("OxfallPlanks", "weathered_planks", new Color(1.05f, 0.98f, 0.90f), 0.08f);
+            MakeLit("OxfallDoor", "old_planks_02", new Color(0.95f, 0.88f, 0.80f), 0.08f);
+            // The first of these stone block photos that downloaded (see tools/art/polyhaven.txt).
+            foreach (var id in new[] { "castle_wall_slates", "stone_wall", "medieval_blocks_02", "stone_brick_wall_001" })
+                if (Load(id, "diff") != null) { MakeLit("OxfallStoneWall", id, new Color(0.95f, 0.93f, 0.90f), 0.1f); break; }
             MakeGround();
             MakeWater();
             MakeCutout("OxfallFoliage", "jacaranda_tree/jacaranda_tree_leaves.png", 0.1f, 0.15f);
