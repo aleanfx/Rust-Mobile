@@ -190,6 +190,17 @@ namespace Oxfall.Editor
                 return;
             }
             var material = LoadOrCreate("OxfallWater", shader);
+            // Set every value here: a material saved earlier keeps its old values even when the
+            // shader's defaults change.
+            material.SetColor("_DeepColor", new Color(0.04f, 0.15f, 0.19f));
+            material.SetColor("_ShallowColor", new Color(0.12f, 0.38f, 0.36f));
+            material.SetColor("_SandColor", new Color(0.58f, 0.52f, 0.40f));
+            material.SetColor("_FoamColor", new Color(0.86f, 0.88f, 0.86f));
+            // Longer, gentler ripples: the first ones read as a busy, repeating pattern.
+            material.SetVector("_RippleTiling", new Vector4(14f, 37f, 0.025f, 0f));
+            material.SetFloat("_RippleStrength", 0.35f);
+            material.SetFloat("_Reflection", 0.6f);
+            material.SetFloat("_Glint", 3f);
             EditorUtility.SetDirty(material);
         }
     }

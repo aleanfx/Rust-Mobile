@@ -15,8 +15,8 @@ Shader "Oxfall/Water"
         _DepthMap ("Depth map (red = depth / range)", 2D) = "white" {}
         _DepthMapScale ("Depth map: 1/size (x), offset (y), range in metres (z)", Vector) = (0.00208, 0.5, 9, 0)
         _RippleMap ("Ripple normals (linear RGB)", 2D) = "bump" {}
-        _RippleTiling ("Ripple tiling: metres per tile (x, y), speed (z)", Vector) = (9, 23, 0.03, 0)
-        _RippleStrength ("Ripple strength", Range(0, 1.5)) = 0.6
+        _RippleTiling ("Ripple tiling: metres per tile (x, y), speed (z)", Vector) = (14, 37, 0.025, 0)
+        _RippleStrength ("Ripple strength", Range(0, 1.5)) = 0.35
         _Reflection ("Reflection", Range(0, 1)) = 0.6
         _Glint ("Sun glint", Range(0, 8)) = 3
     }
