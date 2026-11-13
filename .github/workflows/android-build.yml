@@ -1,0 +1,293 @@
+# Builds the Android APK in the cloud and publishes it as a release, so it can be downloaded
+# straight onto a phone:
+#   https://github.com/<owner>/<repo>/releases/latest/download/Oxfall.apk
+#
+# No PC needed. On the first run, when the repository has no Unity project yet, it also creates
+# the project, adds the packages and commits what Unity generated (ProjectSettings, Packages,
+# .meta files, the scene and rendering assets) back to the branch. Unity's YAML is never written
+# by hand: a hand-made settings file opens fine and is subtly wrong in ways that only show on a
+# device.
+#
+# Licence: a Personal seat from Unity's licensing service using the UNITY_EMAIL and
+# UNITY_PASSWORD secrets, always given back at the end (see unity-licence.yml).
+
+name: Android build
+
+on:
+  push:
+    paths:
+      - 'Assets/**'
+      - 'Packages/**'
+      - 'ProjectSettings/**'
+      - '.github/workflows/android-build.yml'
+  workflow_dispatch:
+
+concurrency:
+  group: unity-licence
+  cancel-in-progress: false
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    name: Android APK
+    runs-on: ubuntu-24.04
+    timeout-minutes: 100
+    container:
+      image: unityci/editor:ubuntu-6000.3.28f1-android-3
+      options: --user root
+      # The runner's preinstalled SDKs, mounted so they can be deleted: an IL2CPP build with
+      # Gradle's caches needs the disk.
+      volumes:
+        - /usr/share/dotnet:/host/dotnet
+        - /usr/local/lib/android:/host/android
+        - /opt/ghc:/host/ghc
+        - /usr/local/share/boost:/host/boost
+        - /opt/hostedtoolcache:/host/toolcache
+
+    env:
+      LICENSING_CLIENT: /opt/unity/Editor/Data/Resources/Licensing/Client/Unity.Licensing.Client
+      EDITOR_VERSION: 6000.3.28f1
+      APK: Builds/Android/Oxfall.apk
+      OXFALL_KEY_ALIAS: oxfall-dev
+      # A development key, kept only in this repository's Actions cache; it lets each test build
+      # install over the last one. Store releases will be signed with a separate, secret key.
+      OXFALL_KEYSTORE_PASS: oxfall-dev-only
+
+    defaults:
+      run:
+        shell: bash
+
+    steps:
+      - name: Free disk space
+        run: |
+          echo "Before: $(df -h / | tail -1)"
+          rm -rf /host/dotnet/* /host/android/* /host/ghc/* /host/boost/* /host/toolcache/* || true
+          echo "After:  $(df -h / | tail -1)"
+
+      - uses: actions/checkout@v4
+
+      - name: Let git use this checkout
+        run: git config --global --add safe.directory "$GITHUB_WORKSPACE"
+
+      - name: Restore the Library
+        id: library
+        uses: actions/cache/restore@v4
+        with:
+          path: Library
+          key: library-android-${{ hashFiles('Packages/packages-lock.json', 'ProjectSettings/ProjectVersion.txt') }}-${{ github.sha }}
+          restore-keys: |
+            library-android-${{ hashFiles('Packages/packages-lock.json', 'ProjectSettings/ProjectVersion.txt') }}-
+            library-android-
+
+      - name: Restore the development keystore
+        id: keystore
+        uses: actions/cache/restore@v4
+        with:
+          path: .keystore
+          key: oxfall-dev-keystore-v1
+
+      - name: Make a development keystore
+        if: steps.keystore.outputs.cache-hit != 'true'
+        run: |
+          set -e
+          keytool="$(find /opt/unity/Editor/Data/PlaybackEngines/AndroidPlayer -name keytool -type f | head -1)"
+          [ -n "$keytool" ] || keytool="$(command -v keytool)"
+          mkdir -p .keystore
+          "$keytool" -genkeypair -keystore .keystore/oxfall-dev.keystore -storetype PKCS12 \
+            -storepass "$OXFALL_KEYSTORE_PASS" -keypass "$OXFALL_KEYSTORE_PASS" \
+            -alias "$OXFALL_KEY_ALIAS" -keyalg RSA -keysize 2048 -validity 10000 \
+            -dname "CN=Oxfall Development"
+          echo "made=true" >> "$GITHUB_OUTPUT"
+
+      - name: Keep the development keystore
+        if: steps.keystore.outputs.cache-hit != 'true'
+        uses: actions/cache/save@v4
+        with:
+          path: .keystore
+          key: oxfall-dev-keystore-v1
+
+      - name: Take a Personal seat
+        id: activate
+        env:
+          UNITY_EMAIL: ${{ secrets.UNITY_EMAIL }}
+          UNITY_PASSWORD: ${{ secrets.UNITY_PASSWORD }}
+        run: |
+          set +e
+          output="$("$LICENSING_CLIENT" --activate-all --include-personal \
+                      --username "$UNITY_EMAIL" --password "$UNITY_PASSWORD" 2>&1)"
+          echo "$output" | grep -viE 'password|token'
+          echo "activated=true" >> "$GITHUB_OUTPUT"
+          echo "$output" | grep -q 'Activation processed successfully' || {
+            echo "::error title=Unity licence failed::no seat. Run the 'Unity licence' workflow for the reason."
+            exit 1
+          }
+
+      - name: Create the Unity project (first run only)
+        id: create
+        run: |
+          set -e
+          if [ -f ProjectSettings/ProjectVersion.txt ] && [ -f Packages/manifest.json ]; then
+            echo "The project already exists."
+            exit 0
+          fi
+
+          # Made elsewhere and copied in: -createProject over a folder that already has Assets/
+          # in it is not something Unity promises anything about.
+          unity-editor -batchmode -nographics -quit -createProject /tmp/fresh -logFile /tmp/create.log || {
+            echo "::group::Unity log"; cat /tmp/create.log || true; echo "::endgroup::"
+            echo "::error title=Project creation failed::the editor would not create a project"
+            exit 1
+          }
+          [ -d ProjectSettings ] || cp -r /tmp/fresh/ProjectSettings ./ProjectSettings
+          printf 'm_EditorVersion: %s\n' "$EDITOR_VERSION" > ProjectSettings/ProjectVersion.txt
+
+          # Packages are added in the throwaway project, where none of our code has to compile
+          # first; only the bootstrap script goes across.
+          mkdir -p /tmp/fresh/Assets/Editor
+          cp Assets/Oxfall/Editor/ProjectBootstrap.cs /tmp/fresh/Assets/Editor/ProjectBootstrap.cs
+          unity-editor -batchmode -nographics -projectPath /tmp/fresh \
+            -executeMethod Oxfall.Editor.ProjectBootstrap.AddPackages -logFile /tmp/packages.log || {
+              echo "::group::Unity log"; tail -200 /tmp/packages.log || true; echo "::endgroup::"
+              echo "::error title=Packages failed::a package could not be added; the log names it"
+              exit 1
+            }
+          grep '\[Oxfall\]' /tmp/packages.log || true
+          mkdir -p Packages
+          cp /tmp/fresh/Packages/manifest.json Packages/manifest.json
+          cp /tmp/fresh/Packages/packages-lock.json Packages/packages-lock.json
+          echo "created=true" >> "$GITHUB_OUTPUT"
+
+      - name: Configure the project
+        id: configure
+        run: |
+          set +e
+          unity-editor -batchmode -nographics -projectPath . -buildTarget Android \
+            -executeMethod Oxfall.Editor.ProjectSetup.ApplyAndExit -logFile /tmp/configure.log
+          code=$?
+          errors="$(grep -E 'error CS[0-9]+' /tmp/configure.log | sort -u | head -60)"
+          if [ -n "$errors" ]; then
+            echo "::group::Compile errors"; echo "$errors"; echo "::endgroup::"
+            echo "$errors" | head -20 | while IFS= read -r line; do echo "::error title=Compile error::$line"; done
+          fi
+          grep -E '\[Oxfall\]' /tmp/configure.log || true
+          if [ "$code" -ne 0 ]; then
+            echo "::group::Unity log (tail)"; tail -150 /tmp/configure.log || true; echo "::endgroup::"
+            echo "::error title=Configuration failed::the editor exited $code"
+            exit 1
+          fi
+          echo "Configured."
+
+      - name: Build the APK
+        id: build
+        run: |
+          set +e
+          # $GITHUB_WORKSPACE, not the github.workspace expression: inside a container job only the
+          # variable gives the path as the container sees it.
+          export OXFALL_KEYSTORE="$GITHUB_WORKSPACE/.keystore/oxfall-dev.keystore"
+          start=$(date +%s)
+          unity-editor -batchmode -nographics -projectPath . -buildTarget Android \
+            -executeMethod Oxfall.Editor.AndroidBuilder.BuildAndExit \
+            -oxfallOutput "$APK" -logFile /tmp/android-build.log
+          code=$?
+          echo "minutes=$(( ($(date +%s) - start + 59) / 60 ))" >> "$GITHUB_OUTPUT"
+          grep -E '\[Oxfall\]' /tmp/android-build.log || true
+          if [ "$code" -ne 0 ] || [ ! -s "$APK" ]; then
+            echo "::group::Editor log (tail)"; tail -250 /tmp/android-build.log || true; echo "::endgroup::"
+            grep -E 'error CS[0-9]+|BuildFailedException|FAILURE|What went wrong|Exception' /tmp/android-build.log | head -40 || true
+            echo "::error title=Android build failed::editor exit $code; APK present: $([ -s "$APK" ] && echo yes || echo no)"
+            exit 1
+          fi
+          echo "bytes=$(stat -c %s "$APK")" >> "$GITHUB_OUTPUT"
+
+      - name: Commit what Unity generated
+        if: always() && steps.configure.outcome == 'success' && github.event_name == 'push'
+        run: |
+          set -e
+          git config user.name "Oxfall CI"
+          git config user.email "noreply@anthropic.com"
+          git add -A Assets Packages ProjectSettings 2>/dev/null || true
+          if git diff --cached --quiet; then
+            echo "Nothing new to commit."
+            exit 0
+          fi
+          git --no-pager diff --cached --stat | tail -40
+          {
+            printf 'Unity project files, generated in CI\n\n'
+            printf 'Written by the Android build workflow (project creation, ProjectSetup and the\n'
+            printf 'build itself), not by hand. Packages were added by name; packages-lock.json\n'
+            printf 'records what the resolver chose for editor %s.\n' "$EDITOR_VERSION"
+          } > /tmp/commit-message.txt
+          git commit -q -F /tmp/commit-message.txt
+          branch="${GITHUB_REF_NAME}"
+          for i in 1 2 3; do
+            if git push origin "HEAD:refs/heads/$branch"; then echo "Committed and pushed."; exit 0; fi
+            git fetch origin "$branch" && git rebase "origin/$branch" || { git rebase --abort || true; break; }
+          done
+          echo "::warning title=Generated files not pushed::the branch moved on and could not be rebased cleanly"
+
+      - name: Save the Library
+        if: always() && steps.configure.outcome == 'success'
+        uses: actions/cache/save@v4
+        with:
+          path: Library
+          key: library-android-${{ hashFiles('Packages/packages-lock.json', 'ProjectSettings/ProjectVersion.txt') }}-${{ github.sha }}
+
+      - name: Keep the APK
+        if: steps.build.outcome == 'success'
+        uses: actions/upload-artifact@v4
+        with:
+          name: oxfall-apk
+          path: ${{ env.APK }}
+          if-no-files-found: error
+          retention-days: 30
+
+      - name: Publish the APK for download on the phone
+        if: steps.build.outcome == 'success' && github.event_name != 'pull_request'
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: build-${{ github.run_number }}
+          name: Oxfall prueba ${{ github.run_number }}
+          target_commitish: ${{ github.sha }}
+          make_latest: true
+          files: ${{ env.APK }}
+          body: |
+            Versión de prueba para Android, compilada automáticamente.
+            Rama: ${{ github.ref_name }} · commit ${{ github.sha }}
+
+      - name: Keep the logs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: unity-logs
+          path: /tmp/*.log
+          if-no-files-found: warn
+          retention-days: 14
+
+      - name: Report
+        if: always()
+        run: |
+          {
+            echo "## Android build"
+            echo ""
+            echo "| | |"
+            echo "| :-- | :-- |"
+            echo "| Project created this run | ${{ steps.create.outputs.created == 'true' && 'yes' || 'no' }} |"
+            echo "| Configure | ${{ steps.configure.outcome }} |"
+            echo "| Build | ${{ steps.build.outcome }} (${{ steps.build.outputs.minutes }} min) |"
+            echo "| APK | ${{ steps.build.outputs.bytes }} bytes |"
+            echo "| Library from cache | ${{ steps.library.outputs.cache-matched-key != '' && 'yes' || 'no' }} |"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Give the seat back
+        if: always() && steps.activate.outputs.activated == 'true'
+        env:
+          UNITY_EMAIL: ${{ secrets.UNITY_EMAIL }}
+          UNITY_PASSWORD: ${{ secrets.UNITY_PASSWORD }}
+        run: |
+          set +e
+          "$LICENSING_CLIENT" --deactivate-all \
+            --username "$UNITY_EMAIL" --password "$UNITY_PASSWORD" 2>&1 \
+            | grep -viE 'password|token' | tail -5
+          echo "Seat returned."
