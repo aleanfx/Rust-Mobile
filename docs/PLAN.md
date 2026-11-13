@@ -5,15 +5,18 @@ Quien retome el proyecto (persona o IA) debe leer esto primero.
 
 ## Dónde estamos
 
-- **Reglas del juego** en C# puro (`Assets/Oxfall/Scripts/Core`): ítems, inventario, crafteo con cola,
-  recolección y construcción en rejilla. 35 pruebas automáticas.
+- **Reglas del juego** en C# puro (`Assets/Oxfall/Scripts/Core`): ítems, inventario y barra rápida,
+  crafteo con cola, recolección, construcción en rejilla con niveles (ramas, madera, piedra) y puertas,
+  ciclo de día y noche, vida, hambre y sed. 86 pruebas automáticas.
 - **Juego jugable de un jugador** (`Assets/Oxfall/Scripts/Game`): isla generada por semilla, moverse,
-  mirar, saltar, nadar, golpear para recolectar, panel de fabricación, hacha y pico que recolectan más
-  rápido, tres niveles de gráficos.
+  mirar, saltar, nadar, golpear para recolectar, inventario de 30 casillas con íconos, fabricar,
+  construir y mejorar con el martillo, puertas, fogatas y antorcha que alumbran de noche, comer moras y
+  beber en charcas, morir y despertar, sonidos, tres niveles de gráficos.
 - **Todo se compila en la nube** sin PC: APK de Android y versión web, con cada cambio.
 - **Pruebas automáticas** de la versión web en un navegador sin pantalla (`tools/webtest`).
 
-Lo que **no** existe todavía: multijugador, construcción visible, combate, guardado, sonido, arte real.
+Lo que **no** existe todavía: multijugador, combate, guardado, segundo piso, horno y metal, modelos
+de arte reales (todo se genera por código con texturas CC0).
 
 ## Los tres riesgos que mandan el orden
 
