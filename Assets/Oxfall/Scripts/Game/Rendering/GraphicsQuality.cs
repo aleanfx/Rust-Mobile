@@ -60,11 +60,16 @@ namespace Oxfall.Game.Rendering
         /// <summary>A first guess from total memory; the player can change it.</summary>
         public static QualityTier Recommended()
         {
+#if UNITY_WEBGL && !UNITY_EDITOR
+            // A browser does not report the device's real memory. Phones start on Medium, computers on High.
+            return Application.isMobilePlatform ? QualityTier.Medium : QualityTier.High;
+#else
             if (!Application.isMobilePlatform) return QualityTier.High;
             int megabytes = SystemInfo.systemMemorySize;
             if (megabytes <= 4600) return QualityTier.Low;
             if (megabytes <= 7000) return QualityTier.Medium;
             return QualityTier.High;
+#endif
         }
 
         public void Next()

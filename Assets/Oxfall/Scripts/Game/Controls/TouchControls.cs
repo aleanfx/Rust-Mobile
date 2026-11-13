@@ -52,7 +52,7 @@ namespace Oxfall.Game.Controls
                 Handle(UnityEngine.Input.GetTouch(i));
             _input.Attack = _attackFinger != None;
 
-#if UNITY_EDITOR || UNITY_STANDALONE
+#if UNITY_EDITOR || UNITY_STANDALONE || UNITY_WEBGL
             KeyboardAndMouse();
 #endif
 
@@ -155,7 +155,7 @@ namespace Oxfall.Game.Controls
         private static bool Inside(RectTransform rect, Vector2 screenPoint) =>
             rect != null && RectTransformUtility.RectangleContainsScreenPoint(rect, screenPoint, null);
 
-#if UNITY_EDITOR || UNITY_STANDALONE
+#if UNITY_EDITOR || UNITY_STANDALONE || UNITY_WEBGL
         /// <summary>For trying the game on a computer: WASD, Shift, Space, mouse to look, left click to hit.</summary>
         private void KeyboardAndMouse()
         {

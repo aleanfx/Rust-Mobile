@@ -14,6 +14,7 @@ namespace Oxfall.Game.Rendering
     public sealed class MaterialLibrary
     {
         public const string BaseMaterialResource = "OxfallLit";
+        public const string GroundMaterialResource = "OxfallGround";
 
         private static readonly int BaseColor = Shader.PropertyToID("_BaseColor");
         private static readonly int BaseMap = Shader.PropertyToID("_BaseMap");
@@ -63,7 +64,10 @@ namespace Oxfall.Game.Rendering
         /// <summary>The ground material, coloured by the island's colour map.</summary>
         public Material MakeGround(Texture2D colourMap)
         {
-            Ground = Make("Ground", Color.white, 0.04f);
+            // A copy of the ground material the editor setup saved, which adds close-up detail; the
+            // plain material still works if it is missing.
+            var detailed = Resources.Load<Material>(GroundMaterialResource);
+            Ground = detailed != null ? new Material(detailed) { name = "Ground" } : Make("Ground", Color.white, 0.04f);
             Ground.SetTexture(BaseMap, colourMap);
             return Ground;
         }

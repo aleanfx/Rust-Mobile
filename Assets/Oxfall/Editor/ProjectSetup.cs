@@ -58,6 +58,7 @@ namespace Oxfall.Editor
                 ConfigureGraphicsStripping();
                 var sky = CreateSkybox();
                 CreateLitMaterial();
+                CreateGroundMaterial();
                 AssetDatabase.SaveAssets();
                 BuildScene(sky);
                 AssetDatabase.SaveAssets();
@@ -232,6 +233,91 @@ namespace Oxfall.Editor
             material.SetFloat("_Metallic", 0f);
             material.enableInstancing = true;
             EditorUtility.SetDirty(material);
+        }
+
+        public const string GroundMaterialPath = ResourcesFolder + "/OxfallGround.mat";
+        public const string GroundDetailPath = RenderingFolder + "/GroundDetail.png";
+
+        /// <summary>
+        /// The ground's material: URP Lit with a tiling detail texture. The island's colour map has
+        /// one texel per metre, which is a smooth blur underfoot; the detail texture multiplies fine
+        /// grain over it so the ground has something to look at close up. It fades out with distance
+        /// through its mipmaps.
+        /// </summary>
+        private static void CreateGroundMaterial()
+        {
+            var shader = Shader.Find("Universal Render Pipeline/Lit");
+            if (shader == null) throw new InvalidOperationException("The URP Lit shader was not found.");
+
+            if (!File.Exists(GroundDetailPath))
+            {
+                File.WriteAllBytes(GroundDetailPath, MakeDetailTexture(256).EncodeToPNG());
+                AssetDatabase.ImportAsset(GroundDetailPath, ImportAssetOptions.ForceUpdate);
+            }
+            var importer = AssetImporter.GetAtPath(GroundDetailPath) as TextureImporter;
+            if (importer == null) throw new InvalidOperationException($"Could not import {GroundDetailPath}.");
+            // Linear, so mid-grey is exactly "no change" when the shader multiplies it in.
+            if (importer.sRGBTexture || importer.wrapMode != TextureWrapMode.Repeat || !importer.mipmapEnabled
+                || importer.anisoLevel != 4)
+            {
+                importer.sRGBTexture = false;
+                importer.wrapMode = TextureWrapMode.Repeat;
+                importer.mipmapEnabled = true;
+                importer.anisoLevel = 4;
+                importer.SaveAndReimport();
+            }
+            var detail = AssetDatabase.LoadAssetAtPath<Texture2D>(GroundDetailPath);
+
+            var material = AssetDatabase.LoadAssetAtPath<Material>(GroundMaterialPath);
+            if (material == null)
+            {
+                material = new Material(shader) { name = "OxfallGround" };
+                AssetDatabase.CreateAsset(material, GroundMaterialPath);
+            }
+            material.shader = shader;
+            material.SetColor("_BaseColor", Color.white);
+            material.SetFloat("_Smoothness", 0.04f);
+            material.SetFloat("_Metallic", 0f);
+            material.SetTexture("_DetailAlbedoMap", detail);
+            // The ground's UVs run 0..1 across the whole island: 150 repeats is one tile every ~3 m.
+            material.SetTextureScale("_DetailAlbedoMap", new Vector2(150f, 150f));
+            material.SetFloat("_DetailAlbedoMapScale", 1f);
+            material.EnableKeyword("_DETAIL_MULX2");
+            material.enableInstancing = true;
+            EditorUtility.SetDirty(material);
+        }
+
+        /// <summary>Seamlessly tiling grey grain around mid-grey: blotches, clumps and fine speckle.</summary>
+        private static Texture2D MakeDetailTexture(int size)
+        {
+            var texture = new Texture2D(size, size, TextureFormat.RGB24, false);
+            var pixels = new Color32[size * size];
+            for (int y = 0; y < size; y++)
+            for (int x = 0; x < size; x++)
+            {
+                // Blend four shifted copies so the left edge meets the right and the top the bottom.
+                float u = (float)x / size, v = (float)y / size;
+                float n = Grain(u, v) * (1f - u) * (1f - v) + Grain(u - 1f, v) * u * (1f - v)
+                        + Grain(u - 1f, v - 1f) * u * v + Grain(u, v - 1f) * (1f - u) * v;
+                byte g = (byte)Mathf.Clamp(Mathf.RoundToInt((0.5f + (n - 0.5f) * 0.9f) * 255f), 0, 255);
+                pixels[y * size + x] = new Color32(g, g, g, 255);
+            }
+            texture.SetPixels32(pixels);
+            texture.Apply();
+            return texture;
+        }
+
+        private static float Grain(float u, float v)
+        {
+            float sum = 0f, amplitude = 0.5f, frequency = 5f, norm = 0f;
+            for (int i = 0; i < 4; i++)
+            {
+                sum += Mathf.PerlinNoise(u * frequency + 137.3f, v * frequency + 111.7f) * amplitude;
+                norm += amplitude;
+                amplitude *= 0.62f;
+                frequency *= 2.3f;
+            }
+            return sum / norm;
         }
 
         private static Material CreateSkybox()
