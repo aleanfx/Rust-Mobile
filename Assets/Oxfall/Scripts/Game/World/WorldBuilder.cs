@@ -96,7 +96,10 @@ namespace Oxfall.Game.World
             var sea = new GameObject("Sea");
             sea.transform.SetParent(parent, false);
             sea.transform.position = new Vector3(0f, IslandShape.WaterLevel, 0f);
-            sea.AddComponent<MeshFilter>().sharedMesh = MeshFactory.Quad(4000f, 1f);
+            // A grid rather than one huge quad: triangles kilometres wide, reaching far behind the
+            // camera, can be dropped by some GPUs (the sea vanished in the browser build). 1200 m
+            // covers the island plus the farthest view distance from its edge.
+            sea.AddComponent<MeshFilter>().sharedMesh = MeshFactory.Grid(1200f, 24);
             var renderer = sea.AddComponent<MeshRenderer>();
             renderer.sharedMaterial = materials.Water;
             renderer.shadowCastingMode = ShadowCastingMode.Off;

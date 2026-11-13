@@ -318,6 +318,36 @@ namespace Oxfall.Game.World
             return b.Build(name);
         }
 
+        /// <summary>A flat square grid centred on the origin, facing up, split into cells.</summary>
+        public static Mesh Grid(float size, int cells)
+        {
+            var vertices = new List<Vector3>((cells + 1) * (cells + 1));
+            var normals = new List<Vector3>(vertices.Capacity);
+            var triangles = new List<int>(cells * cells * 6);
+            float h = size * 0.5f, step = size / cells;
+            for (int z = 0; z <= cells; z++)
+            for (int x = 0; x <= cells; x++)
+            {
+                vertices.Add(new Vector3(-h + x * step, 0f, -h + z * step));
+                normals.Add(Vector3.up);
+            }
+            for (int z = 0; z < cells; z++)
+            for (int x = 0; x < cells; x++)
+            {
+                int i = z * (cells + 1) + x;
+                // Clockwise seen from above, so the faces point up.
+                triangles.Add(i); triangles.Add(i + cells + 1); triangles.Add(i + cells + 2);
+                triangles.Add(i); triangles.Add(i + cells + 2); triangles.Add(i + 1);
+            }
+            var mesh = new Mesh { name = "Grid" };
+            mesh.SetVertices(vertices);
+            mesh.SetNormals(normals);
+            mesh.SetTriangles(triangles, 0);
+            mesh.RecalculateBounds();
+            mesh.UploadMeshData(true);
+            return mesh;
+        }
+
         /// <summary>A flat square centred on the origin, facing up.</summary>
         public static Mesh Quad(float size, float uvTiles)
         {

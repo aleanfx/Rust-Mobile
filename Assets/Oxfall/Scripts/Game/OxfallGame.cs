@@ -140,7 +140,8 @@ namespace Oxfall.Game
                 case "view-hill": ViewFromHill(); break;
                 case "view-forest": ViewInForest(); break;
                 case "view-sea":
-                    _player.Teleport(_world.SpawnPosition, _world.SpawnYaw + 180f, 4f);
+                    // From the spawn on the beach, out to sea and a little down, so the near water shows.
+                    _player.Teleport(_world.SpawnPosition, _world.SpawnYaw + 180f, 14f);
                     break;
                 case "nearest-stone": FaceNearest(ResourceNodeType.Stone); break;
                 case "nearest-ore": FaceNearest(ResourceNodeType.MetalOre); break;
