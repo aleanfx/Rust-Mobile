@@ -34,8 +34,11 @@ namespace Oxfall.Core.Items
         /// <summary>Whether a cosmetic skin can be applied. Skins never change stats.</summary>
         public bool Skinnable { get; }
 
+        /// <summary>One line for the player on what it is for.</summary>
+        public string Description { get; }
+
         public ItemDefinition(string id, string displayName, ItemCategory category, int maxStack,
-            ToolKind tool = ToolKind.None, bool skinnable = false)
+            ToolKind tool = ToolKind.None, bool skinnable = false, string description = "")
         {
             if (string.IsNullOrWhiteSpace(id)) throw new ArgumentException("Item id is required.", nameof(id));
             if (maxStack < 1) throw new ArgumentOutOfRangeException(nameof(maxStack), "Max stack must be at least 1.");
@@ -45,6 +48,7 @@ namespace Oxfall.Core.Items
             MaxStack = maxStack;
             Tool = tool;
             Skinnable = skinnable;
+            Description = description ?? "";
         }
 
         public override string ToString() => Id;

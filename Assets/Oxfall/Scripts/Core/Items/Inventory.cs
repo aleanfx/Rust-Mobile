@@ -156,6 +156,45 @@ namespace Oxfall.Core.Items
             Changed?.Invoke(-1);
         }
 
+        /// <summary>Whether a slot is one of the hotbar's.</summary>
+        public static bool IsHotbarSlot(int slot) => slot >= 0 && slot < HotbarSize;
+
+        /// <summary>
+        /// Sends a stack across, from the hotbar to the backpack or back: onto matching stacks there
+        /// first, then into the first empty slot. Whatever doesn't fit stays where it was. Returns
+        /// true if anything moved.
+        /// </summary>
+        public bool QuickMove(int slot)
+        {
+            CheckSlot(slot);
+            var stack = _slots[slot];
+            if (stack.IsEmpty) return false;
+            int from = IsHotbarSlot(slot) ? HotbarSize : 0;
+            int to = IsHotbarSlot(slot) ? _slots.Length : HotbarSize;
+            int max = _catalog.Get(stack.ItemId).MaxStack;
+            int remaining = stack.Amount;
+
+            for (int i = from; i < to && remaining > 0; i++)
+            {
+                if (!_slots[i].CanMergeWith(stack)) continue;
+                int put = Math.Min(max - _slots[i].Amount, remaining);
+                if (put <= 0) continue;
+                _slots[i] = _slots[i].WithAmount(_slots[i].Amount + put);
+                remaining -= put;
+            }
+            for (int i = from; i < to && remaining > 0; i++)
+            {
+                if (!_slots[i].IsEmpty) continue;
+                _slots[i] = stack.WithAmount(remaining);
+                remaining = 0;
+            }
+
+            if (remaining == stack.Amount) return false;
+            _slots[slot] = stack.WithAmount(remaining);
+            Changed?.Invoke(-1);
+            return true;
+        }
+
         /// <summary>Moves half of a stack (rounded down) into the first empty slot. Returns the new slot or -1.</summary>
         public int Split(int slot)
         {

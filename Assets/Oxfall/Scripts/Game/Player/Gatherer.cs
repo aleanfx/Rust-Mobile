@@ -1,8 +1,10 @@
 using System;
+using System.Collections.Generic;
 using System.Text;
 using Oxfall.Core.Gathering;
 using Oxfall.Core.Items;
 using Oxfall.Game.Controls;
+using Oxfall.Game.Items;
 using Oxfall.Game.World;
 using UnityEngine;
 using UnityEngine.Rendering;
@@ -10,8 +12,9 @@ using UnityEngine.Rendering;
 namespace Oxfall.Game.Player
 {
     /// <summary>
-    /// Swings the held tool while attack is held, and hits whatever resource is in front of the
-    /// camera. What a hit gives is decided by the Core rules; this adds it to the inventory.
+    /// Shows what is chosen on the hotbar in the player's hand, swings it while attack is held, and
+    /// hits whatever resource is in front of the camera. What a hit gives is decided by the Core
+    /// rules from the tool in hand; this adds it to the inventory.
     /// </summary>
     [DefaultExecutionOrder(10)]
     public sealed class Gatherer : MonoBehaviour
@@ -25,37 +28,67 @@ namespace Oxfall.Game.Player
 
         private PlayerInput _input;
         private Inventory _inventory;
+        private Hotbar _hotbar;
         private ItemCatalog _catalog;
+        private IReadOnlyDictionary<string, ItemModel> _models;
         private Transform _head;
         private Transform _hand;
-        private Vector3 _handRest;
+        private MeshFilter _handFilter;
+        private MeshRenderer _handRenderer;
+        private ItemModel _held;
+        private string _heldId;
         private float _cooldown;
         private float _swing = 10f;
+        private float _hintCooldown;
         private readonly StringBuilder _text = new StringBuilder();
 
-        /// <summary>The tool used to hit. Only the rock exists in the first build.</summary>
-        public ToolKind Tool { get; set; } = ToolKind.Rock;
-
-        public void Init(PlayerInput input, Inventory inventory, ItemCatalog catalog, Transform head, Mesh handMesh,
-            Material handMaterial)
+        public void Init(PlayerInput input, Inventory inventory, Hotbar hotbar, ItemCatalog catalog, Transform head,
+            IReadOnlyDictionary<string, ItemModel> models)
         {
             _input = input;
             _inventory = inventory;
+            _hotbar = hotbar;
             _catalog = catalog;
+            _models = models;
             _head = head;
 
-            var hand = new GameObject("Held rock");
+            var hand = new GameObject("Held item");
             hand.transform.SetParent(head, false);
-            _handRest = new Vector3(0.34f, -0.34f, 0.62f);
-            hand.transform.localPosition = _handRest;
-            hand.transform.localRotation = Quaternion.Euler(10f, -20f, 15f);
-            hand.transform.localScale = Vector3.one * 0.12f; // 0.16 covered the jump button on phones
-            hand.AddComponent<MeshFilter>().sharedMesh = handMesh;
-            var renderer = hand.AddComponent<MeshRenderer>();
-            renderer.sharedMaterial = handMaterial;
-            renderer.shadowCastingMode = ShadowCastingMode.Off;
-            renderer.receiveShadows = false;
+            _handFilter = hand.AddComponent<MeshFilter>();
+            _handRenderer = hand.AddComponent<MeshRenderer>();
+            _handRenderer.shadowCastingMode = ShadowCastingMode.Off;
+            _handRenderer.receiveShadows = false;
             _hand = hand.transform;
+            RefreshHeld();
+        }
+
+        /// <summary>Puts what is chosen on the hotbar in the hand. Call after the inventory or the choice changes.</summary>
+        public void RefreshHeld()
+        {
+            var id = _hotbar.Held.ItemId;
+            if (id == _heldId) return;
+            _heldId = id;
+            _held = id != null && _models.TryGetValue(id, out var model) && model.ShowInHand ? model : null;
+            _hand.gameObject.SetActive(_held != null);
+            if (_held == null) return;
+            _handFilter.sharedMesh = _held.Mesh;
+            _handRenderer.sharedMaterials = _held.Materials;
+            _hand.localScale = Vector3.one * _held.HandScale;
+            _swing = 10f;
+            AnimateHand(0f);
+        }
+
+        /// <summary>
+        /// Swings with a tool, or bare-handed to pick plants. Not with the building plan (attack
+        /// places pieces then), a campfire or resources.
+        /// </summary>
+        private bool CanSwing
+        {
+            get
+            {
+                var def = _hotbar.HeldDefinition;
+                return def == null || def.Category == ItemCategory.Tool;
+            }
         }
 
         private void Update()
@@ -63,8 +96,9 @@ namespace Oxfall.Game.Player
             if (_input == null) return;
             float dt = Time.deltaTime;
             _cooldown -= dt;
+            _hintCooldown -= dt;
 
-            if (_input.Attack && _cooldown <= 0f)
+            if (_input.Attack && _cooldown <= 0f && CanSwing)
             {
                 _cooldown = SwingSeconds;
                 _swing = 0f;
@@ -84,8 +118,19 @@ namespace Oxfall.Game.Player
             var node = hit.collider.GetComponentInParent<ResourceNodeView>();
             if (node == null) return;
 
-            var yields = node.Hit(BestTool(node.Node.Type));
-            if (yields.Count == 0) return;
+            var yields = node.Hit(_hotbar.HeldTool);
+            if (yields.Count == 0)
+            {
+                // Bare hands or a torch on a tree or a rock: say once in a while what is missing.
+                if (!node.Node.IsDepleted && _hintCooldown <= 0f)
+                {
+                    _hintCooldown = 2.5f;
+                    Message?.Invoke(_hotbar.HeldTool == ToolKind.None
+                        ? "Elige una herramienta en la barra (la roca sirve)"
+                        : "Esta herramienta no sirve aquí");
+                }
+                return;
+            }
 
             _text.Clear();
             foreach (var y in yields)
@@ -99,30 +144,15 @@ namespace Oxfall.Game.Player
             Message?.Invoke(_text.ToString());
         }
 
-        /// <summary>The best tool the player owns for this kind of node; the bare rock otherwise.</summary>
-        private ToolKind BestTool(ResourceNodeType type)
-        {
-            switch (type)
-            {
-                case ResourceNodeType.Tree:
-                    return _inventory.Has(ItemIds.StoneHatchet, 1) ? ToolKind.Hatchet : Tool;
-                case ResourceNodeType.Stone:
-                case ResourceNodeType.MetalOre:
-                    return _inventory.Has(ItemIds.StonePickaxe, 1) ? ToolKind.Pickaxe : Tool;
-                default:
-                    return Tool;
-            }
-        }
-
-        /// <summary>A quick chop: down and forward, then back.</summary>
+        /// <summary>A quick chop: the held item tips forward and down about the grip, then back.</summary>
         private void AnimateHand(float dt)
         {
-            if (_hand == null) return;
+            if (_held == null) return;
             _swing += dt;
             float t = Mathf.Clamp01(_swing / (SwingSeconds * 0.6f));
             float arc = Mathf.Sin(t * Mathf.PI);
-            _hand.localPosition = _handRest + new Vector3(-0.08f * arc, -0.06f * arc, 0.22f * arc);
-            _hand.localRotation = Quaternion.Euler(10f + 55f * arc, -20f, 15f);
+            _hand.localPosition = _held.HandPosition + new Vector3(-0.08f * arc, -0.06f * arc, 0.22f * arc);
+            _hand.localRotation = Quaternion.AngleAxis(55f * arc, Vector3.right) * _held.HandRotation;
         }
     }
 }

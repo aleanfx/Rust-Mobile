@@ -51,6 +51,11 @@ namespace Oxfall.Game.Rendering
         public Material Grass { get; }
         public Material GhostOk { get; }
         public Material GhostBad { get; }
+        /// <summary>For items: rough cloth, string and lashing, blueprint paper, burnt wood and ash.</summary>
+        public Material Cloth { get; }
+        public Material Rope { get; }
+        public Material Blueprint { get; }
+        public Material Char { get; }
 
         public MaterialLibrary()
         {
@@ -123,6 +128,10 @@ namespace Oxfall.Game.Rendering
             Grass = grassCards ?? MakeGrass();
             GhostOk = Make("Ghost ok", new Color(0.35f, 0.85f, 0.45f), 0.1f);
             GhostBad = Make("Ghost bad", new Color(0.90f, 0.30f, 0.25f), 0.1f);
+            Cloth = Make("Cloth", new Color(0.62f, 0.55f, 0.42f), 0.04f);
+            Rope = Make("Rope", new Color(0.42f, 0.33f, 0.22f), 0.04f);
+            Blueprint = Make("Blueprint", new Color(0.27f, 0.42f, 0.62f), 0.12f);
+            Char = Make("Char", new Color(0.13f, 0.11f, 0.10f), 0.05f);
         }
 
         /// <summary>

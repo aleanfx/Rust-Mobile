@@ -26,6 +26,10 @@ namespace Oxfall.Game.Controls
 
         public event Action QualityTapped;
 
+        /// <summary>Keyboard only: a number key 1 to 6 (as a slot 0 to 5), and the inventory key (Tab or I).</summary>
+        public event Action<int> SlotKey;
+        public event Action InventoryKey;
+
         private PlayerInput _input;
         private Hud _hud;
 
@@ -35,12 +39,14 @@ namespace Oxfall.Game.Controls
         private Vector2 _lookLast;
         private int _attackFinger = None;
         private int _jumpFinger = None;
+        private bool _mouseOnUi;
 
         public void Init(PlayerInput input, Hud hud)
         {
             _input = input;
             _hud = hud;
             UnityEngine.Input.multiTouchEnabled = true;
+            _hud.TapTargets.Add(new Hud.TapTarget { Rect = _hud.QualityButton, OnTap = () => QualityTapped?.Invoke() });
         }
 
         private void Update()
@@ -90,20 +96,30 @@ namespace Oxfall.Game.Controls
             }
         }
 
-        private void Claim(int id, Vector2 pos)
+        /// <summary>
+        /// Runs the button under a touch or click, if any. Returns true when the touch landed on a
+        /// button or a panel (an open panel or the hotbar), which is then not a move or a look.
+        /// </summary>
+        private bool TapAt(Vector2 pos)
         {
-            foreach (var target in _hud.TapTargets)
+            // Copied first: a tap may open a panel and add or hide buttons.
+            foreach (var target in _hud.TapTargets.ToArray())
             {
                 if (!target.Rect.gameObject.activeInHierarchy || !Inside(target.Rect, pos)) continue;
                 target.OnTap?.Invoke();
-                return;
+                return true;
             }
-            // A touch on the open panel itself is not a move or a look.
-            if (_hud.CraftPanelOpen && Inside(_hud.CraftPanel, pos)) return;
+            return _hud.Blocks(pos);
+        }
+
+        private void Claim(int id, Vector2 pos)
+        {
+            if (TapAt(pos)) return;
 
             if (Inside(_hud.AttackButton, pos) && _attackFinger == None)
             {
                 _attackFinger = id;
+                _input.AttackPressed = true;
                 return;
             }
             if (Inside(_hud.JumpButton, pos) && _jumpFinger == None)
@@ -112,12 +128,6 @@ namespace Oxfall.Game.Controls
                 _input.Jump = true;
                 return;
             }
-            if (Inside(_hud.QualityButton, pos))
-            {
-                QualityTapped?.Invoke();
-                return;
-            }
-
             bool leftSide = pos.x < Screen.width * 0.42f && pos.y < Screen.height * 0.8f;
             if (leftSide && _stickFinger == None)
             {
@@ -181,8 +191,20 @@ namespace Oxfall.Game.Controls
             if (UnityEngine.Input.GetKeyDown(KeyCode.Space)) _input.Jump = true;
             if (UnityEngine.Input.GetMouseButton(1))
                 _input.Look += new Vector2(UnityEngine.Input.GetAxisRaw("Mouse X"), UnityEngine.Input.GetAxisRaw("Mouse Y")) * 3f;
-            _input.Attack |= UnityEngine.Input.GetMouseButton(0);
+
+            // A click on a button presses it; anywhere else it hits (or places).
+            if (UnityEngine.Input.GetMouseButtonDown(0))
+            {
+                _mouseOnUi = TapAt(UnityEngine.Input.mousePosition);
+                if (!_mouseOnUi) _input.AttackPressed = true;
+            }
+            if (!UnityEngine.Input.GetMouseButton(0)) _mouseOnUi = false;
+            _input.Attack |= UnityEngine.Input.GetMouseButton(0) && !_mouseOnUi;
+
             if (UnityEngine.Input.GetKeyDown(KeyCode.G)) QualityTapped?.Invoke();
+            for (int i = 0; i < 6; i++)
+                if (UnityEngine.Input.GetKeyDown(KeyCode.Alpha1 + i)) SlotKey?.Invoke(i);
+            if (UnityEngine.Input.GetKeyDown(KeyCode.Tab) || UnityEngine.Input.GetKeyDown(KeyCode.I)) InventoryKey?.Invoke();
         }
 #endif
     }

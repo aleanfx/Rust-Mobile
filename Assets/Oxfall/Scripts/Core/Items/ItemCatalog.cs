@@ -38,18 +38,28 @@ namespace Oxfall.Core.Items
         /// <summary>The MVP item set. Stack sizes follow the survival-genre convention players expect.</summary>
         public static ItemCatalog CreateDefault() => new ItemCatalog(new[]
         {
-            new ItemDefinition(ItemIds.Wood, "Madera", ItemCategory.Resource, 1000),
-            new ItemDefinition(ItemIds.Stone, "Piedra", ItemCategory.Resource, 1000),
-            new ItemDefinition(ItemIds.MetalOre, "Mineral de metal", ItemCategory.Resource, 1000),
-            new ItemDefinition(ItemIds.Cloth, "Tela", ItemCategory.Resource, 1000),
+            new ItemDefinition(ItemIds.Wood, "Madera", ItemCategory.Resource, 1000,
+                description: "Para fabricar herramientas y construir."),
+            new ItemDefinition(ItemIds.Stone, "Piedra", ItemCategory.Resource, 1000,
+                description: "Para herramientas y, más adelante, muros de piedra."),
+            new ItemDefinition(ItemIds.MetalOre, "Mineral de metal", ItemCategory.Resource, 1000,
+                description: "Se funde en un horno para sacar metal."),
+            new ItemDefinition(ItemIds.Cloth, "Tela", ItemCategory.Resource, 1000,
+                description: "Sale del cáñamo. Para antorchas y ropa."),
 
-            new ItemDefinition(ItemIds.Rock, "Roca", ItemCategory.Tool, 1, ToolKind.Rock, skinnable: true),
-            new ItemDefinition(ItemIds.StoneHatchet, "Hacha de piedra", ItemCategory.Tool, 1, ToolKind.Hatchet, skinnable: true),
-            new ItemDefinition(ItemIds.StonePickaxe, "Pico de piedra", ItemCategory.Tool, 1, ToolKind.Pickaxe, skinnable: true),
-            new ItemDefinition(ItemIds.Torch, "Antorcha", ItemCategory.Tool, 1, ToolKind.Torch, skinnable: true),
+            new ItemDefinition(ItemIds.Rock, "Roca", ItemCategory.Tool, 1, ToolKind.Rock, skinnable: true,
+                description: "Golpea árboles y piedras. Mejor que nada."),
+            new ItemDefinition(ItemIds.StoneHatchet, "Hacha de piedra", ItemCategory.Tool, 1, ToolKind.Hatchet, skinnable: true,
+                description: "Tala árboles: el doble de madera que la roca."),
+            new ItemDefinition(ItemIds.StonePickaxe, "Pico de piedra", ItemCategory.Tool, 1, ToolKind.Pickaxe, skinnable: true,
+                description: "Pica piedra y mineral: el doble que la roca."),
+            new ItemDefinition(ItemIds.Torch, "Antorcha", ItemCategory.Tool, 1, ToolKind.Torch, skinnable: true,
+                description: "Alumbra de noche."),
 
-            new ItemDefinition(ItemIds.BuildingPlan, "Plano de construcción", ItemCategory.Placeable, 1),
-            new ItemDefinition(ItemIds.Campfire, "Fogata", ItemCategory.Placeable, 5),
+            new ItemDefinition(ItemIds.BuildingPlan, "Plano de construcción", ItemCategory.Placeable, 1,
+                description: "Llévalo en la mano para construir."),
+            new ItemDefinition(ItemIds.Campfire, "Fogata", ItemCategory.Placeable, 5,
+                description: "Da luz y calor, y cocina."),
         });
     }
 }

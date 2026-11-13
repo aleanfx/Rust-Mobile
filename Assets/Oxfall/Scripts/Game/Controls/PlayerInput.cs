@@ -22,10 +22,14 @@ namespace Oxfall.Game.Controls
         /// <summary>True while the attack button is held.</summary>
         public bool Attack;
 
+        /// <summary>True for the one frame the attack button went down (placing a piece is one per press).</summary>
+        public bool AttackPressed;
+
         public void ClearFrame()
         {
             Look = Vector2.zero;
             Jump = false;
+            AttackPressed = false;
         }
     }
 }

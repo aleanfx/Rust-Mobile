@@ -16,10 +16,13 @@ namespace Oxfall.Game.UI
         public const float JoystickRadius = 130f;
 
         // The warm dark panels and rust accent of the style mock-up.
-        private static readonly Color Panel = new Color(0.08f, 0.063f, 0.05f, 0.62f);
-        private static readonly Color Soft = new Color(0.10f, 0.08f, 0.06f, 0.42f);
-        private static readonly Color Accent = new Color(0.78f, 0.39f, 0.16f, 0.88f);
-        private static readonly Color Ready = new Color(0.40f, 0.52f, 0.26f, 0.92f);
+        internal static readonly Color Panel = new Color(0.08f, 0.063f, 0.05f, 0.62f);
+        internal static readonly Color Soft = new Color(0.10f, 0.08f, 0.06f, 0.42f);
+        internal static readonly Color Accent = new Color(0.78f, 0.39f, 0.16f, 0.88f);
+        internal static readonly Color Ready = new Color(0.40f, 0.52f, 0.26f, 0.92f);
+        internal static readonly Color Title = new Color(0.85f, 0.73f, 0.54f);
+        internal static readonly Color Muted = new Color(0.72f, 0.68f, 0.62f);
+        internal static readonly Color Sheet = new Color(0.08f, 0.063f, 0.05f, 0.9f);
 
         private RectTransform _safeArea;
         private Rect _appliedSafeArea;
@@ -43,6 +46,12 @@ namespace Oxfall.Game.UI
         public RectTransform QualityButton { get; private set; }
         public Image AttackImage { get; private set; }
         public Image JumpImage { get; private set; }
+
+        /// <summary>The area clear of notches and rounded corners; everything on screen hangs from it.</summary>
+        public RectTransform SafeArea => _safeArea;
+
+        private Text _attackLabel;
+        private Color _attackIdle = Soft;
 
         public static Hud Create()
         {
@@ -103,7 +112,7 @@ namespace Oxfall.Game.UI
             AttackButton = UiFactory.NewRect("Attack", _safeArea, new Vector2(1f, 0f), new Vector2(0.5f, 0.5f), new Vector2(-210f, 230f), new Vector2(230f, 230f));
             AttackImage = UiFactory.AddImage(AttackButton, UiFactory.Circle, Soft);
             var attackLabel = UiFactory.NewRect("Label", AttackButton, new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), Vector2.zero, new Vector2(220f, 60f));
-            UiFactory.AddText(attackLabel, "GOLPEAR", 34, TextAnchor.MiddleCenter, Color.white);
+            _attackLabel = UiFactory.AddText(attackLabel, "GOLPEAR", 34, TextAnchor.MiddleCenter, Color.white);
 
             JumpButton = UiFactory.NewRect("Jump", _safeArea, new Vector2(1f, 0f), new Vector2(0.5f, 0.5f), new Vector2(-450f, 140f), new Vector2(160f, 160f));
             JumpImage = UiFactory.AddImage(JumpButton, UiFactory.Circle, Soft);
@@ -117,36 +126,21 @@ namespace Oxfall.Game.UI
             UiFactory.AddText(craftLabel, "FABRICAR", 24, TextAnchor.MiddleCenter, Color.white);
             TapTargets.Add(new TapTarget { Rect = CraftButton, OnTap = ToggleCraftPanel });
 
-            // Left of FABRICAR: enters and leaves building mode.
+            // Above attack, only in building mode: which piece to build. Attack places it.
             var centre = new Vector2(0.5f, 0.5f);
-            BuildButton = UiFactory.NewRect("Build", _safeArea, new Vector2(1f, 0f), centre, new Vector2(-310f, 500f), new Vector2(170f, 170f));
-            UiFactory.AddImage(BuildButton, UiFactory.Circle, Soft);
-            var buildLabel = UiFactory.NewRect("Label", BuildButton, centre, centre, Vector2.zero, new Vector2(170f, 50f));
-            UiFactory.AddText(buildLabel, "CONSTRUIR", 23, TextAnchor.MiddleCenter, Color.white);
-            TapTargets.Add(new TapTarget { Rect = BuildButton, OnTap = () => BuildTapped?.Invoke() });
-
-            // Bottom centre, only in building mode: which piece, and the button that places it.
-            var bottom = new Vector2(0.5f, 0f);
-            PieceButton = UiFactory.NewRect("Piece", _safeArea, bottom, bottom, new Vector2(-180f, 40f), new Vector2(340f, 96f));
+            PieceButton = UiFactory.NewRect("Piece", _safeArea, new Vector2(1f, 0f), centre, new Vector2(-400f, 410f), new Vector2(320f, 90f));
             UiFactory.AddImage(PieceButton, UiFactory.Rounded, Panel);
-            var pieceLabel = UiFactory.NewRect("Label", PieceButton, centre, centre, Vector2.zero, new Vector2(330f, 60f));
-            _pieceLabel = UiFactory.AddText(pieceLabel, "", 28, TextAnchor.MiddleCenter, Color.white);
+            var pieceLabel = UiFactory.NewRect("Label", PieceButton, centre, centre, Vector2.zero, new Vector2(310f, 60f));
+            _pieceLabel = UiFactory.AddText(pieceLabel, "", 26, TextAnchor.MiddleCenter, Color.white);
             TapTargets.Add(new TapTarget { Rect = PieceButton, OnTap = () => PieceTapped?.Invoke() });
 
-            PlaceButton = UiFactory.NewRect("Place", _safeArea, bottom, bottom, new Vector2(180f, 40f), new Vector2(300f, 96f));
-            _placeImage = UiFactory.AddImage(PlaceButton, UiFactory.Rounded, Panel);
-            var placeLabel = UiFactory.NewRect("Label", PlaceButton, centre, centre, Vector2.zero, new Vector2(290f, 60f));
-            UiFactory.AddText(placeLabel, "COLOCAR", 30, TextAnchor.MiddleCenter, Color.white);
-            TapTargets.Add(new TapTarget { Rect = PlaceButton, OnTap = () => PlaceTapped?.Invoke() });
-
             PieceButton.gameObject.SetActive(false);
-            PlaceButton.gameObject.SetActive(false);
         }
 
         public void SetPressed(Image image, bool pressed)
         {
             // Only on change: touching a graphic's colour makes its canvas rebuild.
-            var target = pressed ? Accent : Soft;
+            var target = pressed ? Accent : image == AttackImage ? _attackIdle : Soft;
             if (image.color != target) image.color = target;
         }
 
@@ -160,29 +154,40 @@ namespace Oxfall.Game.UI
         /// <summary>Everything tappable besides the stick, attack and jump. Hidden ones are skipped.</summary>
         public readonly List<TapTarget> TapTargets = new List<TapTarget>();
 
-        public event System.Action BuildTapped;
+        /// <summary>Panels and bars where a touch that hits no button still must not move or look.</summary>
+        public readonly List<RectTransform> Blockers = new List<RectTransform>();
+
+        public bool Blocks(Vector2 screenPoint)
+        {
+            foreach (var rect in Blockers)
+                if (rect.gameObject.activeInHierarchy && RectTransformUtility.RectangleContainsScreenPoint(rect, screenPoint, null))
+                    return true;
+            return false;
+        }
+
         public event System.Action PieceTapped;
-        public event System.Action PlaceTapped;
+        public event System.Action CraftPanelOpened;
 
-        public RectTransform BuildButton { get; private set; }
         public RectTransform PieceButton { get; private set; }
-        public RectTransform PlaceButton { get; private set; }
         private Text _pieceLabel;
-        private Image _placeImage;
 
-        /// <summary>Shows or hides the building controls and names the chosen piece.</summary>
+        /// <summary>
+        /// Building mode (the building plan in hand): the piece button shows, and attack becomes
+        /// COLOCAR.
+        /// </summary>
         public void SetBuildMode(bool on, string pieceName)
         {
             PieceButton.gameObject.SetActive(on);
-            PlaceButton.gameObject.SetActive(on);
             _pieceLabel.text = "Pieza: " + pieceName;
+            _attackLabel.text = on ? "COLOCAR" : "GOLPEAR";
+            if (!on) SetPlaceValid(false);
         }
 
-        /// <summary>Greens COLOCAR while the piece fits where it is aimed.</summary>
+        /// <summary>Greens the attack button (COLOCAR) while the piece fits where it is aimed.</summary>
         public void SetPlaceValid(bool valid)
         {
-            var target = valid ? Ready : Panel;
-            if (_placeImage.color != target) _placeImage.color = target;
+            _attackIdle = valid ? Ready : Soft;
+            if (AttackImage.color != Accent && AttackImage.color != _attackIdle) AttackImage.color = _attackIdle;
         }
 
         public RectTransform CraftButton { get; private set; }
@@ -204,10 +209,11 @@ namespace Oxfall.Game.UI
 
             CraftPanel = UiFactory.NewRect("Craft panel", _safeArea, half, half, new Vector2(0f, 20f),
                 new Vector2(1040f, 120f + book.All.Count * rowHeight));
-            UiFactory.AddImage(CraftPanel, UiFactory.Rounded, new Color(0.08f, 0.063f, 0.05f, 0.9f));
+            UiFactory.AddImage(CraftPanel, UiFactory.Rounded, Sheet);
+            Blockers.Add(CraftPanel);
 
             var title = UiFactory.NewRect("Title", CraftPanel, new Vector2(0.5f, 1f), new Vector2(0.5f, 1f), new Vector2(0f, -22f), new Vector2(600f, 60f));
-            UiFactory.AddText(title, "FABRICAR", 40, TextAnchor.MiddleCenter, new Color(0.85f, 0.73f, 0.54f));
+            UiFactory.AddText(title, "FABRICAR", 40, TextAnchor.MiddleCenter, Title);
 
             var close = UiFactory.NewRect("Close", CraftPanel, topRight, topRight, new Vector2(-18f, -18f), new Vector2(84f, 72f));
             UiFactory.AddImage(close, UiFactory.Rounded, Soft);
@@ -230,7 +236,7 @@ namespace Oxfall.Game.UI
                     cost.Append(ingredient.Amount).Append(' ').Append(catalog.Get(ingredient.ItemId).DisplayName);
                 }
                 var costRect = UiFactory.NewRect("Cost", CraftPanel, topLeft, topLeft, new Vector2(420f, y), new Vector2(400f, 80f));
-                UiFactory.AddText(costRect, cost.ToString(), 26, TextAnchor.MiddleLeft, new Color(0.72f, 0.68f, 0.62f));
+                UiFactory.AddText(costRect, cost.ToString(), 26, TextAnchor.MiddleLeft, Muted);
 
                 var button = UiFactory.NewRect("Make", CraftPanel, topRight, topRight, new Vector2(-30f, y - 4f), new Vector2(190f, 72f));
                 _craftButtons.Add(UiFactory.AddImage(button, UiFactory.Rounded, Soft));
@@ -247,8 +253,15 @@ namespace Oxfall.Game.UI
         public void ToggleCraftPanel()
         {
             if (CraftPanel == null) return;
-            CraftPanel.gameObject.SetActive(!CraftPanel.gameObject.activeSelf);
+            bool open = !CraftPanel.gameObject.activeSelf;
+            CraftPanel.gameObject.SetActive(open);
+            if (open) CraftPanelOpened?.Invoke();
             RefreshCraftPanel();
+        }
+
+        public void CloseCraftPanel()
+        {
+            if (CraftPanelOpen) CraftPanel.gameObject.SetActive(false);
         }
 
         /// <summary>Greens the button of every recipe the player can afford right now.</summary>

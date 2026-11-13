@@ -1,5 +1,6 @@
 using Oxfall.Core.Building;
 using Oxfall.Core.Items;
+using Oxfall.Game.Controls;
 using Oxfall.Game.Player;
 using Oxfall.Game.Rendering;
 using Oxfall.Game.UI;
@@ -10,8 +11,8 @@ using UnityEngine.Rendering;
 namespace Oxfall.Game.Construction
 {
     /// <summary>
-    /// Building mode: shows a ghost of the chosen piece where it would go, green when it can be
-    /// placed, and places it. Where pieces may go and what they cost is decided by the Core's
+    /// Building mode, while the building plan is in hand: shows a ghost of the chosen piece where
+    /// it would go, green when it can be placed, and places it when attack is pressed. Where pieces may go and what they cost is decided by the Core's
     /// <see cref="BuildingGrid"/> and <see cref="BuildCosts"/>; this adds the terrain checks and the
     /// visuals.
     /// </summary>
@@ -26,6 +27,7 @@ namespace Oxfall.Game.Construction
             { PieceType.Foundation, PieceType.Wall, PieceType.Doorway, PieceType.Roof };
 
         private BuildingGrid _grid;
+        private PlayerInput _input;
         private Inventory _inventory;
         private IslandShape _shape;
         private PlayerController _player;
@@ -48,10 +50,11 @@ namespace Oxfall.Game.Construction
         public bool Active { get; private set; }
         public PieceType Current => Order[_index];
 
-        public void Init(BuildingGrid grid, Inventory inventory, IslandShape shape, PlayerController player,
+        public void Init(BuildingGrid grid, PlayerInput input, Inventory inventory, IslandShape shape, PlayerController player,
             MaterialLibrary materials, Hud hud)
         {
             _grid = grid;
+            _input = input;
             _inventory = inventory;
             _shape = shape;
             _player = player;
@@ -91,15 +94,11 @@ namespace Oxfall.Game.Construction
             }
         }
 
-        /// <summary>Enters or leaves building mode. Entering needs a building plan in the inventory.</summary>
-        public void Toggle()
+        /// <summary>Enters or leaves building mode: on while the building plan is in hand.</summary>
+        public void SetActive(bool on)
         {
-            if (!Active && !_inventory.Has(ItemIds.BuildingPlan, 1))
-            {
-                _hud.ShowToast("Necesitas un Plano de construcción (fabrícalo con 20 de Madera)");
-                return;
-            }
-            Active = !Active;
+            if (on == Active) return;
+            Active = on;
             _ghostFilter.gameObject.SetActive(Active);
             _hud.SetBuildMode(Active, Name(Current));
             if (Active) _hud.ShowToast("Modo construcción: apunta y toca COLOCAR");
@@ -163,6 +162,11 @@ namespace Oxfall.Game.Construction
         private void Update()
         {
             if (!Active) return;
+            if (_input.AttackPressed)
+            {
+                Place();
+                if (!Active) return;
+            }
             Aim();
             _ghostRenderer.sharedMaterial = _valid ? _materials.GhostOk : _materials.GhostBad;
             _hud.SetPlaceValid(_valid);

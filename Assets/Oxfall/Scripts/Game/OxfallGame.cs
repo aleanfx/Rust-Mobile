@@ -4,6 +4,7 @@ using Oxfall.Core.Gathering;
 using Oxfall.Core.Items;
 using Oxfall.Game.Construction;
 using Oxfall.Game.Controls;
+using Oxfall.Game.Items;
 using Oxfall.Game.Player;
 using Oxfall.Game.Rendering;
 using Oxfall.Game.UI;
@@ -26,6 +27,9 @@ namespace Oxfall.Game
         private WorldInstance _world;
         private ItemCatalog _catalog;
         private Inventory _inventory;
+        private Hotbar _hotbar;
+        private InventoryUi _inventoryUi;
+        private Gatherer _gatherer;
         private Hud _hud;
         private GraphicsQuality _quality;
         private GrassField _grass;
@@ -59,7 +63,11 @@ namespace Oxfall.Game
 
             _catalog = ItemCatalog.CreateDefault();
             _inventory = new Inventory(_catalog);
+            // What a fresh player starts with in the genre: a rock to gather with and a torch.
             _inventory.Add(ItemIds.Rock, 1);
+            _inventory.Add(ItemIds.Torch, 1);
+            _hotbar = new Hotbar(_inventory);
+            var models = ItemModels.Create(materials);
 
             var input = new PlayerInput();
 
@@ -74,11 +82,18 @@ namespace Oxfall.Game
             var camera = CreateCamera(player.Head);
 
             var gatherer = playerObject.AddComponent<Gatherer>();
-            gatherer.Init(input, _inventory, _catalog, player.Head, MeshFactory.HandRock(), materials.HandRock);
+            gatherer.Init(input, _inventory, _hotbar, _catalog, player.Head, models);
+            _gatherer = gatherer;
 
             _hud = Hud.Create();
             var controls = _hud.gameObject.AddComponent<TouchControls>();
             controls.Init(input, _hud);
+
+            // The hotbar and the inventory panel; their icons are rendered from the item models.
+            _inventoryUi = new InventoryUi(_hud, _inventory, _hotbar);
+            controls.SlotKey += slot => _hotbar.Select(slot);
+            controls.InventoryKey += _inventoryUi.Toggle;
+            ItemIcons.Render(models, _world.Sun).Ready += _inventoryUi.Refresh;
 
             // Grass around the player; how far and how thick depends on the graphics level.
             var grass = _world.Root.gameObject.AddComponent<GrassField>();
@@ -104,27 +119,39 @@ namespace Oxfall.Game
             _crafting = new CraftingQueue(_inventory);
             _crafting.Completed += (recipe, amount) =>
             {
-                string made = _catalog.Get(recipe.OutputItemId).DisplayName;
-                _hud.ShowToast("Fabricado: " + made);
-                Debug.Log("[Oxfall] Crafted " + made);
+                var made = _catalog.Get(recipe.OutputItemId);
+                bool onBar = false;
+                for (int i = 0; i < Inventory.HotbarSize; i++) onBar |= _inventory[i].ItemId == made.Id;
+                _hud.ShowToast("Fabricado: " + made.DisplayName + (onBar && made.Category != ItemCategory.Resource
+                    ? " (tócalo en la barra para usarlo)" : ""));
+                Debug.Log("[Oxfall] Crafted " + made.DisplayName);
             };
             _crafting.Overflow = (itemId, amount) => _hud.ShowToast("Inventario lleno");
             _hud.BuildCraftPanel(_recipes, _catalog, _inventory, TryCraft);
 
             // Building: the Core grid holds what stands where; BuildSystem aims, checks terrain and draws.
+            // Holding the building plan is building mode.
             _build = playerObject.AddComponent<BuildSystem>();
-            _build.Init(new BuildingGrid(), _inventory, _world.Shape, player, materials, _hud);
-            _hud.BuildTapped += _build.Toggle;
+            _build.Init(new BuildingGrid(), input, _inventory, _world.Shape, player, materials, _hud);
             _hud.PieceTapped += _build.CyclePiece;
-            _hud.PlaceTapped += _build.Place;
 
             _inventory.Changed += _ =>
             {
                 _hud.RefreshResources(_inventory, _catalog);
                 _hud.RefreshCraftPanel();
+                OnHeldChanged();
             };
+            _hotbar.SelectionChanged += _ => OnHeldChanged();
             _hud.RefreshResources(_inventory, _catalog);
             _hud.ShowToast("Bienvenido a Oxfall: golpea árboles y rocas");
+        }
+
+        /// <summary>The inventory or the hotbar choice changed: redraw, and update the hand and building mode.</summary>
+        private void OnHeldChanged()
+        {
+            _inventoryUi.Refresh();
+            _gatherer.RefreshHeld();
+            _build.SetActive(_hotbar.IsHolding(ItemIds.BuildingPlan));
         }
 
         /// <summary>
@@ -157,18 +184,36 @@ namespace Oxfall.Game
                     _inventory.Add(ItemIds.Stone, 1000);
                     _inventory.Add(ItemIds.BuildingPlan, 1);
                     break;
-                case "build": _build.Toggle(); break;
+                case "give-all":
+                    _inventory.Add(ItemIds.StoneHatchet, 1);
+                    _inventory.Add(ItemIds.StonePickaxe, 1);
+                    _inventory.Add(ItemIds.BuildingPlan, 1);
+                    _inventory.Add(ItemIds.Campfire, 2);
+                    _inventory.Add(ItemIds.Wood, 1500);
+                    _inventory.Add(ItemIds.Stone, 700);
+                    _inventory.Add(ItemIds.MetalOre, 240);
+                    _inventory.Add(ItemIds.Cloth, 40);
+                    break;
+                case "build": _hotbar.SelectItem(ItemIds.BuildingPlan); break;
                 case "piece": _build.CyclePiece(); break;
                 case "place": _build.Place(); break;
+                case "inventory": _inventoryUi.Toggle(); break;
                 case "stats":
                     Debug.Log($"[Oxfall] Stats: wood={_inventory.Count(ItemIds.Wood)} stone={_inventory.Count(ItemIds.Stone)} " +
                               $"ore={_inventory.Count(ItemIds.MetalOre)} cloth={_inventory.Count(ItemIds.Cloth)} " +
                               $"hatchet={_inventory.Count(ItemIds.StoneHatchet)} pickaxe={_inventory.Count(ItemIds.StonePickaxe)} " +
+                              $"held={_hotbar.Held} building={_build.Active} " +
                               $"pos={_player.transform.position} quality={GraphicsQuality.Name(_quality.Tier)} " +
                               $"screen={Screen.width}x{Screen.height} grass={_grass.BladeCount}");
                     break;
                 default:
-                    Debug.LogWarning("[Oxfall] Unknown debug command: " + command);
+                    // slot-N chooses hotbar slot N (1 to 6); tap-N taps inventory slot N (0 to 29).
+                    if (command.StartsWith("slot-") && int.TryParse(command.Substring(5), out int slot))
+                        _hotbar.Select(slot - 1);
+                    else if (command.StartsWith("tap-") && int.TryParse(command.Substring(4), out int tap))
+                        _inventoryUi.TapSlot(tap);
+                    else
+                        Debug.LogWarning("[Oxfall] Unknown debug command: " + command);
                     break;
             }
         }
@@ -275,6 +320,7 @@ namespace Oxfall.Game
             camera.fieldOfView = 70f;
             camera.clearFlags = RenderSettings.skybox != null ? CameraClearFlags.Skybox : CameraClearFlags.SolidColor;
             camera.backgroundColor = WorldBuilder.FogColour;
+            camera.cullingMask = ~(1 << ItemIcons.Layer);
             go.AddComponent<AudioListener>();
             return camera;
         }

@@ -319,6 +319,114 @@ namespace Oxfall.Game.World
             return b.Build("HandRock", 50f);
         }
 
+        // ---- Items: what the player holds and what the inventory icons are rendered from. Tools are
+        // built at their real size with the grip at the origin, the haft up +Y and the head or blade
+        // towards +X. Submesh order is the material order in ItemModels.
+
+        /// <summary>A stone hatchet: a knapped stone lashed to a wooden haft. Submeshes: wood, stone, lashing.</summary>
+        public static Mesh Hatchet()
+        {
+            var b = new FlatMeshBuilder(3) { UvScale = 0.25f };
+            b.AddTube(0, new Vector3(0f, -0.04f, 0f), new Vector3(0f, 0.5f, 0f), 0.017f, 0.015f, 7, 0);
+            b.AddRock(1, new Vector3(0.05f, 0.44f, 0f), new Vector3(0.08f, 0.045f, 0.022f), new System.Random(11));
+            b.AddTube(2, new Vector3(0f, 0.395f, 0f), new Vector3(0f, 0.475f, 0f), 0.024f, 0.024f, 7, 2);
+            return b.Build("Hatchet", 55f);
+        }
+
+        /// <summary>A stone pickaxe: a long stone point each side of the haft. Submeshes: wood, stone, lashing.</summary>
+        public static Mesh Pickaxe()
+        {
+            var b = new FlatMeshBuilder(3) { UvScale = 0.25f };
+            b.AddTube(0, new Vector3(0f, -0.04f, 0f), new Vector3(0f, 0.53f, 0f), 0.017f, 0.015f, 7, 0);
+            var centre = new Vector3(0f, 0.47f, 0f);
+            b.AddTube(1, centre, new Vector3(0.17f, 0.425f, 0f), 0.032f, 0.006f, 6, 1);
+            b.AddTube(1, centre, new Vector3(-0.15f, 0.435f, 0f), 0.032f, 0.008f, 6, 1);
+            b.AddRock(1, centre, new Vector3(0.042f, 0.038f, 0.034f), new System.Random(5));
+            b.AddTube(2, new Vector3(0f, 0.43f, 0f), new Vector3(0f, 0.51f, 0f), 0.024f, 0.024f, 7, 2);
+            return b.Build("Pickaxe", 55f);
+        }
+
+        /// <summary>A torch: a stick with a wrap of charred cloth at the top. Submeshes: wood, cloth.</summary>
+        public static Mesh Torch()
+        {
+            var b = new FlatMeshBuilder(2) { UvScale = 0.25f };
+            b.AddTube(0, new Vector3(0f, -0.04f, 0f), new Vector3(0f, 0.42f, 0f), 0.016f, 0.019f, 7, 0);
+            b.AddTube(1, new Vector3(0f, 0.31f, 0f), new Vector3(0f, 0.44f, 0f), 0.031f, 0.036f, 8, 1);
+            b.AddTube(1, new Vector3(0f, 0.36f, 0f), new Vector3(0f, 0.40f, 0f), 0.040f, 0.040f, 8, 1);
+            return b.Build("Torch", 55f);
+        }
+
+        /// <summary>The flame of a torch or a campfire: two crossed tapering shapes, about 0.25 m tall.</summary>
+        public static Mesh Flame()
+        {
+            var b = new FlatMeshBuilder(1);
+            b.AddTube(0, Vector3.zero, new Vector3(0f, 0.1f, 0f), 0.035f, 0.045f, 6, 0);
+            b.AddTube(0, new Vector3(0f, 0.1f, 0f), new Vector3(0.01f, 0.26f, 0f), 0.045f, 0.0f, 6, 0);
+            return b.Build("Flame", 70f);
+        }
+
+        /// <summary>A rolled-up blueprint tied with string, along X. Submeshes: paper, string.</summary>
+        public static Mesh BuildingPlan()
+        {
+            var b = new FlatMeshBuilder(2) { UvScale = 0.3f };
+            b.AddTube(0, new Vector3(-0.15f, 0f, 0f), new Vector3(0.15f, 0f, 0f), 0.03f, 0.03f, 10, 0);
+            b.AddTube(1, new Vector3(-0.012f, 0f, 0f), new Vector3(0.012f, 0f, 0f), 0.032f, 0.032f, 10, 1);
+            return b.Build("BuildingPlan", 50f);
+        }
+
+        /// <summary>A campfire about a metre across: a ring of stones round leaning logs on ash. Submeshes: stone, wood, char.</summary>
+        public static Mesh Campfire()
+        {
+            var b = new FlatMeshBuilder(3) { UvScale = 0.5f };
+            var random = new System.Random(19);
+            for (int i = 0; i < 9; i++)
+            {
+                float a = i * Mathf.PI * 2f / 9f + Rand(random, -0.12f, 0.12f);
+                var at = new Vector3(Mathf.Cos(a) * 0.45f, 0.04f, Mathf.Sin(a) * 0.45f);
+                b.AddRock(0, at, new Vector3(Rand(random, 0.09f, 0.12f), Rand(random, 0.06f, 0.09f), Rand(random, 0.09f, 0.12f)), random);
+            }
+            b.AddTube(2, new Vector3(0f, -0.01f, 0f), new Vector3(0f, 0.015f, 0f), 0.34f, 0.32f, 12, 2);
+            for (int i = 0; i < 5; i++)
+            {
+                float a = i * Mathf.PI * 2f / 5f + 0.3f;
+                var foot = new Vector3(Mathf.Cos(a) * 0.32f, 0.03f, Mathf.Sin(a) * 0.32f);
+                var tip = new Vector3(Mathf.Cos(a) * 0.04f, 0.36f, Mathf.Sin(a) * 0.04f);
+                b.AddTube(1, foot, tip, 0.042f, 0.028f, 6, 2);
+            }
+            return b.Build("Campfire", 50f);
+        }
+
+        /// <summary>Three logs stacked, along Z. Submeshes: bark, end grain.</summary>
+        public static Mesh WoodPile()
+        {
+            var b = new FlatMeshBuilder(2) { UvScale = 0.35f };
+            var half = new Vector3(0f, 0f, 0.24f);
+            foreach (var c in new[] { new Vector3(-0.075f, 0.07f, 0f), new Vector3(0.075f, 0.07f, 0.02f), new Vector3(0f, 0.198f, -0.02f) })
+                b.AddTube(0, c - half, c + half, 0.07f, 0.068f, 8, 1);
+            return b.Build("WoodPile", 55f);
+        }
+
+        /// <summary>A few loose stones (stone or ore, by material).</summary>
+        public static Mesh StonePile(int seed)
+        {
+            var b = new FlatMeshBuilder(1) { UvScale = 0.3f };
+            var random = new System.Random(seed);
+            b.AddRock(0, new Vector3(-0.08f, 0.06f, 0f), new Vector3(0.1f, 0.075f, 0.09f), random);
+            b.AddRock(0, new Vector3(0.08f, 0.055f, 0.03f), new Vector3(0.08f, 0.065f, 0.08f), random);
+            b.AddRock(0, new Vector3(0f, 0.13f, -0.02f), new Vector3(0.07f, 0.06f, 0.07f), random);
+            return b.Build("StonePile", 50f);
+        }
+
+        /// <summary>A roll of rough cloth tied with string, along X. Submeshes: cloth, string.</summary>
+        public static Mesh ClothRoll()
+        {
+            var b = new FlatMeshBuilder(2) { UvScale = 0.3f };
+            b.AddTube(0, new Vector3(-0.12f, 0f, 0f), new Vector3(0.12f, 0f, 0f), 0.065f, 0.065f, 10, 0);
+            b.AddTube(1, new Vector3(-0.07f, 0f, 0f), new Vector3(-0.05f, 0f, 0f), 0.068f, 0.068f, 10, 1);
+            b.AddTube(1, new Vector3(0.05f, 0f, 0f), new Vector3(0.07f, 0f, 0f), 0.068f, 0.068f, 10, 1);
+            return b.Build("ClothRoll", 50f);
+        }
+
         /// <summary>One flat-shaded mesh made of boxes. Building pieces are made of these.</summary>
         public static Mesh Boxes(string name, params Bounds[] boxes)
         {
@@ -516,6 +624,37 @@ namespace Oxfall.Game.World
                     Triangle(submesh, b0, t0, t1);
                     Triangle(submesh, b0, t1, b1);
                 }
+            }
+
+            /// <summary>
+            /// A tube from <paramref name="a"/> to <paramref name="b"/>, its radius going from
+            /// <paramref name="radiusA"/> to <paramref name="radiusB"/>. With a cap submesh, both ends are closed.
+            /// </summary>
+            public void AddTube(int submesh, Vector3 a, Vector3 b, float radiusA, float radiusB, int sides, int capSubmesh = -1)
+            {
+                var axis = b - a;
+                float length = axis.magnitude;
+                if (length < 1e-5f) return;
+                var dir = axis / length;
+                var rotation = Quaternion.FromToRotation(Vector3.up, dir);
+                for (int i = 0; i < sides; i++)
+                {
+                    var r0 = rotation * Ring(i, sides, 1f, 0f);
+                    var r1 = rotation * Ring(i + 1, sides, 1f, 0f);
+                    var outward = (r0 + r1).normalized;
+                    Facing(submesh, a + r0 * radiusA, b + r0 * radiusB, b + r1 * radiusB, outward);
+                    Facing(submesh, a + r0 * radiusA, b + r1 * radiusB, a + r1 * radiusA, outward);
+                    if (capSubmesh < 0) continue;
+                    if (radiusB > 1e-4f) Facing(capSubmesh, b, b + r0 * radiusB, b + r1 * radiusB, dir);
+                    if (radiusA > 1e-4f) Facing(capSubmesh, a, a + r0 * radiusA, a + r1 * radiusA, -dir);
+                }
+            }
+
+            /// <summary>A triangle wound so that its face points towards <paramref name="towards"/>.</summary>
+            public void Facing(int submesh, Vector3 a, Vector3 b, Vector3 c, Vector3 towards)
+            {
+                if (Vector3.Dot(Vector3.Cross(b - a, c - a), towards) >= 0f) Triangle(submesh, a, b, c);
+                else Triangle(submesh, a, c, b);
             }
 
             /// <summary>
