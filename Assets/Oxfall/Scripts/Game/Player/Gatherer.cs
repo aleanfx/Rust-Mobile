@@ -49,7 +49,7 @@ namespace Oxfall.Game.Player
             _handRest = new Vector3(0.34f, -0.34f, 0.62f);
             hand.transform.localPosition = _handRest;
             hand.transform.localRotation = Quaternion.Euler(10f, -20f, 15f);
-            hand.transform.localScale = Vector3.one * 0.16f;
+            hand.transform.localScale = Vector3.one * 0.12f; // 0.16 covered the jump button on phones
             hand.AddComponent<MeshFilter>().sharedMesh = handMesh;
             var renderer = hand.AddComponent<MeshRenderer>();
             renderer.sharedMaterial = handMaterial;
