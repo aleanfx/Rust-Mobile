@@ -1,5 +1,6 @@
 using System;
 using System.Text;
+using Oxfall.Core.Gathering;
 using Oxfall.Core.Items;
 using Oxfall.Game.Controls;
 using Oxfall.Game.World;
@@ -83,7 +84,7 @@ namespace Oxfall.Game.Player
             var node = hit.collider.GetComponentInParent<ResourceNodeView>();
             if (node == null) return;
 
-            var yields = node.Hit(Tool);
+            var yields = node.Hit(BestTool(node.Node.Type));
             if (yields.Count == 0) return;
 
             _text.Clear();
@@ -96,6 +97,21 @@ namespace Oxfall.Game.Player
                 if (left > 0) _text.Append(" (inventario lleno)");
             }
             Message?.Invoke(_text.ToString());
+        }
+
+        /// <summary>The best tool the player owns for this kind of node; the bare rock otherwise.</summary>
+        private ToolKind BestTool(ResourceNodeType type)
+        {
+            switch (type)
+            {
+                case ResourceNodeType.Tree:
+                    return _inventory.Has(ItemIds.StoneHatchet, 1) ? ToolKind.Hatchet : Tool;
+                case ResourceNodeType.Stone:
+                case ResourceNodeType.MetalOre:
+                    return _inventory.Has(ItemIds.StonePickaxe, 1) ? ToolKind.Pickaxe : Tool;
+                default:
+                    return Tool;
+            }
         }
 
         /// <summary>A quick chop: down and forward, then back.</summary>

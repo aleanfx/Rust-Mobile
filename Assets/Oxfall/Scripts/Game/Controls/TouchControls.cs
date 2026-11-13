@@ -92,6 +92,15 @@ namespace Oxfall.Game.Controls
 
         private void Claim(int id, Vector2 pos)
         {
+            foreach (var target in _hud.TapTargets)
+            {
+                if (!target.Rect.gameObject.activeInHierarchy || !Inside(target.Rect, pos)) continue;
+                target.OnTap?.Invoke();
+                return;
+            }
+            // A touch on the open panel itself is not a move or a look.
+            if (_hud.CraftPanelOpen && Inside(_hud.CraftPanel, pos)) return;
+
             if (Inside(_hud.AttackButton, pos) && _attackFinger == None)
             {
                 _attackFinger = id;

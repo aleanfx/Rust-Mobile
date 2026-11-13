@@ -1,4 +1,6 @@
+using System.Collections.Generic;
 using System.Text;
+using Oxfall.Core.Crafting;
 using Oxfall.Core.Items;
 using UnityEngine;
 using UnityEngine.UI;
@@ -104,6 +106,13 @@ namespace Oxfall.Game.UI
             JumpImage = UiFactory.AddImage(JumpButton, UiFactory.Circle, Soft);
             var jumpLabel = UiFactory.NewRect("Label", JumpButton, new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), Vector2.zero, new Vector2(160f, 50f));
             UiFactory.AddText(jumpLabel, "SALTAR", 28, TextAnchor.MiddleCenter, Color.white);
+
+            // Right side, above attack: opens the crafting panel.
+            CraftButton = UiFactory.NewRect("Craft", _safeArea, new Vector2(1f, 0f), new Vector2(0.5f, 0.5f), new Vector2(-120f, 470f), new Vector2(170f, 170f));
+            UiFactory.AddImage(CraftButton, UiFactory.Circle, Soft);
+            var craftLabel = UiFactory.NewRect("Label", CraftButton, new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), Vector2.zero, new Vector2(170f, 50f));
+            UiFactory.AddText(craftLabel, "FABRICAR", 24, TextAnchor.MiddleCenter, Color.white);
+            TapTargets.Add(new TapTarget { Rect = CraftButton, OnTap = ToggleCraftPanel });
         }
 
         public void SetPressed(Image image, bool pressed)
@@ -111,6 +120,93 @@ namespace Oxfall.Game.UI
             // Only on change: touching a graphic's colour makes its canvas rebuild.
             var target = pressed ? new Color(1f, 1f, 1f, 0.45f) : Soft;
             if (image.color != target) image.color = target;
+        }
+
+        /// <summary>Something on screen that does one thing when tapped.</summary>
+        public sealed class TapTarget
+        {
+            public RectTransform Rect;
+            public System.Action OnTap;
+        }
+
+        /// <summary>Everything tappable besides the stick, attack and jump. Hidden ones are skipped.</summary>
+        public readonly List<TapTarget> TapTargets = new List<TapTarget>();
+
+        public RectTransform CraftButton { get; private set; }
+        public RectTransform CraftPanel { get; private set; }
+        public bool CraftPanelOpen => CraftPanel != null && CraftPanel.gameObject.activeSelf;
+
+        private readonly List<Recipe> _craftRecipes = new List<Recipe>();
+        private readonly List<Image> _craftButtons = new List<Image>();
+        private Inventory _craftInventory;
+
+        /// <summary>The crafting panel: one row per recipe with what it costs and a button to make it.</summary>
+        public void BuildCraftPanel(RecipeBook book, ItemCatalog catalog, Inventory inventory, System.Action<Recipe> onCraft)
+        {
+            _craftInventory = inventory;
+            var half = new Vector2(0.5f, 0.5f);
+            var topLeft = new Vector2(0f, 1f);
+            var topRight = new Vector2(1f, 1f);
+            const float rowHeight = 96f;
+
+            CraftPanel = UiFactory.NewRect("Craft panel", _safeArea, half, half, new Vector2(0f, 20f),
+                new Vector2(1040f, 120f + book.All.Count * rowHeight));
+            UiFactory.AddImage(CraftPanel, UiFactory.Rounded, new Color(0.05f, 0.06f, 0.07f, 0.86f));
+
+            var title = UiFactory.NewRect("Title", CraftPanel, new Vector2(0.5f, 1f), new Vector2(0.5f, 1f), new Vector2(0f, -22f), new Vector2(600f, 60f));
+            UiFactory.AddText(title, "FABRICAR", 40, TextAnchor.MiddleCenter, new Color(0.85f, 0.73f, 0.54f));
+
+            var close = UiFactory.NewRect("Close", CraftPanel, topRight, topRight, new Vector2(-18f, -18f), new Vector2(84f, 72f));
+            UiFactory.AddImage(close, UiFactory.Rounded, Soft);
+            var closeLabel = UiFactory.NewRect("Label", close, half, half, Vector2.zero, new Vector2(80f, 60f));
+            UiFactory.AddText(closeLabel, "X", 36, TextAnchor.MiddleCenter, Color.white);
+            TapTargets.Add(new TapTarget { Rect = close, OnTap = ToggleCraftPanel });
+
+            for (int i = 0; i < book.All.Count; i++)
+            {
+                var recipe = book.All[i];
+                float y = -110f - i * rowHeight;
+
+                var nameRect = UiFactory.NewRect("Name", CraftPanel, topLeft, topLeft, new Vector2(36f, y), new Vector2(380f, 80f));
+                UiFactory.AddText(nameRect, catalog.Get(recipe.OutputItemId).DisplayName, 32, TextAnchor.MiddleLeft, Color.white);
+
+                var cost = new StringBuilder();
+                foreach (var ingredient in recipe.Ingredients)
+                {
+                    if (cost.Length > 0) cost.Append(" + ");
+                    cost.Append(ingredient.Amount).Append(' ').Append(catalog.Get(ingredient.ItemId).DisplayName);
+                }
+                var costRect = UiFactory.NewRect("Cost", CraftPanel, topLeft, topLeft, new Vector2(420f, y), new Vector2(400f, 80f));
+                UiFactory.AddText(costRect, cost.ToString(), 26, TextAnchor.MiddleLeft, new Color(0.8f, 0.82f, 0.84f));
+
+                var button = UiFactory.NewRect("Make", CraftPanel, topRight, topRight, new Vector2(-30f, y - 4f), new Vector2(190f, 72f));
+                _craftButtons.Add(UiFactory.AddImage(button, UiFactory.Rounded, Soft));
+                var label = UiFactory.NewRect("Label", button, half, half, Vector2.zero, new Vector2(180f, 60f));
+                UiFactory.AddText(label, "HACER", 30, TextAnchor.MiddleCenter, Color.white);
+
+                _craftRecipes.Add(recipe);
+                TapTargets.Add(new TapTarget { Rect = button, OnTap = () => onCraft(recipe) });
+            }
+
+            CraftPanel.gameObject.SetActive(false);
+        }
+
+        public void ToggleCraftPanel()
+        {
+            if (CraftPanel == null) return;
+            CraftPanel.gameObject.SetActive(!CraftPanel.gameObject.activeSelf);
+            RefreshCraftPanel();
+        }
+
+        /// <summary>Greens the button of every recipe the player can afford right now.</summary>
+        public void RefreshCraftPanel()
+        {
+            if (!CraftPanelOpen) return;
+            for (int i = 0; i < _craftRecipes.Count; i++)
+            {
+                var target = _craftRecipes[i].CanAfford(_craftInventory) ? new Color(0.36f, 0.62f, 0.30f, 0.9f) : Soft;
+                if (_craftButtons[i].color != target) _craftButtons[i].color = target;
+            }
         }
 
         public void SetQualityLabel(string tierName) => _quality.text = "Gráficos: " + tierName;

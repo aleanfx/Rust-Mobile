@@ -1,3 +1,4 @@
+using Oxfall.Core.Crafting;
 using Oxfall.Core.Gathering;
 using Oxfall.Core.Items;
 using Oxfall.Game.Controls;
@@ -26,6 +27,8 @@ namespace Oxfall.Game
         private Hud _hud;
         private GraphicsQuality _quality;
         private PlayerController _player;
+        private RecipeBook _recipes;
+        private CraftingQueue _crafting;
         private float _respawnTimer;
 
         /// <summary>
@@ -88,7 +91,23 @@ namespace Oxfall.Game
                 _hud.ShowToast(message);
                 Debug.Log("[Oxfall] Gathered " + message);
             };
-            _inventory.Changed += _ => _hud.RefreshResources(_inventory, _catalog);
+            // Crafting: the Core queue takes the ingredients up front and hands the item over when done.
+            _recipes = RecipeBook.CreateDefault(_catalog);
+            _crafting = new CraftingQueue(_inventory);
+            _crafting.Completed += (recipe, amount) =>
+            {
+                string made = _catalog.Get(recipe.OutputItemId).DisplayName;
+                _hud.ShowToast("Fabricado: " + made);
+                Debug.Log("[Oxfall] Crafted " + made);
+            };
+            _crafting.Overflow = (itemId, amount) => _hud.ShowToast("Inventario lleno");
+            _hud.BuildCraftPanel(_recipes, _catalog, _inventory, TryCraft);
+
+            _inventory.Changed += _ =>
+            {
+                _hud.RefreshResources(_inventory, _catalog);
+                _hud.RefreshCraftPanel();
+            };
             _hud.RefreshResources(_inventory, _catalog);
             _hud.ShowToast("Bienvenido a Oxfall: golpea árboles y rocas");
         }
@@ -109,14 +128,39 @@ namespace Oxfall.Game
                 case "quality-low": SetQuality(QualityTier.Low); break;
                 case "quality-medium": SetQuality(QualityTier.Medium); break;
                 case "quality-high": SetQuality(QualityTier.High); break;
+                case "craft-hatchet": TryCraft(_recipes.Get("stone_hatchet")); break;
+                case "craft-pickaxe": TryCraft(_recipes.Get("stone_pickaxe")); break;
+                case "craft-panel": _hud.ToggleCraftPanel(); break;
+                case "give":
+                    _inventory.Add(ItemIds.Wood, 1000);
+                    _inventory.Add(ItemIds.Stone, 1000);
+                    break;
                 case "stats":
                     Debug.Log($"[Oxfall] Stats: wood={_inventory.Count(ItemIds.Wood)} stone={_inventory.Count(ItemIds.Stone)} " +
                               $"ore={_inventory.Count(ItemIds.MetalOre)} cloth={_inventory.Count(ItemIds.Cloth)} " +
+                              $"hatchet={_inventory.Count(ItemIds.StoneHatchet)} pickaxe={_inventory.Count(ItemIds.StonePickaxe)} " +
                               $"pos={_player.transform.position} quality={GraphicsQuality.Name(_quality.Tier)} " +
                               $"screen={Screen.width}x{Screen.height}");
                     break;
                 default:
                     Debug.LogWarning("[Oxfall] Unknown debug command: " + command);
+                    break;
+            }
+        }
+
+        private void TryCraft(Recipe recipe)
+        {
+            string item = _catalog.Get(recipe.OutputItemId).DisplayName;
+            switch (_crafting.Enqueue(recipe))
+            {
+                case CraftingQueue.EnqueueResult.Queued:
+                    _hud.ShowToast($"Fabricando {item}… {recipe.CraftSeconds:0} s");
+                    break;
+                case CraftingQueue.EnqueueResult.MissingIngredients:
+                    _hud.ShowToast("Faltan materiales para " + item);
+                    break;
+                default:
+                    _hud.ShowToast("La cola de fabricación está llena");
                     break;
             }
         }
@@ -178,6 +222,7 @@ namespace Oxfall.Game
         private void Update()
         {
             // Trees and rocks grow back on their own timers; checking once a second is plenty.
+            _crafting?.Tick(Time.deltaTime);
             _respawnTimer += Time.deltaTime;
             if (_respawnTimer < RespawnTickSeconds || _world == null) return;
             foreach (var node in _world.Nodes) node.TickRespawn(_respawnTimer);
