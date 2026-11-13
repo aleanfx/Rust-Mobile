@@ -1,0 +1,25 @@
+# Runs the game-rules tests (inventory, crafting, gathering, building). They are plain C# with no
+# Unity in them, so they run in seconds and need no licence.
+
+name: Core tests
+
+on:
+  push:
+    paths:
+      - 'Assets/Oxfall/Scripts/Core/**'
+      - 'tests/**'
+      - '.github/workflows/core-tests.yml'
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  test:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '8.0.x'
+      - name: Test
+        run: dotnet test tests/Oxfall.Core.Tests --nologo

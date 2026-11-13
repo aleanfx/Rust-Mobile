@@ -1,0 +1,92 @@
+using System;
+using System.Collections.Generic;
+using Oxfall.Core.Items;
+
+namespace Oxfall.Core.Crafting
+{
+    public readonly struct Ingredient
+    {
+        public string ItemId { get; }
+        public int Amount { get; }
+
+        public Ingredient(string itemId, int amount)
+        {
+            if (string.IsNullOrEmpty(itemId)) throw new ArgumentException("Ingredient needs an item id.", nameof(itemId));
+            if (amount <= 0) throw new ArgumentOutOfRangeException(nameof(amount));
+            ItemId = itemId;
+            Amount = amount;
+        }
+    }
+
+    public sealed class Recipe
+    {
+        public string Id { get; }
+        public string OutputItemId { get; }
+        public int OutputAmount { get; }
+        public IReadOnlyList<Ingredient> Ingredients { get; }
+        public float CraftSeconds { get; }
+
+        public Recipe(string id, string outputItemId, int outputAmount, float craftSeconds, params Ingredient[] ingredients)
+        {
+            if (string.IsNullOrEmpty(id)) throw new ArgumentException("Recipe id is required.", nameof(id));
+            if (string.IsNullOrEmpty(outputItemId)) throw new ArgumentException("Output item is required.", nameof(outputItemId));
+            if (outputAmount <= 0) throw new ArgumentOutOfRangeException(nameof(outputAmount));
+            if (craftSeconds < 0) throw new ArgumentOutOfRangeException(nameof(craftSeconds));
+            if (ingredients == null || ingredients.Length == 0) throw new ArgumentException("A recipe needs ingredients.", nameof(ingredients));
+            Id = id;
+            OutputItemId = outputItemId;
+            OutputAmount = outputAmount;
+            CraftSeconds = craftSeconds;
+            Ingredients = Array.AsReadOnly((Ingredient[])ingredients.Clone());
+        }
+
+        public bool CanAfford(Inventory inventory)
+        {
+            foreach (var ing in Ingredients)
+                if (!inventory.Has(ing.ItemId, ing.Amount)) return false;
+            return true;
+        }
+    }
+
+    public sealed class RecipeBook
+    {
+        private readonly Dictionary<string, Recipe> _recipes = new Dictionary<string, Recipe>();
+        private readonly List<Recipe> _ordered = new List<Recipe>();
+
+        public IReadOnlyList<Recipe> All => _ordered;
+
+        public RecipeBook(ItemCatalog catalog, IEnumerable<Recipe> recipes)
+        {
+            if (catalog == null) throw new ArgumentNullException(nameof(catalog));
+            foreach (var r in recipes)
+            {
+                if (_recipes.ContainsKey(r.Id)) throw new ArgumentException($"Duplicate recipe id '{r.Id}'.");
+                if (!catalog.Contains(r.OutputItemId)) throw new ArgumentException($"Recipe '{r.Id}' makes unknown item '{r.OutputItemId}'.");
+                foreach (var ing in r.Ingredients)
+                    if (!catalog.Contains(ing.ItemId)) throw new ArgumentException($"Recipe '{r.Id}' uses unknown item '{ing.ItemId}'.");
+                _recipes.Add(r.Id, r);
+                _ordered.Add(r);
+            }
+        }
+
+        public Recipe Get(string id) =>
+            _recipes.TryGetValue(id, out var r) ? r : throw new KeyNotFoundException($"Unknown recipe '{id}'.");
+
+        public bool TryGet(string id, out Recipe recipe) => _recipes.TryGetValue(id, out recipe);
+
+        /// <summary>The MVP recipes. Costs follow the survival-genre baseline so veterans feel at home.</summary>
+        public static RecipeBook CreateDefault(ItemCatalog catalog) => new RecipeBook(catalog, new[]
+        {
+            new Recipe("stone_hatchet", ItemIds.StoneHatchet, 1, 10f,
+                new Ingredient(ItemIds.Wood, 200), new Ingredient(ItemIds.Stone, 100)),
+            new Recipe("stone_pickaxe", ItemIds.StonePickaxe, 1, 10f,
+                new Ingredient(ItemIds.Wood, 200), new Ingredient(ItemIds.Stone, 100)),
+            new Recipe("torch", ItemIds.Torch, 1, 3f,
+                new Ingredient(ItemIds.Wood, 30), new Ingredient(ItemIds.Cloth, 10)),
+            new Recipe("building_plan", ItemIds.BuildingPlan, 1, 3f,
+                new Ingredient(ItemIds.Wood, 20)),
+            new Recipe("campfire", ItemIds.Campfire, 1, 5f,
+                new Ingredient(ItemIds.Wood, 100)),
+        });
+    }
+}

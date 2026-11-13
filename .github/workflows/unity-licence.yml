@@ -1,0 +1,112 @@
+# Checks that the Unity Personal licence works in CI, on its own, so a licence problem is never
+# mistaken for a code problem.
+#
+# Unity 6 cannot use a .ulf from Unity Hub (it is bound to the machine that made it) and manual
+# activation of Personal licences is closed. What works is asking Unity's licensing service for a
+# seat with the account's own email and password (secrets UNITY_EMAIL and UNITY_PASSWORD). The
+# account must have a password (a Google/Apple sign-in has none until one is set at
+# https://login.unity.com) and must not ask for a two-factor code.
+#
+# Each activation takes one of the account's few Personal seats, so the seat is always given back
+# at the end, even when the job fails or is cancelled.
+
+name: Unity licence
+
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - '.github/workflows/unity-licence.yml'
+
+concurrency:
+  group: unity-licence
+  cancel-in-progress: false
+
+jobs:
+  licence:
+    name: Activate, open the editor, give the seat back
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    container:
+      image: unityci/editor:ubuntu-6000.3.28f1-base-3
+      options: --user root
+
+    env:
+      LICENSING_CLIENT: /opt/unity/Editor/Data/Resources/Licensing/Client/Unity.Licensing.Client
+
+    steps:
+      - name: The credentials are present
+        shell: bash
+        env:
+          UNITY_EMAIL: ${{ secrets.UNITY_EMAIL }}
+          UNITY_PASSWORD: ${{ secrets.UNITY_PASSWORD }}
+        run: |
+          missing=""
+          [ -n "${UNITY_EMAIL:-}" ]    || missing="$missing UNITY_EMAIL"
+          [ -n "${UNITY_PASSWORD:-}" ] || missing="$missing UNITY_PASSWORD"
+          if [ -n "$missing" ]; then
+            echo "::error title=Unity credentials missing::Not set on this repository:$missing"
+            exit 1
+          fi
+          echo "Both credentials are set."
+
+      - name: Take a Personal seat
+        id: activate
+        shell: bash
+        env:
+          UNITY_EMAIL: ${{ secrets.UNITY_EMAIL }}
+          UNITY_PASSWORD: ${{ secrets.UNITY_PASSWORD }}
+        run: |
+          set +e
+          output="$("$LICENSING_CLIENT" --activate-all --include-personal \
+                      --username "$UNITY_EMAIL" --password "$UNITY_PASSWORD" 2>&1)"
+          status=$?
+          echo "$output" | grep -viE 'password|token'
+          echo "activated=true" >> "$GITHUB_OUTPUT"
+
+          if [ $status -ne 0 ] || ! echo "$output" | grep -q 'Activation processed successfully'; then
+            cause="the licensing service did not assign a seat"
+            if   echo "$output" | grep -qi 'invalid.*credential\|unauthorized\|401'; then
+              cause="the email or password was rejected (a Google/Apple sign-in has no password until one is set at login.unity.com)"
+            elif echo "$output" | grep -qi 'two.factor\|2FA\|verification code'; then
+              cause="the account asks for a two-factor code, which CI cannot answer"
+            elif echo "$output" | grep -qi 'no seat\|seat.*unavailable\|exhausted'; then
+              cause="no Personal seat was free; seats free themselves after a while"
+            fi
+            echo "## Unity licence failed" >> "$GITHUB_STEP_SUMMARY"
+            echo "Cause: $cause" >> "$GITHUB_STEP_SUMMARY"
+            echo "::error title=Unity licence failed::$cause"
+            exit 1
+          fi
+          echo "Seat held."
+
+      - name: Open the editor on a throwaway project
+        shell: bash
+        run: |
+          set +e
+          unity-editor -batchmode -nographics -quit \
+            -createProject /tmp/licence-probe -logFile /tmp/unity.log
+          status=$?
+          version="$(grep -m1 -oE 'Initialize engine version: [0-9]+\.[0-9]+\.[0-9]+[a-z0-9]*' /tmp/unity.log | sed 's/.*version: //')"
+          if [ "$status" -eq 0 ] && [ -d /tmp/licence-probe ]; then
+            echo "## Unity licence works" >> "$GITHUB_STEP_SUMMARY"
+            echo "Editor: \`${version:-unknown}\`" >> "$GITHUB_STEP_SUMMARY"
+            echo "Editor version: ${version:-unknown}"
+            exit 0
+          fi
+          echo "::group::Unity log"; cat /tmp/unity.log || true; echo "::endgroup::"
+          echo "::error title=Unity licence failed::a seat was assigned but the editor would not start (exit $status)"
+          exit 1
+
+      - name: Give the seat back
+        if: always() && steps.activate.outputs.activated == 'true'
+        shell: bash
+        env:
+          UNITY_EMAIL: ${{ secrets.UNITY_EMAIL }}
+          UNITY_PASSWORD: ${{ secrets.UNITY_PASSWORD }}
+        run: |
+          set +e
+          "$LICENSING_CLIENT" --deactivate-all \
+            --username "$UNITY_EMAIL" --password "$UNITY_PASSWORD" 2>&1 \
+            | grep -viE 'password|token' | tail -10
+          echo "Seat returned."

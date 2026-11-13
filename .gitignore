@@ -1,0 +1,27 @@
+# Unity
+/[Ll]ibrary/
+/[Tt]emp/
+/[Oo]bj/
+/[Bb]uild/
+/[Bb]uilds/
+/[Ll]ogs/
+/[Uu]ser[Ss]ettings/
+/[Mm]emoryCaptures/
+/[Rr]ecordings/
+/*.csproj
+/*.sln
+*.pidb
+*.pdb
+*.mdb
+crashlytics-build.properties
+*.apk
+*.aab
+# .NET tests
+bin/
+obj/
+TestResults/
+# OS / editors
+.DS_Store
+.vs/
+.vscode/
+.idea/

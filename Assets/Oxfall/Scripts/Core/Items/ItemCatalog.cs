@@ -1,0 +1,55 @@
+using System;
+using System.Collections.Generic;
+
+namespace Oxfall.Core.Items
+{
+    /// <summary>Every item type the game knows, looked up by id.</summary>
+    public sealed class ItemCatalog
+    {
+        private readonly Dictionary<string, ItemDefinition> _items = new Dictionary<string, ItemDefinition>();
+
+        public IEnumerable<ItemDefinition> All => _items.Values;
+
+        public ItemCatalog(IEnumerable<ItemDefinition> items)
+        {
+            if (items == null) throw new ArgumentNullException(nameof(items));
+            foreach (var item in items)
+            {
+                if (_items.ContainsKey(item.Id))
+                    throw new ArgumentException($"Duplicate item id '{item.Id}'.", nameof(items));
+                _items.Add(item.Id, item);
+            }
+        }
+
+        public ItemDefinition Get(string id)
+        {
+            if (id != null && _items.TryGetValue(id, out var item)) return item;
+            throw new KeyNotFoundException($"Unknown item id '{id}'.");
+        }
+
+        public bool TryGet(string id, out ItemDefinition item)
+        {
+            if (id == null) { item = null; return false; }
+            return _items.TryGetValue(id, out item);
+        }
+
+        public bool Contains(string id) => id != null && _items.ContainsKey(id);
+
+        /// <summary>The MVP item set. Stack sizes follow the survival-genre convention players expect.</summary>
+        public static ItemCatalog CreateDefault() => new ItemCatalog(new[]
+        {
+            new ItemDefinition(ItemIds.Wood, "Madera", ItemCategory.Resource, 1000),
+            new ItemDefinition(ItemIds.Stone, "Piedra", ItemCategory.Resource, 1000),
+            new ItemDefinition(ItemIds.MetalOre, "Mineral de metal", ItemCategory.Resource, 1000),
+            new ItemDefinition(ItemIds.Cloth, "Tela", ItemCategory.Resource, 1000),
+
+            new ItemDefinition(ItemIds.Rock, "Roca", ItemCategory.Tool, 1, ToolKind.Rock, skinnable: true),
+            new ItemDefinition(ItemIds.StoneHatchet, "Hacha de piedra", ItemCategory.Tool, 1, ToolKind.Hatchet, skinnable: true),
+            new ItemDefinition(ItemIds.StonePickaxe, "Pico de piedra", ItemCategory.Tool, 1, ToolKind.Pickaxe, skinnable: true),
+            new ItemDefinition(ItemIds.Torch, "Antorcha", ItemCategory.Tool, 1, ToolKind.Torch, skinnable: true),
+
+            new ItemDefinition(ItemIds.BuildingPlan, "Plano de construcción", ItemCategory.Placeable, 1),
+            new ItemDefinition(ItemIds.Campfire, "Fogata", ItemCategory.Placeable, 5),
+        });
+    }
+}
