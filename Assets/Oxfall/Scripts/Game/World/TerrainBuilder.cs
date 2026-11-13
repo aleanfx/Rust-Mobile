@@ -48,6 +48,28 @@ namespace Oxfall.Game.World
             return root;
         }
 
+        /// <summary>
+        /// The height of the terrain mesh as drawn at a point: the island's height at the grid corners,
+        /// spread over the two triangles of the cell the way the mesh is cut (corner to far corner).
+        /// It can differ from <see cref="IslandShape.Height"/> by a little between grid points.
+        /// </summary>
+        public static float MeshHeight(IslandShape shape, float x, float z)
+        {
+            float gx = (x + IslandShape.HalfSize) / CellSize, gz = (z + IslandShape.HalfSize) / CellSize;
+            float ix = Mathf.Floor(gx), iz = Mathf.Floor(gz);
+            float fx = gx - ix, fz = gz - iz;
+            float x0 = -IslandShape.HalfSize + ix * CellSize, z0 = -IslandShape.HalfSize + iz * CellSize;
+            float h00 = shape.Height(x0, z0);
+            float h11 = shape.Height(x0 + CellSize, z0 + CellSize);
+            if (fz >= fx)
+            {
+                float h01 = shape.Height(x0, z0 + CellSize);
+                return h00 + fz * (h01 - h00) + fx * (h11 - h01);
+            }
+            float h10 = shape.Height(x0 + CellSize, z0);
+            return h00 + fx * (h10 - h00) + fz * (h11 - h10);
+        }
+
         private static Mesh BuildChunk(IslandShape shape, int startX, int startZ, int countX, int countZ)
         {
             int vx = countX + 1;

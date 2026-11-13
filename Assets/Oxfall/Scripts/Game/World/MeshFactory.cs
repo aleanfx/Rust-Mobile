@@ -326,32 +326,34 @@ namespace Oxfall.Game.World
         public static Mesh BerryBush(System.Random random, bool cards)
         {
             var b = new FlatMeshBuilder(3);
-            var centre = new Vector3(0f, 0.45f, 0f);
+            var centre = new Vector3(0f, 0.42f, 0f);
+            // A leafy body, so the bush reads as one plant and the berries have something to hang on.
+            var body = new Vector3(0.42f, 0.33f, 0.42f);
+            b.AddBlob(LeavesSubmesh, centre, body, random, 0.25f);
             if (cards)
             {
-                for (int j = 0; j < 14; j++)
+                for (int j = 0; j < 20; j++)
                 {
                     var dir = RandomDirection(random);
-                    dir.y = Mathf.Abs(dir.y) * 0.6f + 0.15f;
+                    dir.y = Mathf.Abs(dir.y) * 0.7f + 0.2f;
                     dir.Normalize();
                     var flatSide = Vector3.Cross(Vector3.up, dir);
                     if (flatSide.sqrMagnitude < 1e-4f) flatSide = Vector3.right;
                     var side = Quaternion.AngleAxis(Rand(random, -40f, 40f), dir) * flatSide.normalized;
                     var frond = AllFronds[random.Next(AllFronds.Length)];
-                    float length = Rand(random, 0.55f, 0.8f);
-                    Card(b, centre + RandomDirection(random) * 0.12f - dir * 0.15f, dir, Rand(random, 10f, 30f), side,
+                    float length = Rand(random, 0.45f, 0.65f);
+                    Card(b, centre + Vector3.Scale(dir, body) * 0.6f, dir, Rand(random, 10f, 30f), side,
                         length, length / frond.Aspect, frond, centre - Vector3.up * 0.3f, false, 0.4f);
                 }
             }
-            else
-            {
-                b.AddBlob(LeavesSubmesh, centre, new Vector3(0.6f, 0.45f, 0.6f), random, 0.25f);
-            }
-            for (int i = 0; i < 12; i++)
+            // Clusters of berries sitting on the outside of the leaves, mostly on the upper half.
+            for (int i = 0; i < 9; i++)
             {
                 var d = RandomDirection(random);
-                d.y = Mathf.Abs(d.y) * 0.8f;
-                AddBerry(b, centre + Vector3.Scale(d.normalized, new Vector3(0.5f, 0.4f, 0.5f)), random);
+                d.y = Mathf.Abs(d.y) * 0.9f + 0.05f;
+                var spot = centre + Vector3.Scale(d.normalized, body * 1.05f);
+                for (int k = 0; k < 3; k++)
+                    AddBerry(b, spot + RandomDirection(random) * 0.045f, random, 0.034f);
             }
             return b.Build("BerryBush", 70f);
         }
@@ -522,13 +524,23 @@ namespace Oxfall.Game.World
         private static void Stick(FlatMeshBuilder b, float x0, float y0, float x1, float y1, float z, float radius) =>
             b.AddTube(0, new Vector3(x0, y0, z), new Vector3(x1, y1, z), radius, radius * 0.85f, 5);
 
-        /// <summary>The flame of a torch or a campfire: two crossed tapering shapes, about 0.25 m tall.</summary>
+        /// <summary>
+        /// The flame of a torch or a campfire: a quad 0.2 m wide and 0.32 m tall standing on the
+        /// origin. Oxfall/Flame turns it to the camera and draws the fire on it, so its bounds are
+        /// widened to cover every way it can turn.
+        /// </summary>
         public static Mesh Flame()
         {
-            var b = new FlatMeshBuilder(1);
-            b.AddTube(0, Vector3.zero, new Vector3(0f, 0.1f, 0f), 0.035f, 0.045f, 6, 0);
-            b.AddTube(0, new Vector3(0f, 0.1f, 0f), new Vector3(0.01f, 0.26f, 0f), 0.045f, 0.0f, 6, 0);
-            return b.Build("Flame", 70f);
+            var mesh = new Mesh { name = "Flame" };
+            mesh.SetVertices(new List<Vector3>
+            {
+                new Vector3(-0.1f, 0f, 0f), new Vector3(-0.1f, 0.32f, 0f), new Vector3(0.1f, 0.32f, 0f), new Vector3(0.1f, 0f, 0f),
+            });
+            mesh.SetUVs(0, new List<Vector2> { new Vector2(0f, 0f), new Vector2(0f, 1f), new Vector2(1f, 1f), new Vector2(1f, 0f) });
+            mesh.SetNormals(new List<Vector3> { Vector3.back, Vector3.back, Vector3.back, Vector3.back });
+            mesh.SetTriangles(new[] { 0, 1, 2, 0, 2, 3 }, 0);
+            mesh.bounds = new Bounds(new Vector3(0f, 0.16f, 0f), new Vector3(0.3f, 0.36f, 0.3f));
+            return mesh;
         }
 
         /// <summary>A rolled-up blueprint tied with string, along X. Submeshes: paper, string.</summary>
@@ -629,6 +641,58 @@ namespace Oxfall.Game.World
             mesh.SetTriangles(triangles, 0);
             mesh.RecalculateBounds();
             mesh.UploadMeshData(true);
+            return mesh;
+        }
+
+        /// <summary>
+        /// The surface of a pond: flat at the origin where the ground under it is lower, and tucked
+        /// under the ground wherever the ground rises above the water, so no edge of it ever floats
+        /// over the bank. The shoreline is wherever the ground meets the water.
+        /// </summary>
+        /// <param name="groundAbove">Height of the drawn ground above the water at a point (x, z) of the surface.</param>
+        public static Mesh PondSurface(float radius, int rings, int segments, System.Func<float, float, float> groundAbove)
+        {
+            var vertices = new List<Vector3>(1 + rings * segments);
+            var triangles = new List<int>(segments * 3 + (rings - 1) * segments * 6);
+            float Surface(float x, float z)
+            {
+                float ground = groundAbove(x, z);
+                return ground < -0.05f ? 0f : Mathf.Min(0f, ground) - 0.3f;
+            }
+            vertices.Add(new Vector3(0f, Surface(0f, 0f), 0f));
+            for (int r = 1; r <= rings; r++)
+            {
+                float d = radius * r / rings;
+                for (int i = 0; i < segments; i++)
+                {
+                    float a = i * Mathf.PI * 2f / segments;
+                    float x = Mathf.Cos(a) * d, z = Mathf.Sin(a) * d;
+                    vertices.Add(new Vector3(x, Surface(x, z), z));
+                }
+            }
+            for (int i = 0; i < segments; i++)
+            {
+                int next = (i + 1) % segments;
+                triangles.Add(0); triangles.Add(1 + next); triangles.Add(1 + i);
+            }
+            for (int r = 1; r < rings; r++)
+            {
+                int inner = 1 + (r - 1) * segments, outer = 1 + r * segments;
+                for (int i = 0; i < segments; i++)
+                {
+                    int next = (i + 1) % segments;
+                    // Clockwise seen from above, so the faces point up.
+                    triangles.Add(inner + i); triangles.Add(inner + next); triangles.Add(outer + next);
+                    triangles.Add(inner + i); triangles.Add(outer + next); triangles.Add(outer + i);
+                }
+            }
+            var normals = new List<Vector3>(vertices.Count);
+            for (int i = 0; i < vertices.Count; i++) normals.Add(Vector3.up);
+            var mesh = new Mesh { name = "Pond" };
+            mesh.SetVertices(vertices);
+            mesh.SetNormals(normals);
+            mesh.SetTriangles(triangles, 0);
+            mesh.RecalculateBounds();
             return mesh;
         }
 

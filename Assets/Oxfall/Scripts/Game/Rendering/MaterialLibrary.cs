@@ -148,15 +148,20 @@ namespace Oxfall.Game.Rendering
             Blueprint = Make("Blueprint", new Color(0.27f, 0.42f, 0.62f), 0.12f);
             Char = Make("Char", new Color(0.13f, 0.11f, 0.10f), 0.05f);
             Flame = Resources.Load<Material>("OxfallFlame") ?? Make("Flame", new Color(1f, 0.55f, 0.15f), 0f);
-            Berries = Make("Berries", new Color(0.30f, 0.05f, 0.12f), 0.5f);
+            Berries = Make("Berries", new Color(0.50f, 0.06f, 0.20f), 0.55f);
             Pond = new Material(Water) { name = "Pond" };
             if (Pond.HasProperty("_DepthMap"))
             {
                 // The same depth everywhere: no sand showing through and no foam.
                 Pond.SetTexture("_DepthMap", Texture2D.whiteTexture);
                 Pond.SetVector("_DepthMapScale", new Vector4(0f, 0.5f, 1.8f, 0f));
-                Pond.SetColor("_ShallowColor", new Color(0.13f, 0.27f, 0.22f));
-                Pond.SetColor("_DeepColor", new Color(0.05f, 0.12f, 0.11f));
+                Pond.SetColor("_ShallowColor", new Color(0.13f, 0.22f, 0.17f));
+                Pond.SetColor("_DeepColor", new Color(0.06f, 0.10f, 0.08f));
+                // Small, slow ripples and a dull reflection: still, murky fresh water, not the sea.
+                Pond.SetVector("_RippleTiling", new Vector4(3f, 7f, 0.01f, 0f));
+                Pond.SetFloat("_RippleStrength", 0.18f);
+                Pond.SetFloat("_Reflection", 0.3f);
+                Pond.SetFloat("_Glint", 1.2f);
             }
         }
 

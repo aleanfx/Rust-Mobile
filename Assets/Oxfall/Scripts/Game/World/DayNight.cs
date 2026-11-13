@@ -23,9 +23,9 @@ namespace Oxfall.Game.World
         private static readonly Color DaySky = new Color(0.55f, 0.62f, 0.72f);
         private static readonly Color DayEquator = new Color(0.55f, 0.55f, 0.50f);
         private static readonly Color DayGround = new Color(0.27f, 0.25f, 0.21f);
-        private static readonly Color NightSky = new Color(0.11f, 0.14f, 0.22f);
-        private static readonly Color NightEquator = new Color(0.075f, 0.09f, 0.13f);
-        private static readonly Color NightGround = new Color(0.035f, 0.035f, 0.045f);
+        private static readonly Color NightSky = new Color(0.15f, 0.18f, 0.27f);
+        private static readonly Color NightEquator = new Color(0.10f, 0.12f, 0.17f);
+        private static readonly Color NightGround = new Color(0.05f, 0.05f, 0.065f);
         private static readonly Color DuskEquator = new Color(0.62f, 0.44f, 0.34f);
 
         private static readonly Color NightFog = new Color(0.055f, 0.07f, 0.11f);
@@ -113,7 +113,7 @@ namespace Oxfall.Game.World
                 float yaw = BaseYaw + 180f + Mathf.Lerp(-100f, 100f, _cycle.NightProgress);
                 _sun.transform.rotation = Quaternion.Euler(Mathf.Max(_cycle.MoonElevation, 4f), yaw, 0f);
                 _sun.color = MoonColour;
-                _sun.intensity = 0.32f * Mathf.SmoothStep(0f, 1f, Mathf.InverseLerp(0f, 10f, _cycle.MoonElevation));
+                _sun.intensity = 0.4f * Mathf.SmoothStep(0f, 1f, Mathf.InverseLerp(0f, 10f, _cycle.MoonElevation));
             }
 
             RenderSettings.ambientSkyColor = Color.Lerp(NightSky, DaySky, twilight);

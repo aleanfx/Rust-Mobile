@@ -133,8 +133,11 @@ namespace Oxfall.Game.World
                 float d = (new Vector2(x, z) - pond.Centre).magnitude;
                 if (d > pond.Radius + 12f) continue;
                 float t = d / pond.Radius;
-                // A bowl under the water, then a gentle bank rising to meet the land.
-                float dug = t < 1f ? pond.Level - 1.6f * (1f - t * t) : pond.Level + (d - pond.Radius) * 0.35f;
+                // A bowl under the water, its rim a little under the surface, then a bank rising out
+                // of the water over a metre and a half and on gently to meet the land.
+                float dug = t < 1f ? pond.Level - 0.3f - 1.4f * (1f - t * t)
+                    : d < pond.Radius + 1.5f ? pond.Level - 0.3f + (d - pond.Radius) * 0.55f
+                    : pond.Level + 0.525f + (d - pond.Radius - 1.5f) * 0.35f;
                 h = Mathf.Min(h, dug);
             }
             return h;

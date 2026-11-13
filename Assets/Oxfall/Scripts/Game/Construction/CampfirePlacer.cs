@@ -105,7 +105,7 @@ namespace Oxfall.Game.Construction
             collider.center = new Vector3(0f, 0.2f, 0f);
             collider.radius = 0.5f;
             collider.height = 0.4f;
-            Fire.Create(go.transform, new Vector3(0f, 0.04f, 0f), 1.9f, 3, 12f, 3f, _flame, _materials.Flame);
+            Fire.Create(go.transform, new Vector3(0f, 0.04f, 0f), 1.7f, 5, 14f, 3.4f, _flame, _materials.Flame);
             return go;
         }
 

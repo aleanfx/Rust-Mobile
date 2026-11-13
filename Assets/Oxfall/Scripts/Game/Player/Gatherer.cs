@@ -96,7 +96,7 @@ namespace Oxfall.Game.Player
             // A torch burns while it is in hand: a small flame and a light that reaches about 9 m.
             if (_held.Burns && _fire == null)
             {
-                _fire = Fire.Create(_hand, _held.FirePosition, 0.5f, 2, 9f, 2.2f, MeshFactory.Flame(), _flameMaterial);
+                _fire = Fire.Create(_hand, _held.FirePosition, 0.7f, 2, 12f, 3.2f, MeshFactory.Flame(), _flameMaterial);
                 if (FireSound != null) GameAudio.Attach(_fire.gameObject, FireSound, 0.18f, 6f);
             }
             if (_fire != null)
