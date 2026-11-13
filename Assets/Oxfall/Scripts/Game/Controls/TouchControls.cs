@@ -30,6 +30,9 @@ namespace Oxfall.Game.Controls
         public event Action<int> SlotKey;
         public event Action InventoryKey;
 
+        /// <summary>Raised when a button on screen is pressed (for its click).</summary>
+        public event Action Tapped;
+
         private PlayerInput _input;
         private Hud _hud;
 
@@ -102,14 +105,18 @@ namespace Oxfall.Game.Controls
         /// </summary>
         private bool TapAt(Vector2 pos)
         {
+            var modal = _hud.Modal;
+            bool modalOpen = modal != null && modal.gameObject.activeInHierarchy;
             // Copied first: a tap may open a panel and add or hide buttons.
             foreach (var target in _hud.TapTargets.ToArray())
             {
+                if (modalOpen && !target.Rect.IsChildOf(modal)) continue;
                 if (!target.Rect.gameObject.activeInHierarchy || !Inside(target.Rect, pos)) continue;
                 target.OnTap?.Invoke();
+                Tapped?.Invoke();
                 return true;
             }
-            return _hud.Blocks(pos);
+            return modalOpen || _hud.Blocks(pos);
         }
 
         private void Claim(int id, Vector2 pos)

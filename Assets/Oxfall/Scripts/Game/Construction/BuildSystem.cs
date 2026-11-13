@@ -47,6 +47,9 @@ namespace Oxfall.Game.Construction
         private Edge _edge;
         private float _top;
 
+        /// <summary>Raised after a piece is built.</summary>
+        public event System.Action Placed;
+
         public bool Active { get; private set; }
         public PieceType Current => Order[_index];
 
@@ -157,6 +160,7 @@ namespace Oxfall.Game.Construction
                 _player.LiftTo(_top + 0.05f);
 
             Debug.Log($"[Oxfall] Built {Current} at {piece.transform.position}");
+            Placed?.Invoke();
         }
 
         private void Update()

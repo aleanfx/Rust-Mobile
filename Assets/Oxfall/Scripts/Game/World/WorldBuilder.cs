@@ -42,6 +42,7 @@ namespace Oxfall.Game.World
             var splatMap = materials.HasTexturedGround ? TerrainBuilder.BuildSplatMap(world.Shape) : null;
             TerrainBuilder.Build(world.Shape, materials.MakeGround(colourMap, splatMap), world.Root);
             BuildSea(materials, world.Root);
+            BuildPonds(world.Shape, materials, world.Root);
             materials.SetSeaDepth(TerrainBuilder.BuildDepthMap(world.Shape), IslandShape.WorldSize,
                 TerrainBuilder.DepthMapRange);
             PlaceResources(world, materials, seed);
@@ -107,6 +108,22 @@ namespace Oxfall.Game.World
             renderer.shadowCastingMode = ShadowCastingMode.Off;
         }
 
+        /// <summary>A disc of fresh water in each pond, a little wider than the hole so its edge hides in the bank.</summary>
+        private static void BuildPonds(IslandShape shape, MaterialLibrary materials, Transform parent)
+        {
+            foreach (var pond in shape.Ponds)
+            {
+                var go = new GameObject("Pond");
+                go.transform.SetParent(parent, false);
+                go.transform.position = new Vector3(pond.Centre.x, pond.Level, pond.Centre.y);
+                go.AddComponent<MeshFilter>().sharedMesh = MeshFactory.Disc(pond.Radius + 0.6f, 32);
+                var renderer = go.AddComponent<MeshRenderer>();
+                renderer.sharedMaterial = materials.Pond;
+                renderer.shadowCastingMode = ShadowCastingMode.Off;
+            }
+            Debug.Log($"[Oxfall] {shape.Ponds.Count} ponds.");
+        }
+
         private static void PlaceResources(WorldInstance world, MaterialLibrary materials, int seed)
         {
             var random = new System.Random(seed * 31 + 7);
@@ -124,6 +141,8 @@ namespace Oxfall.Game.World
             for (int i = 0; i < rocks.Length; i++) rocks[i] = MeshFactory.Rock(shapes);
             var hemps = new Mesh[2];
             for (int i = 0; i < hemps.Length; i++) hemps[i] = MeshFactory.Hemp(shapes);
+            var bushes = new Mesh[2];
+            for (int i = 0; i < bushes.Length; i++) bushes[i] = MeshFactory.BerryBush(shapes, leafCards);
 
             var parent = new GameObject("Resources").transform;
             parent.SetParent(world.Root, false);
@@ -138,7 +157,7 @@ namespace Oxfall.Game.World
                 float x = -IslandShape.HalfSize + (gx + 0.15f + 0.7f * (float)random.NextDouble()) * cell;
                 float z = -IslandShape.HalfSize + (gz + 0.15f + 0.7f * (float)random.NextDouble()) * cell;
                 float h = shape.Height(x, z);
-                if (h < 1.3f) continue;
+                if (h < 1.3f || shape.PondBank(x, z) > 0f) continue;
 
                 float flatness = shape.Normal(x, z).y;
                 float forest = shape.Forest(x, z);
@@ -149,6 +168,7 @@ namespace Oxfall.Game.World
                 float stoneChance = 0.035f + (flatness < 0.9f ? 0.08f : 0f);
                 float oreChance = h > 5f ? 0.022f : 0f;
                 float hempChance = grassy && forest < 0.5f ? 0.05f : 0f;
+                float berryChance = grassy && forest > 0.3f && forest < 0.7f ? 0.035f : 0f;
 
                 var position = new Vector3(x, h, z);
                 float yaw = (float)random.NextDouble() * 360f;
@@ -198,6 +218,17 @@ namespace Oxfall.Game.World
                     // A trigger: the player walks through plants but can still aim at them.
                     AddSphere(go, new Vector3(0f, 0.6f, 0f), 0.6f, true);
                     AddView(world, go, nextId++, ResourceNodeType.Hemp);
+                }
+                else if (roll < treeChance + stoneChance + oreChance + hempChance + berryChance)
+                {
+                    var bushMaterials = leafCards
+                        ? new[] { materials.Berries, materials.Leaves[0], materials.LeafCards[nextId % materials.LeafCards.Length] }
+                        : new[] { materials.Berries, materials.Leaves[0] };
+                    float s = 0.85f + (float)random.NextDouble() * 0.4f;
+                    var go = MakeNode("Berry bush", bushes[random.Next(bushes.Length)], bushMaterials,
+                        position - new Vector3(0f, 0.05f, 0f), yaw, Vector3.one * s, parent);
+                    AddSphere(go, new Vector3(0f, 0.45f, 0f), 0.6f, true);
+                    AddView(world, go, nextId++, ResourceNodeType.BerryBush);
                 }
             }
 

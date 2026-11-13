@@ -9,6 +9,9 @@ namespace Oxfall.Core.Items
         public const string MetalOre = "metal_ore";
         public const string Cloth = "cloth";
 
+        // Food
+        public const string Berries = "berries";
+
         // Tools
         public const string Rock = "rock";
         public const string StoneHatchet = "stone_hatchet";

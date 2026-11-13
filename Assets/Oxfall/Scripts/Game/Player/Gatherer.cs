@@ -3,6 +3,8 @@ using System.Collections.Generic;
 using System.Text;
 using Oxfall.Core.Gathering;
 using Oxfall.Core.Items;
+using Oxfall.Core.Survival;
+using Oxfall.Game.Audio;
 using Oxfall.Game.Controls;
 using Oxfall.Game.Items;
 using Oxfall.Game.World;
@@ -23,8 +25,17 @@ namespace Oxfall.Game.Player
         public float Reach = 2.7f;
         public float AimRadius = 0.3f;
 
+        /// <summary>Water from one swallow at a pond.</summary>
+        public const float DrinkWater = 25f;
+
         /// <summary>Raised with a message for the player ("+15 Madera").</summary>
         public event Action<string> Message;
+
+        /// <summary>Raised for every swing, hit, bite and swallow, for its sound.</summary>
+        public event Action<SoundCue> Sound;
+
+        /// <summary>The crackle of a burning torch, when there is one to play.</summary>
+        public AudioClip FireSound { get; set; }
 
         private PlayerInput _input;
         private Inventory _inventory;
@@ -37,14 +48,21 @@ namespace Oxfall.Game.Player
         private MeshRenderer _handRenderer;
         private ItemModel _held;
         private string _heldId;
+        private Material _flameMaterial;
+        private Fire _fire;
+        private Vitals _vitals;
+        private IslandShape _shape;
         private float _cooldown;
         private float _swing = 10f;
         private float _hintCooldown;
         private readonly StringBuilder _text = new StringBuilder();
 
         public void Init(PlayerInput input, Inventory inventory, Hotbar hotbar, ItemCatalog catalog, Transform head,
-            IReadOnlyDictionary<string, ItemModel> models)
+            IReadOnlyDictionary<string, ItemModel> models, Material flameMaterial, Vitals vitals, IslandShape shape)
         {
+            _flameMaterial = flameMaterial;
+            _vitals = vitals;
+            _shape = shape;
             _input = input;
             _inventory = inventory;
             _hotbar = hotbar;
@@ -74,6 +92,18 @@ namespace Oxfall.Game.Player
             _handFilter.sharedMesh = _held.Mesh;
             _handRenderer.sharedMaterials = _held.Materials;
             _hand.localScale = Vector3.one * _held.HandScale;
+
+            // A torch burns while it is in hand: a small flame and a light that reaches about 9 m.
+            if (_held.Burns && _fire == null)
+            {
+                _fire = Fire.Create(_hand, _held.FirePosition, 0.5f, 2, 9f, 2.2f, MeshFactory.Flame(), _flameMaterial);
+                if (FireSound != null) GameAudio.Attach(_fire.gameObject, FireSound, 0.18f, 6f);
+            }
+            if (_fire != null)
+            {
+                _fire.gameObject.SetActive(_held.Burns);
+                _fire.transform.localPosition = _held.FirePosition;
+            }
             _swing = 10f;
             AnimateHand(0f);
         }
@@ -102,10 +132,25 @@ namespace Oxfall.Game.Player
             {
                 _cooldown = SwingSeconds;
                 _swing = 0f;
+                Sound?.Invoke(SoundCue.Swing);
                 Strike();
+            }
+            else if (_input.AttackPressed && _cooldown <= 0f && _hotbar.HeldDefinition?.Category == ItemCategory.Food)
+            {
+                _cooldown = 0.5f;
+                _swing = 0f;
+                Eat(_hotbar.HeldDefinition);
             }
 
             AnimateHand(dt);
+        }
+
+        /// <summary>One swing (or one bite) with what is in hand, as one press of attack. For tests.</summary>
+        public void UseOnce()
+        {
+            _swing = 0f;
+            if (CanSwing) Strike();
+            else if (_hotbar.HeldDefinition?.Category == ItemCategory.Food) Eat(_hotbar.HeldDefinition);
         }
 
         private void Strike()
@@ -113,12 +158,78 @@ namespace Oxfall.Game.Player
             var ray = new Ray(_head.position, _head.forward);
             if (!Physics.SphereCast(ray, AimRadius, out var hit, Reach, Physics.DefaultRaycastLayers,
                     QueryTriggerInteraction.Collide))
+            {
+                TryDrink();
                 return;
+            }
 
+            // Aiming down at a pond, the cast can reach the pond's bed: water is checked then too.
             var node = hit.collider.GetComponentInParent<ResourceNodeView>();
-            if (node == null) return;
+            if (node == null) TryDrink();
+            else Gather(node);
+        }
 
+        /// <summary>Eats one of what is in hand.</summary>
+        private void Eat(ItemDefinition food)
+        {
+            if (_vitals == null || !_inventory.Remove(food.Id, 1)) return;
+            _vitals.Consume(food.Nourishment);
+            Sound?.Invoke(SoundCue.Eat);
+            _text.Clear();
+            _text.Append("Comes ").Append(food.DisplayName.ToLowerInvariant());
+            if (food.Nourishment.Food > 0f) _text.Append("   +").Append(Mathf.RoundToInt(food.Nourishment.Food)).Append(" comida");
+            if (food.Nourishment.Water > 0f) _text.Append("   +").Append(Mathf.RoundToInt(food.Nourishment.Water)).Append(" agua");
+            Message?.Invoke(_text.ToString());
+        }
+
+        /// <summary>
+        /// Drinks if the player is looking at fresh water close by; says so if it is the sea. Returns
+        /// true if the swing went into water.
+        /// </summary>
+        private bool TryDrink()
+        {
+            if (_vitals == null || _shape == null) return false;
+            var origin = _head.position;
+            var forward = _head.forward;
+            if (forward.y > -0.15f) return false;
+            foreach (var pond in _shape.Ponds)
+            {
+                float t = (pond.Level - origin.y) / forward.y;
+                if (t < 0f || t > Reach + 1.5f) continue;
+                var p = origin + forward * t;
+                if ((new Vector2(p.x, p.z) - pond.Centre).sqrMagnitude > pond.Radius * pond.Radius) continue;
+                _vitals.Consume(new Nourishment(0f, DrinkWater));
+                Sound?.Invoke(SoundCue.Drink);
+                Message?.Invoke($"Bebes agua dulce   +{DrinkWater:0} agua");
+                return true;
+            }
+            float sea = (IslandShape.WaterLevel - origin.y) / forward.y;
+            if (sea >= 0f && sea <= Reach + 1.5f)
+            {
+                var p = origin + forward * sea;
+                if (_shape.Height(p.x, p.z) < IslandShape.WaterLevel)
+                {
+                    if (_hintCooldown <= 0f)
+                    {
+                        _hintCooldown = 2.5f;
+                        Message?.Invoke("El agua de mar es salada: busca una charca de agua dulce");
+                    }
+                    return true;
+                }
+            }
+            return false;
+        }
+
+        private void Gather(ResourceNodeView node)
+        {
             var yields = node.Hit(_hotbar.HeldTool);
+            if (yields.Count > 0 || !node.Node.IsDepleted)
+            {
+                var type = node.Node.Type;
+                Sound?.Invoke(type == ResourceNodeType.Tree ? SoundCue.Wood
+                    : type == ResourceNodeType.Stone || type == ResourceNodeType.MetalOre ? SoundCue.Stone
+                    : SoundCue.Plant);
+            }
             if (yields.Count == 0)
             {
                 // Bare hands or a torch on a tree or a rock: say once in a while what is missing.

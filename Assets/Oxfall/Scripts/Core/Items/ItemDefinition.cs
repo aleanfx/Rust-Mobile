@@ -1,4 +1,5 @@
 using System;
+using Oxfall.Core.Survival;
 
 namespace Oxfall.Core.Items
 {
@@ -7,6 +8,7 @@ namespace Oxfall.Core.Items
         Resource,
         Tool,
         Placeable,
+        Food,
     }
 
     /// <summary>What a tool is good at. Gathering yields depend on it.</summary>
@@ -37,8 +39,12 @@ namespace Oxfall.Core.Items
         /// <summary>One line for the player on what it is for.</summary>
         public string Description { get; }
 
+        /// <summary>What eating one gives back; nothing for anything that isn't food.</summary>
+        public Nourishment Nourishment { get; }
+
         public ItemDefinition(string id, string displayName, ItemCategory category, int maxStack,
-            ToolKind tool = ToolKind.None, bool skinnable = false, string description = "")
+            ToolKind tool = ToolKind.None, bool skinnable = false, string description = "",
+            Nourishment nourishment = default)
         {
             if (string.IsNullOrWhiteSpace(id)) throw new ArgumentException("Item id is required.", nameof(id));
             if (maxStack < 1) throw new ArgumentOutOfRangeException(nameof(maxStack), "Max stack must be at least 1.");
@@ -49,6 +55,7 @@ namespace Oxfall.Core.Items
             Tool = tool;
             Skinnable = skinnable;
             Description = description ?? "";
+            Nourishment = nourishment;
         }
 
         public override string ToString() => Id;

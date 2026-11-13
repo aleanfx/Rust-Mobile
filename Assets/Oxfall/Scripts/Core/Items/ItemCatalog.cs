@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using Oxfall.Core.Survival;
 
 namespace Oxfall.Core.Items
 {
@@ -46,6 +47,10 @@ namespace Oxfall.Core.Items
                 description: "Se funde en un horno para sacar metal."),
             new ItemDefinition(ItemIds.Cloth, "Tela", ItemCategory.Resource, 1000,
                 description: "Sale del cáñamo. Para antorchas y ropa."),
+
+            new ItemDefinition(ItemIds.Berries, "Moras", ItemCategory.Food, 20,
+                description: "Llévalas en la mano y toca COMER: algo de comida y de agua.",
+                nourishment: new Nourishment(35f, 15f)),
 
             new ItemDefinition(ItemIds.Rock, "Roca", ItemCategory.Tool, 1, ToolKind.Rock, skinnable: true,
                 description: "Golpea árboles y piedras. Mejor que nada."),

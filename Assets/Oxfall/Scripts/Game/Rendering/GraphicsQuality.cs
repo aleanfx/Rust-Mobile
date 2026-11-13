@@ -148,6 +148,8 @@ namespace Oxfall.Game.Rendering
                 urp.msaaSampleCount = msaa;
                 urp.supportsHDR = hdr;
                 if (shadowDistance > 0f) urp.shadowDistance = shadowDistance;
+                // Torches and campfires lighting one object: two on Low is enough to see by.
+                urp.maxAdditionalLightsCount = tier == QualityTier.Low ? 2 : 4;
             }
 
             var cameraData = _camera.GetUniversalAdditionalCameraData();

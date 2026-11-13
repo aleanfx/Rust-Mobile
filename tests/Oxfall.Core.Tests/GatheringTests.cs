@@ -65,6 +65,26 @@ namespace Oxfall.Core.Tests
         }
 
         [Test]
+        public void Berries_are_picked_by_hand_a_few_at_a_time()
+        {
+            var bush = new ResourceNode(4, ResourceNodeType.BerryBush);
+            var y = bush.Hit(ToolKind.None);
+            Assert.That(y.Single().ItemId, Is.EqualTo(ItemIds.Berries));
+            Assert.That(y.Single().Amount, Is.EqualTo(GatherTable.Capacity(ResourceNodeType.BerryBush)));
+            Assert.That(bush.IsDepleted, Is.True);
+        }
+
+        [Test]
+        public void Berries_are_food_that_fills_food_and_water()
+        {
+            var berries = ItemCatalog.CreateDefault().Get(ItemIds.Berries);
+            Assert.That(berries.Category, Is.EqualTo(ItemCategory.Food));
+            Assert.That(berries.Nourishment.Food, Is.GreaterThan(0f));
+            Assert.That(berries.Nourishment.Water, Is.GreaterThan(0f));
+            Assert.That(ItemCatalog.CreateDefault().Get(ItemIds.Wood).Nourishment.Food, Is.EqualTo(0f));
+        }
+
+        [Test]
         public void A_depleted_node_grows_back_after_its_timer()
         {
             var hemp = new ResourceNode(3, ResourceNodeType.Hemp);

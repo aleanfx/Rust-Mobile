@@ -131,7 +131,11 @@ namespace Oxfall.Editor
 
             var serialized = new SerializedObject(pipeline);
             SetInt(serialized, "m_MainLightRenderingMode", (int)LightRenderingMode.PerPixel, true);
-            SetInt(serialized, "m_AdditionalLightsRenderingMode", (int)LightRenderingMode.Disabled, true);
+            // Torches and campfires are point lights: per pixel, at most four on any one object, no
+            // shadows of their own. GraphicsQuality lowers the count on weaker phones.
+            SetInt(serialized, "m_AdditionalLightsRenderingMode", (int)LightRenderingMode.PerPixel, true);
+            SetInt(serialized, "m_AdditionalLightsPerObjectLimit", 4, false);
+            SetBool(serialized, "m_AdditionalLightShadowsSupported", false, false);
             SetBool(serialized, "m_MainLightShadowsSupported", true, true);
             SetBool(serialized, "m_SoftShadowsSupported", false, false);
             SetInt(serialized, "m_MainLightShadowmapResolution", 1024, false);

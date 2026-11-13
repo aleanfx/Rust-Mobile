@@ -22,6 +22,13 @@ namespace Oxfall.Game.Items
 
         /// <summary>Its rotation for the inventory icon, seen by a camera looking along +Z.</summary>
         public Quaternion IconRotation = Quaternion.identity;
+
+        /// <summary>How much closer the icon frames it: thin diagonal tools leave room in their box.</summary>
+        public float IconZoom = 1f;
+
+        /// <summary>Whether it burns while held (the torch), and where the flame sits on the model.</summary>
+        public bool Burns;
+        public Vector3 FirePosition;
     }
 
     /// <summary>
@@ -52,17 +59,22 @@ namespace Oxfall.Game.Items
                     Mesh = MeshFactory.Torch(),
                     Materials = new[] { m.Bark, m.Char },
                     ShowInHand = true,
+                    Burns = true,
+                    FirePosition = new Vector3(0f, 0.41f, 0f),
                     HandPosition = new Vector3(0.36f, -0.50f, 0.50f),
                     HandRotation = Grip(new Vector3(-0.18f, 0.92f, 0.35f), Vector3.forward),
                     IconRotation = Diagonal(new Vector3(0.45f, 0.89f, 0f), new Vector3(0.89f, -0.45f, 0f)),
+                    IconZoom = 1.35f,
                 },
                 [ItemIds.BuildingPlan] = new ItemModel
                 {
                     Mesh = MeshFactory.BuildingPlan(),
                     Materials = new[] { m.Blueprint, m.Rope },
                     ShowInHand = true,
-                    HandPosition = new Vector3(0.30f, -0.33f, 0.60f),
-                    HandRotation = Quaternion.FromToRotation(Vector3.right, new Vector3(-0.55f, 0.55f, 0.62f)),
+                    // Held low on the right, pointing away up the screen, so it hides little of the view.
+                    HandPosition = new Vector3(0.32f, -0.36f, 0.72f),
+                    HandRotation = Quaternion.FromToRotation(Vector3.right, new Vector3(-0.3f, 0.3f, 0.9f)),
+                    HandScale = 0.8f,
                     IconRotation = Quaternion.AngleAxis(20f, Vector3.up) * Quaternion.FromToRotation(Vector3.right, new Vector3(0.85f, 0.5f, 0f)),
                 },
                 [ItemIds.Campfire] = new ItemModel
@@ -89,6 +101,16 @@ namespace Oxfall.Game.Items
                     Materials = new[] { m.MetalOre },
                     IconRotation = Tilt(-30f, 60f),
                 },
+                [ItemIds.Berries] = new ItemModel
+                {
+                    Mesh = MeshFactory.BerryCluster(),
+                    Materials = new[] { m.Berries, m.Leaves[0] },
+                    ShowInHand = true,
+                    HandPosition = new Vector3(0.26f, -0.27f, 0.5f),
+                    HandRotation = Quaternion.Euler(-35f, 25f, 0f),
+                    HandScale = 1.3f,
+                    IconRotation = Tilt(-40f, 20f),
+                },
                 [ItemIds.Cloth] = new ItemModel
                 {
                     Mesh = MeshFactory.ClothRoll(),
@@ -111,6 +133,7 @@ namespace Oxfall.Game.Items
             HandPosition = new Vector3(0.36f, -0.52f, 0.42f),
             HandRotation = Grip(new Vector3(-0.33f, 0.82f, 0.47f), new Vector3(-0.6f, 0f, 0.8f)),
             IconRotation = Diagonal(new Vector3(0.6f, 0.8f, 0f), new Vector3(0.8f, -0.6f, 0f)),
+            IconZoom = 1.25f,
         };
 
         /// <summary>The rotation that turns a tool's haft (+Y) along <paramref name="haft"/> and its head (+X) towards <paramref name="head"/>.</summary>

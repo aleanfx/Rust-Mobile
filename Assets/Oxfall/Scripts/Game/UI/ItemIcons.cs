@@ -30,6 +30,9 @@ namespace Oxfall.Game.UI
         /// <summary>Raised once the icons are ready.</summary>
         public event Action Ready;
 
+        /// <summary>True for the frame the icons borrow the sun; the day-night cycle leaves the light alone then.</summary>
+        public static bool Busy { get; private set; }
+
         /// <summary>The icon of an item, or null before they are rendered (or if it failed).</summary>
         public static Sprite Get(string itemId) => itemId != null && Sprites.TryGetValue(itemId, out var s) ? s : null;
 
@@ -50,6 +53,7 @@ namespace Oxfall.Game.UI
 
         private IEnumerator Run(IReadOnlyDictionary<string, ItemModel> models, Light sun)
         {
+            Busy = true;
             var jobs = new List<Job>();
             int n = 0;
             foreach (var pair in models)
@@ -73,7 +77,7 @@ namespace Oxfall.Game.UI
                 cameraObject.transform.SetParent(transform, false);
                 var camera = cameraObject.AddComponent<Camera>();
                 camera.orthographic = true;
-                camera.orthographicSize = Mathf.Max(bounds.extents.x, bounds.extents.y) * 1.08f;
+                camera.orthographicSize = Mathf.Max(bounds.extents.x, bounds.extents.y) * 1.08f / Mathf.Max(0.5f, model.IconZoom);
                 camera.transform.SetPositionAndRotation(bounds.center - Vector3.forward * (bounds.extents.z + 1f), Quaternion.identity);
                 camera.nearClipPlane = 0.05f;
                 camera.farClipPlane = bounds.extents.z * 2f + 2f;
@@ -99,13 +103,23 @@ namespace Oxfall.Game.UI
             // icons look the same whatever the time of day.
             Quaternion sunRotation = default;
             float sunIntensity = 0f;
+            Color sunColour = Color.white;
             if (sun != null)
             {
                 sunRotation = sun.transform.rotation;
                 sunIntensity = sun.intensity;
+                sunColour = sun.color;
                 sun.transform.rotation = Quaternion.LookRotation(new Vector3(0.45f, -0.6f, 0.65f));
-                sun.intensity = 1.6f;
+                sun.intensity = 2.1f;
+                sun.color = new Color(1f, 0.95f, 0.88f);
             }
+            var ambientSky = RenderSettings.ambientSkyColor;
+            var ambientEquator = RenderSettings.ambientEquatorColor;
+            var ambientGround = RenderSettings.ambientGroundColor;
+            // Brighter than any real hour: icons sit on dark slots and must read at a glance.
+            RenderSettings.ambientSkyColor = new Color(0.75f, 0.78f, 0.84f);
+            RenderSettings.ambientEquatorColor = new Color(0.70f, 0.68f, 0.62f);
+            RenderSettings.ambientGroundColor = new Color(0.45f, 0.42f, 0.38f);
 #if OXFALL_URP
             // A lower render scale (the Low graphics tier) would blur the icons; full size for this frame.
             var urp = GraphicsSettings.currentRenderPipeline as UniversalRenderPipelineAsset;
@@ -141,7 +155,11 @@ namespace Oxfall.Game.UI
             {
                 sun.transform.rotation = sunRotation;
                 sun.intensity = sunIntensity;
+                sun.color = sunColour;
             }
+            RenderSettings.ambientSkyColor = ambientSky;
+            RenderSettings.ambientEquatorColor = ambientEquator;
+            RenderSettings.ambientGroundColor = ambientGround;
 #if OXFALL_URP
             if (urp != null) urp.renderScale = renderScale;
 #endif
@@ -152,6 +170,7 @@ namespace Oxfall.Game.UI
                 Destroy(job.Target);
             }
 
+            Busy = false;
             Debug.Log($"[Oxfall] Rendered {Sprites.Count} item icons.");
             Ready?.Invoke();
             Destroy(gameObject);

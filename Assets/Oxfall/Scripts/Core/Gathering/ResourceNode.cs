@@ -10,6 +10,7 @@ namespace Oxfall.Core.Gathering
         Stone,
         MetalOre,
         Hemp,
+        BerryBush,
     }
 
     public readonly struct Yield
@@ -32,6 +33,7 @@ namespace Oxfall.Core.Gathering
                 case ResourceNodeType.Stone: return 400;
                 case ResourceNodeType.MetalOre: return 240;
                 case ResourceNodeType.Hemp: return 10;
+                case ResourceNodeType.BerryBush: return 4;
                 default: throw new ArgumentOutOfRangeException(nameof(type));
             }
         }
@@ -45,6 +47,7 @@ namespace Oxfall.Core.Gathering
                 case ResourceNodeType.Stone: return 360f;
                 case ResourceNodeType.MetalOre: return 480f;
                 case ResourceNodeType.Hemp: return 120f;
+                case ResourceNodeType.BerryBush: return 150f;
                 default: throw new ArgumentOutOfRangeException(nameof(type));
             }
         }
@@ -61,7 +64,8 @@ namespace Oxfall.Core.Gathering
                 case ResourceNodeType.MetalOre:
                     return tool == ToolKind.Pickaxe ? 24 : tool == ToolKind.Rock ? 10 : tool == ToolKind.Hatchet ? 5 : 0;
                 case ResourceNodeType.Hemp:
-                    return Capacity(ResourceNodeType.Hemp); // picked by hand in one go, any tool or none
+                case ResourceNodeType.BerryBush:
+                    return Capacity(type); // picked by hand in one go, any tool or none
                 default:
                     throw new ArgumentOutOfRangeException(nameof(type));
             }
@@ -75,6 +79,7 @@ namespace Oxfall.Core.Gathering
                 case ResourceNodeType.Stone: return ItemIds.Stone;
                 case ResourceNodeType.MetalOre: return ItemIds.MetalOre;
                 case ResourceNodeType.Hemp: return ItemIds.Cloth;
+                case ResourceNodeType.BerryBush: return ItemIds.Berries;
                 default: throw new ArgumentOutOfRangeException(nameof(type));
             }
         }

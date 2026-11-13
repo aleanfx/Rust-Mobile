@@ -75,6 +75,7 @@ Shader "Oxfall/Foliage"
             #pragma fragment frag
             #pragma multi_compile _ _MAIN_LIGHT_SHADOWS _MAIN_LIGHT_SHADOWS_CASCADE _MAIN_LIGHT_SHADOWS_SCREEN
             #pragma multi_compile_fragment _ _SHADOWS_SOFT
+            #pragma multi_compile _ _ADDITIONAL_LIGHTS
             #pragma multi_compile_fog
 
             struct Varyings
@@ -114,7 +115,17 @@ Shader "Oxfall/Foliage"
                 float3 viewWS = normalize(_WorldSpaceCameraPos - input.positionWS);
                 half through = saturate(dot(-viewWS, mainLight.direction)) * _Translucency;
                 half3 direct = mainLight.color * (wrap + through) * mainLight.shadowAttenuation;
-                half3 colour = albedo * (direct + SampleSH(normalWS));
+                half3 lighting = direct + SampleSH(normalWS);
+            #if defined(_ADDITIONAL_LIGHTS)
+                // Torches and campfires, wrapped like the sun.
+                uint lightCount = GetAdditionalLightsCount();
+                for (uint li = 0u; li < lightCount; ++li)
+                {
+                    Light light = GetAdditionalLight(li, input.positionWS);
+                    lighting += light.color * (light.distanceAttenuation * saturate(dot(normalWS, light.direction) * 0.65h + 0.35h));
+                }
+            #endif
+                half3 colour = albedo * lighting;
                 colour = MixFog(colour, input.fogFactor);
                 return half4(colour, 1);
             }

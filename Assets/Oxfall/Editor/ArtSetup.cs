@@ -15,6 +15,8 @@ namespace Oxfall.Editor
 
         public static void Apply()
         {
+            // Fire needs no texture: made whether or not the photos are there.
+            MakeFlame();
             if (!AssetDatabase.IsValidFolder(TexturesFolder))
             {
                 Debug.LogWarning($"[Oxfall] {TexturesFolder} is missing; the game keeps its plain colours.");
@@ -196,6 +198,26 @@ namespace Oxfall.Editor
             material.renderQueue = (int)RenderQueue.AlphaTest;
             material.enableInstancing = true;
             EditorUtility.SetDirty(material);
+        }
+
+        /// <summary>The glow of torch and campfire flames (Oxfall/Flame, additive and unlit).</summary>
+        private static void MakeFlame()
+        {
+            var shader = Shader.Find("Oxfall/Flame");
+            if (shader == null)
+            {
+                Debug.LogWarning("[Oxfall] Shader Oxfall/Flame not found; flames use a plain colour.");
+                return;
+            }
+            var material = LoadOrCreate("OxfallFlame", shader);
+            material.SetColor("_CoreColor", new Color(1f, 0.82f, 0.42f));
+            material.SetColor("_TipColor", new Color(0.95f, 0.28f, 0.06f));
+            material.SetFloat("_Intensity", 1.6f);
+            material.SetFloat("_Height", 0.26f);
+            material.SetFloat("_Lick", 0.03f);
+            material.renderQueue = (int)RenderQueue.Transparent;
+            EditorUtility.SetDirty(material);
+            AssetDatabase.SaveAssets();
         }
 
         /// <summary>The sea. Its ripple texture is made by the game at start-up.</summary>

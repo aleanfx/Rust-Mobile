@@ -37,6 +37,7 @@ Shader "Oxfall/Ground"
             #pragma fragment frag
             #pragma multi_compile _ _MAIN_LIGHT_SHADOWS _MAIN_LIGHT_SHADOWS_CASCADE _MAIN_LIGHT_SHADOWS_SCREEN
             #pragma multi_compile_fragment _ _SHADOWS_SOFT
+            #pragma multi_compile _ _ADDITIONAL_LIGHTS
             #pragma multi_compile_fog
             // Normal maps cost four more texture reads: the game turns them off on the Low level.
             #pragma multi_compile_local _ _GROUND_NORMALS
@@ -133,6 +134,16 @@ Shader "Oxfall/Ground"
                 Light mainLight = GetMainLight(shadowCoord);
                 half lambert = saturate(dot(normalWS, mainLight.direction));
                 half3 lighting = mainLight.color * (lambert * mainLight.shadowAttenuation) + SampleSH(normalWS);
+
+            #if defined(_ADDITIONAL_LIGHTS)
+                // Torches and campfires.
+                uint lightCount = GetAdditionalLightsCount();
+                for (uint li = 0u; li < lightCount; ++li)
+                {
+                    Light light = GetAdditionalLight(li, input.positionWS);
+                    lighting += light.color * (light.distanceAttenuation * saturate(dot(normalWS, light.direction)));
+                }
+            #endif
 
                 half3 colour = albedo * lighting;
                 colour = MixFog(colour, input.fogFactor);

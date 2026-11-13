@@ -319,6 +319,66 @@ namespace Oxfall.Game.World
             return b.Build("HandRock", 50f);
         }
 
+        /// <summary>
+        /// A berry bush, knee to waist high: leafy sprays (photo cards, or a lumpy mass without
+        /// them) dotted with dark berries. Submeshes: berries, leaves, leaf cards.
+        /// </summary>
+        public static Mesh BerryBush(System.Random random, bool cards)
+        {
+            var b = new FlatMeshBuilder(3);
+            var centre = new Vector3(0f, 0.45f, 0f);
+            if (cards)
+            {
+                for (int j = 0; j < 14; j++)
+                {
+                    var dir = RandomDirection(random);
+                    dir.y = Mathf.Abs(dir.y) * 0.6f + 0.15f;
+                    dir.Normalize();
+                    var flatSide = Vector3.Cross(Vector3.up, dir);
+                    if (flatSide.sqrMagnitude < 1e-4f) flatSide = Vector3.right;
+                    var side = Quaternion.AngleAxis(Rand(random, -40f, 40f), dir) * flatSide.normalized;
+                    var frond = AllFronds[random.Next(AllFronds.Length)];
+                    float length = Rand(random, 0.55f, 0.8f);
+                    Card(b, centre + RandomDirection(random) * 0.12f - dir * 0.15f, dir, Rand(random, 10f, 30f), side,
+                        length, length / frond.Aspect, frond, centre - Vector3.up * 0.3f, false, 0.4f);
+                }
+            }
+            else
+            {
+                b.AddBlob(LeavesSubmesh, centre, new Vector3(0.6f, 0.45f, 0.6f), random, 0.25f);
+            }
+            for (int i = 0; i < 12; i++)
+            {
+                var d = RandomDirection(random);
+                d.y = Mathf.Abs(d.y) * 0.8f;
+                AddBerry(b, centre + Vector3.Scale(d.normalized, new Vector3(0.5f, 0.4f, 0.5f)), random);
+            }
+            return b.Build("BerryBush", 70f);
+        }
+
+        /// <summary>A handful of berries on a leaf, for the inventory icon. Submeshes: berries, leaf.</summary>
+        public static Mesh BerryCluster()
+        {
+            var b = new FlatMeshBuilder(2);
+            var random = new System.Random(23);
+            b.AddBlob(1, new Vector3(0f, -0.01f, 0f), new Vector3(0.11f, 0.012f, 0.07f), random, 0.1f);
+            var spots = new[]
+            {
+                new Vector3(-0.03f, 0.02f, 0f), new Vector3(0.025f, 0.02f, 0.01f), new Vector3(0f, 0.02f, -0.03f),
+                new Vector3(0.005f, 0.05f, 0f), new Vector3(0.05f, 0.02f, -0.025f),
+            };
+            foreach (var p in spots) AddBerry(b, p, random, 0.022f);
+            return b.Build("Berries", 70f);
+        }
+
+        /// <summary>One berry: a small rounded lump (a capped six-sided tube smoothed round).</summary>
+        private static void AddBerry(FlatMeshBuilder b, Vector3 at, System.Random random, float radius = 0.03f)
+        {
+            float r = radius * Rand(random, 0.85f, 1.15f);
+            var axis = RandomDirection(random) * r * 0.5f;
+            b.AddTube(0, at - axis, at + axis, r, r * 0.8f, 6, 0);
+        }
+
         // ---- Items: what the player holds and what the inventory icons are rendered from. Tools are
         // built at their real size with the grip at the origin, the haft up +Y and the head or blade
         // towards +X. Submesh order is the material order in ItemModels.
@@ -463,6 +523,32 @@ namespace Oxfall.Game.World
             mesh.SetTriangles(triangles, 0);
             mesh.RecalculateBounds();
             mesh.UploadMeshData(true);
+            return mesh;
+        }
+
+        /// <summary>A flat disc centred on the origin, facing up.</summary>
+        public static Mesh Disc(float radius, int segments)
+        {
+            var vertices = new List<Vector3> { Vector3.zero };
+            var normals = new List<Vector3> { Vector3.up };
+            var triangles = new List<int>(segments * 3);
+            for (int i = 0; i < segments; i++)
+            {
+                float a = i * Mathf.PI * 2f / segments;
+                vertices.Add(new Vector3(Mathf.Cos(a) * radius, 0f, Mathf.Sin(a) * radius));
+                normals.Add(Vector3.up);
+            }
+            for (int i = 0; i < segments; i++)
+            {
+                // Clockwise seen from above, so the faces point up.
+                int next = i + 1 < segments ? i + 2 : 1;
+                triangles.Add(0); triangles.Add(next); triangles.Add(i + 1);
+            }
+            var mesh = new Mesh { name = "Disc" };
+            mesh.SetVertices(vertices);
+            mesh.SetNormals(normals);
+            mesh.SetTriangles(triangles, 0);
+            mesh.RecalculateBounds();
             return mesh;
         }
 

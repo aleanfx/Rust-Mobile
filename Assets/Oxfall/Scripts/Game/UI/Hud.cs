@@ -27,6 +27,7 @@ namespace Oxfall.Game.UI
         private RectTransform _safeArea;
         private Rect _appliedSafeArea;
         private Text _fps;
+        private Text _clock;
         private Text _resources;
         private Text _toast;
         private float _toastTimer;
@@ -80,6 +81,8 @@ namespace Oxfall.Game.UI
             // Top left: frame rate.
             var fps = UiFactory.NewRect("FPS", _safeArea, new Vector2(0f, 1f), new Vector2(0f, 1f), new Vector2(28f, -18f), new Vector2(420f, 44f));
             _fps = UiFactory.AddText(fps, "", 30, TextAnchor.UpperLeft, Color.white);
+            var clock = UiFactory.NewRect("Clock", _safeArea, new Vector2(0f, 1f), new Vector2(0f, 1f), new Vector2(28f, -62f), new Vector2(420f, 44f));
+            _clock = UiFactory.AddText(clock, "", 30, TextAnchor.UpperLeft, Title);
 
             // Top centre: what the player is carrying.
             var resPanel = UiFactory.NewRect("Resources panel", _safeArea, new Vector2(0.5f, 1f), new Vector2(0.5f, 1f), new Vector2(0f, -14f), new Vector2(820f, 64f));
@@ -154,6 +157,9 @@ namespace Oxfall.Game.UI
         /// <summary>Everything tappable besides the stick, attack and jump. Hidden ones are skipped.</summary>
         public readonly List<TapTarget> TapTargets = new List<TapTarget>();
 
+        /// <summary>A screen over everything (death): while it shows, only its own buttons work.</summary>
+        public RectTransform Modal;
+
         /// <summary>Panels and bars where a touch that hits no button still must not move or look.</summary>
         public readonly List<RectTransform> Blockers = new List<RectTransform>();
 
@@ -172,16 +178,18 @@ namespace Oxfall.Game.UI
         private Text _pieceLabel;
 
         /// <summary>
-        /// Building mode (the building plan in hand): the piece button shows, and attack becomes
-        /// COLOCAR.
+        /// Placing something (the building plan or a campfire in hand): with a piece name the piece
+        /// button shows, and attack greens while the piece fits.
         /// </summary>
         public void SetBuildMode(bool on, string pieceName)
         {
-            PieceButton.gameObject.SetActive(on);
-            _pieceLabel.text = "Pieza: " + pieceName;
-            _attackLabel.text = on ? "COLOCAR" : "GOLPEAR";
+            PieceButton.gameObject.SetActive(on && pieceName != null);
+            if (pieceName != null) _pieceLabel.text = "Pieza: " + pieceName;
             if (!on) SetPlaceValid(false);
         }
+
+        /// <summary>What the attack button does with what is in hand: GOLPEAR, COLOCAR or COMER.</summary>
+        public void SetAttackLabel(string label) => _attackLabel.text = label;
 
         /// <summary>Greens the attack button (COLOCAR) while the piece fits where it is aimed.</summary>
         public void SetPlaceValid(bool valid)
@@ -276,6 +284,8 @@ namespace Oxfall.Game.UI
         }
 
         public void SetQualityLabel(string tierName) => _quality.text = "Gráficos: " + tierName;
+
+        public void SetClock(string text) => _clock.text = text;
 
         public void ShowToast(string message)
         {
