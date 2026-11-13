@@ -64,6 +64,16 @@ namespace Oxfall.Game.Player
             _body.enabled = true;
         }
 
+        /// <summary>Raises the player's feet to a height if they are below it (a floor was built under them).</summary>
+        public void LiftTo(float y)
+        {
+            if (transform.position.y >= y) return;
+            _body.enabled = false;
+            transform.position = new Vector3(transform.position.x, y, transform.position.z);
+            _verticalSpeed = 0f;
+            _body.enabled = true;
+        }
+
         private void Update()
         {
             if (_input == null) return;

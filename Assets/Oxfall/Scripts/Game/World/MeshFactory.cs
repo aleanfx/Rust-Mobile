@@ -79,6 +79,14 @@ namespace Oxfall.Game.World
             return b.Build("HandRock");
         }
 
+        /// <summary>One flat-shaded mesh made of boxes. Building pieces are made of these.</summary>
+        public static Mesh Boxes(string name, params Bounds[] boxes)
+        {
+            var b = new FlatMeshBuilder(1);
+            foreach (var box in boxes) b.AddBox(0, box.min, box.max);
+            return b.Build(name);
+        }
+
         /// <summary>A flat square centred on the origin, facing up.</summary>
         public static Mesh Quad(float size, float uvTiles)
         {
@@ -129,6 +137,24 @@ namespace Oxfall.Game.World
                 _uvs.Add(new Vector2(0f, 0f)); _uvs.Add(new Vector2(1f, 0f)); _uvs.Add(new Vector2(0.5f, 1f));
                 var list = _triangles[submesh];
                 list.Add(start); list.Add(start + 1); list.Add(start + 2);
+            }
+
+            /// <summary>An axis-aligned box, every face wound to face outwards.</summary>
+            public void AddBox(int submesh, Vector3 lo, Vector3 hi)
+            {
+                Vector3 P(float x, float y, float z) => new Vector3(x, y, z);
+                Quad(submesh, P(lo.x, hi.y, lo.z), P(lo.x, hi.y, hi.z), P(hi.x, hi.y, hi.z), P(hi.x, hi.y, lo.z)); // top
+                Quad(submesh, P(lo.x, lo.y, lo.z), P(hi.x, lo.y, lo.z), P(hi.x, lo.y, hi.z), P(lo.x, lo.y, hi.z)); // bottom
+                Quad(submesh, P(hi.x, lo.y, lo.z), P(hi.x, hi.y, lo.z), P(hi.x, hi.y, hi.z), P(hi.x, lo.y, hi.z)); // +X
+                Quad(submesh, P(lo.x, lo.y, lo.z), P(lo.x, lo.y, hi.z), P(lo.x, hi.y, hi.z), P(lo.x, hi.y, lo.z)); // -X
+                Quad(submesh, P(lo.x, lo.y, hi.z), P(hi.x, lo.y, hi.z), P(hi.x, hi.y, hi.z), P(lo.x, hi.y, hi.z)); // +Z
+                Quad(submesh, P(lo.x, lo.y, lo.z), P(lo.x, hi.y, lo.z), P(hi.x, hi.y, lo.z), P(hi.x, lo.y, lo.z)); // -Z
+            }
+
+            private void Quad(int submesh, Vector3 a, Vector3 b, Vector3 c, Vector3 d)
+            {
+                Triangle(submesh, a, b, c);
+                Triangle(submesh, a, c, d);
             }
 
             public void AddCone(int submesh, Vector3 baseCentre, float radius, float height, int sides, float yawDegrees)

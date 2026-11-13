@@ -1,6 +1,8 @@
+using Oxfall.Core.Building;
 using Oxfall.Core.Crafting;
 using Oxfall.Core.Gathering;
 using Oxfall.Core.Items;
+using Oxfall.Game.Construction;
 using Oxfall.Game.Controls;
 using Oxfall.Game.Player;
 using Oxfall.Game.Rendering;
@@ -29,6 +31,7 @@ namespace Oxfall.Game
         private PlayerController _player;
         private RecipeBook _recipes;
         private CraftingQueue _crafting;
+        private BuildSystem _build;
         private float _respawnTimer;
 
         /// <summary>
@@ -102,6 +105,13 @@ namespace Oxfall.Game
             _crafting.Overflow = (itemId, amount) => _hud.ShowToast("Inventario lleno");
             _hud.BuildCraftPanel(_recipes, _catalog, _inventory, TryCraft);
 
+            // Building: the Core grid holds what stands where; BuildSystem aims, checks terrain and draws.
+            _build = playerObject.AddComponent<BuildSystem>();
+            _build.Init(new BuildingGrid(), _inventory, _world.Shape, player, materials, _hud);
+            _hud.BuildTapped += _build.Toggle;
+            _hud.PieceTapped += _build.CyclePiece;
+            _hud.PlaceTapped += _build.Place;
+
             _inventory.Changed += _ =>
             {
                 _hud.RefreshResources(_inventory, _catalog);
@@ -133,7 +143,11 @@ namespace Oxfall.Game
                 case "give":
                     _inventory.Add(ItemIds.Wood, 1000);
                     _inventory.Add(ItemIds.Stone, 1000);
+                    _inventory.Add(ItemIds.BuildingPlan, 1);
                     break;
+                case "build": _build.Toggle(); break;
+                case "piece": _build.CyclePiece(); break;
+                case "place": _build.Place(); break;
                 case "stats":
                     Debug.Log($"[Oxfall] Stats: wood={_inventory.Count(ItemIds.Wood)} stone={_inventory.Count(ItemIds.Stone)} " +
                               $"ore={_inventory.Count(ItemIds.MetalOre)} cloth={_inventory.Count(ItemIds.Cloth)} " +

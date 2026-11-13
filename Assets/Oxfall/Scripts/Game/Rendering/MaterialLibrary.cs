@@ -32,6 +32,9 @@ namespace Oxfall.Game.Rendering
         public Material MetalOre { get; }
         public Material Hemp { get; }
         public Material HandRock { get; }
+        public Material Planks { get; }
+        public Material GhostOk { get; }
+        public Material GhostBad { get; }
 
         public MaterialLibrary()
         {
@@ -59,6 +62,9 @@ namespace Oxfall.Game.Rendering
             MetalOre = Make("Metal ore", new Color(0.52f, 0.36f, 0.26f), 0.25f);
             Hemp = Make("Hemp", new Color(0.36f, 0.55f, 0.22f), 0.05f);
             HandRock = Make("Hand rock", new Color(0.55f, 0.53f, 0.50f), 0.15f);
+            Planks = Make("Planks", new Color(0.60f, 0.45f, 0.28f), 0.08f);
+            GhostOk = Make("Ghost ok", new Color(0.35f, 0.85f, 0.45f), 0.1f);
+            GhostBad = Make("Ghost bad", new Color(0.90f, 0.30f, 0.25f), 0.1f);
         }
 
         /// <summary>The ground material, coloured by the island's colour map.</summary>

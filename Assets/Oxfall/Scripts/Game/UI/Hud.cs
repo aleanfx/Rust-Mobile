@@ -113,6 +113,31 @@ namespace Oxfall.Game.UI
             var craftLabel = UiFactory.NewRect("Label", CraftButton, new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), Vector2.zero, new Vector2(170f, 50f));
             UiFactory.AddText(craftLabel, "FABRICAR", 24, TextAnchor.MiddleCenter, Color.white);
             TapTargets.Add(new TapTarget { Rect = CraftButton, OnTap = ToggleCraftPanel });
+
+            // Left of FABRICAR: enters and leaves building mode.
+            var centre = new Vector2(0.5f, 0.5f);
+            BuildButton = UiFactory.NewRect("Build", _safeArea, new Vector2(1f, 0f), centre, new Vector2(-310f, 500f), new Vector2(170f, 170f));
+            UiFactory.AddImage(BuildButton, UiFactory.Circle, Soft);
+            var buildLabel = UiFactory.NewRect("Label", BuildButton, centre, centre, Vector2.zero, new Vector2(170f, 50f));
+            UiFactory.AddText(buildLabel, "CONSTRUIR", 23, TextAnchor.MiddleCenter, Color.white);
+            TapTargets.Add(new TapTarget { Rect = BuildButton, OnTap = () => BuildTapped?.Invoke() });
+
+            // Bottom centre, only in building mode: which piece, and the button that places it.
+            var bottom = new Vector2(0.5f, 0f);
+            PieceButton = UiFactory.NewRect("Piece", _safeArea, bottom, bottom, new Vector2(-180f, 40f), new Vector2(340f, 96f));
+            UiFactory.AddImage(PieceButton, UiFactory.Rounded, Panel);
+            var pieceLabel = UiFactory.NewRect("Label", PieceButton, centre, centre, Vector2.zero, new Vector2(330f, 60f));
+            _pieceLabel = UiFactory.AddText(pieceLabel, "", 28, TextAnchor.MiddleCenter, Color.white);
+            TapTargets.Add(new TapTarget { Rect = PieceButton, OnTap = () => PieceTapped?.Invoke() });
+
+            PlaceButton = UiFactory.NewRect("Place", _safeArea, bottom, bottom, new Vector2(180f, 40f), new Vector2(300f, 96f));
+            _placeImage = UiFactory.AddImage(PlaceButton, UiFactory.Rounded, Panel);
+            var placeLabel = UiFactory.NewRect("Label", PlaceButton, centre, centre, Vector2.zero, new Vector2(290f, 60f));
+            UiFactory.AddText(placeLabel, "COLOCAR", 30, TextAnchor.MiddleCenter, Color.white);
+            TapTargets.Add(new TapTarget { Rect = PlaceButton, OnTap = () => PlaceTapped?.Invoke() });
+
+            PieceButton.gameObject.SetActive(false);
+            PlaceButton.gameObject.SetActive(false);
         }
 
         public void SetPressed(Image image, bool pressed)
@@ -131,6 +156,31 @@ namespace Oxfall.Game.UI
 
         /// <summary>Everything tappable besides the stick, attack and jump. Hidden ones are skipped.</summary>
         public readonly List<TapTarget> TapTargets = new List<TapTarget>();
+
+        public event System.Action BuildTapped;
+        public event System.Action PieceTapped;
+        public event System.Action PlaceTapped;
+
+        public RectTransform BuildButton { get; private set; }
+        public RectTransform PieceButton { get; private set; }
+        public RectTransform PlaceButton { get; private set; }
+        private Text _pieceLabel;
+        private Image _placeImage;
+
+        /// <summary>Shows or hides the building controls and names the chosen piece.</summary>
+        public void SetBuildMode(bool on, string pieceName)
+        {
+            PieceButton.gameObject.SetActive(on);
+            PlaceButton.gameObject.SetActive(on);
+            _pieceLabel.text = "Pieza: " + pieceName;
+        }
+
+        /// <summary>Greens COLOCAR while the piece fits where it is aimed.</summary>
+        public void SetPlaceValid(bool valid)
+        {
+            var target = valid ? new Color(0.36f, 0.62f, 0.30f, 0.9f) : Panel;
+            if (_placeImage.color != target) _placeImage.color = target;
+        }
 
         public RectTransform CraftButton { get; private set; }
         public RectTransform CraftPanel { get; private set; }
