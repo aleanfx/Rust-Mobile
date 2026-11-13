@@ -28,7 +28,9 @@ namespace Oxfall.Editor
             MakeLit("OxfallPlanks", "weathered_planks", new Color(1.05f, 0.98f, 0.90f), 0.08f);
             MakeGround();
             MakeWater();
-            MakeFoliage();
+            MakeCutout("OxfallFoliage", "jacaranda_tree/jacaranda_tree_leaves.png", 0.1f);
+            MakeCutout("OxfallNeedles", "oxfall_fir_branch/oxfall_fir_branch.png", 0.1f);
+            MakeCutout("OxfallGrassCards", "grass_bermuda_01/grass_bermuda_01.png", 0.05f);
             AssetDatabase.SaveAssets();
             Debug.Log("[Oxfall] Art materials made from the CC0 textures.");
         }
@@ -148,24 +150,24 @@ namespace Oxfall.Editor
         }
 
         /// <summary>
-        /// Leaves for the foliage cards: URP Lit, cut out by the alpha of the leaf atlas, both faces
-        /// drawn. Saved as an asset so the build keeps the alpha-test shader variants.
+        /// Leaves, needles or grass on cards: URP Lit, cut out by the alpha of a photo atlas, both
+        /// faces drawn. Saved as an asset so the build keeps the alpha-test shader variants.
         /// </summary>
-        private static void MakeFoliage()
+        private static void MakeCutout(string name, string atlasPath, float smoothness)
         {
-            var atlas = AssetDatabase.LoadAssetAtPath<Texture2D>($"{TexturesFolder}/jacaranda_tree/jacaranda_tree_leaves.png");
+            var atlas = AssetDatabase.LoadAssetAtPath<Texture2D>($"{TexturesFolder}/{atlasPath}");
             if (atlas == null)
             {
-                Debug.LogWarning("[Oxfall] Leaf atlas missing; trees keep their plain crowns.");
+                Debug.LogWarning($"[Oxfall] {atlasPath} missing; {name} not made, the plain look stays.");
                 return;
             }
             var shader = Shader.Find("Universal Render Pipeline/Lit");
             if (shader == null) return;
 
-            var material = LoadOrCreate("OxfallFoliage", shader);
+            var material = LoadOrCreate(name, shader);
             material.SetTexture("_BaseMap", atlas);
             material.SetColor("_BaseColor", Color.white);
-            material.SetFloat("_Smoothness", 0.1f);
+            material.SetFloat("_Smoothness", smoothness);
             material.SetFloat("_Metallic", 0f);
             material.SetFloat("_AlphaClip", 1f);
             material.SetFloat("_Cutoff", 0.5f);

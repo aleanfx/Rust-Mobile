@@ -17,43 +17,57 @@ namespace Oxfall.Game.World
         /// <summary>Foliage cards: alpha-cut photo leaves, in trees made with cards.</summary>
         public const int CardSubmesh = 2;
 
+        /// <summary>Which edge of a frond's box in the atlas its stem starts from.</summary>
+        private enum Stem { Left, Right, Bottom }
+
         /// <summary>
-        /// A leafy frond in the foliage atlas (the CC0 Jacaranda leaves from Poly Haven): its box in
-        /// UV space and which end the stem starts from. Measured from the alpha of the atlas.
+        /// A leafy frond or needle spray in a leaf atlas: its box in UV space and which edge the stem
+        /// starts from. Boxes were measured from the alpha of the CC0 atlases from Poly Haven.
         /// </summary>
         private readonly struct Frond
         {
             private readonly float _u0, _u1, _v0, _v1;
-            private readonly bool _stemOnRight;
+            private readonly Stem _stem;
 
-            public Frond(float u0, float v0, float u1, float v1, bool stemOnRight)
+            public Frond(float u0, float v0, float u1, float v1, Stem stem)
             {
                 _u0 = u0; _v0 = v0; _u1 = u1; _v1 = v1;
-                _stemOnRight = stemOnRight;
+                _stem = stem;
             }
 
             /// <summary>Length over width.</summary>
-            public float Aspect => (_u1 - _u0) / (_v1 - _v0);
+            public float Aspect => _stem == Stem.Bottom ? (_v1 - _v0) / (_u1 - _u0) : (_u1 - _u0) / (_v1 - _v0);
 
             /// <summary>The UV at a point across (0..1) and along (0 = stem, 1 = tip) the frond.</summary>
-            public Vector2 Uv(float across, float along) => new Vector2(
-                _stemOnRight ? _u1 - along * (_u1 - _u0) : _u0 + along * (_u1 - _u0),
-                _v0 + across * (_v1 - _v0));
+            public Vector2 Uv(float across, float along)
+            {
+                switch (_stem)
+                {
+                    case Stem.Right: return new Vector2(_u1 - along * (_u1 - _u0), _v0 + across * (_v1 - _v0));
+                    case Stem.Bottom: return new Vector2(_u0 + across * (_u1 - _u0), _v0 + along * (_v1 - _v0));
+                    default: return new Vector2(_u0 + along * (_u1 - _u0), _v0 + across * (_v1 - _v0));
+                }
+            }
         }
 
-        private static readonly Frond[] LongFronds =
-        {
-            new Frond(0.119f, 0.500f, 0.988f, 0.973f, false),
-            new Frond(0.199f, 0.006f, 1.000f, 0.422f, true),
-        };
+        // Jacaranda leaves (broadleaf trees).
         private static readonly Frond[] AllFronds =
         {
-            LongFronds[0], LongFronds[1],
-            new Frond(0.000f, 0.281f, 0.459f, 0.762f, false),
+            new Frond(0.119f, 0.500f, 0.988f, 0.973f, Stem.Left),
+            new Frond(0.199f, 0.006f, 1.000f, 0.422f, Stem.Right),
+            new Frond(0.000f, 0.281f, 0.459f, 0.762f, Stem.Left),
+        };
+
+        // Fir branches (pines): two branch cards side by side, built from the CC0 fir twig photos by
+        // tools/art/make_fir_branch.py, stems at the bottom.
+        private static readonly Frond[] FirBranches =
+        {
+            new Frond(0.0f, 0.0f, 0.5f, 1.0f, Stem.Bottom),
+            new Frond(0.5f, 0.0f, 1.0f, 1.0f, Stem.Bottom),
         };
 
         /// <summary>
-        /// A pine. With cards: a trunk, a dark core and whorls of drooping photo-leaf branches.
+        /// A pine. With cards: a trunk, a dark core and whorls of drooping branches of photo fir sprays.
         /// Without: a trunk and stacked cones of needles.
         /// </summary>
         public static Mesh Pine(System.Random random, bool cards = false)
@@ -108,24 +122,24 @@ namespace Oxfall.Game.World
                     var dir = outward * Mathf.Cos(droop) + Vector3.down * Mathf.Sin(droop);
                     var flatSide = Vector3.Cross(Vector3.up, dir).normalized;
                     var start = new Vector3(0f, y, 0f) + outward * 0.1f;
-                    var frond = LongFronds[random.Next(LongFronds.Length)];
-                    float width = length / frond.Aspect * 0.85f;
+                    var branch = FirBranches[random.Next(FirBranches.Length)];
+                    float width = length / branch.Aspect * Rand(random, 1.0f, 1.2f);
                     float bend = Rand(random, 8f, 18f);
-                    // A spray lying nearly flat and, on the long lower branches, a steeper one under it
-                    // so the branch has body seen from the side.
+                    // A branch lying nearly flat and, on the long lower ones, a steeper one under it so
+                    // the branch has body seen from the side.
                     var side = Quaternion.AngleAxis(Rand(random, -20f, 20f), dir) * flatSide;
-                    Card(b, start, dir, bend, side, length, width, frond, Vector3.zero, true, 0.55f);
+                    Card(b, start, dir, bend, side, length, width, branch, Vector3.zero, true, 0.55f);
                     if (t >= 0.6f) continue;
                     side = Quaternion.AngleAxis(Rand(random, 65f, 110f), dir) * flatSide;
-                    frond = LongFronds[random.Next(LongFronds.Length)];
-                    Card(b, start, dir, bend, side, length * 0.85f, width * 0.7f, frond, Vector3.zero, true, 0.55f);
+                    branch = FirBranches[random.Next(FirBranches.Length)];
+                    Card(b, start, dir, bend, side, length * 0.8f, width * 0.7f, branch, Vector3.zero, true, 0.55f);
                 }
             }
 
-            // The leader: two crossed upright sprays at the very top.
+            // The leader: two crossed upright branches at the very top.
             var top = new Vector3(0f, crownTop - 0.3f, 0f);
-            Card(b, top, Vector3.up, 0f, Vector3.right, 1.5f, 0.8f, LongFronds[0], Vector3.zero, true, 1f);
-            Card(b, top, Vector3.up, 0f, Vector3.forward, 1.4f, 0.75f, LongFronds[1], Vector3.zero, true, 1f);
+            Card(b, top, Vector3.up, 0f, Vector3.right, 1.6f, 0.8f, FirBranches[0], Vector3.zero, true, 1f);
+            Card(b, top, Vector3.up, 0f, Vector3.forward, 1.5f, 0.75f, FirBranches[1], Vector3.zero, true, 1f);
             return b.Build("Pine", 80f);
         }
 

@@ -82,7 +82,7 @@ namespace Oxfall.Game
 
             // Grass around the player; how far and how thick depends on the graphics level.
             var grass = _world.Root.gameObject.AddComponent<GrassField>();
-            grass.Init(_world.Shape, materials.Grass, player.transform);
+            grass.Init(_world.Shape, materials.Grass, materials.GrassIsCards, player.transform);
             _grass = grass;
 
             _quality = new GraphicsQuality(camera, _world.Sun, grass, materials.Ground);

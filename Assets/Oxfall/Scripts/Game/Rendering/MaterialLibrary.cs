@@ -17,6 +17,8 @@ namespace Oxfall.Game.Rendering
         public const string GroundMaterialResource = "OxfallGround";
         public const string TexturedGroundResource = "OxfallTerrain";
         public const string FoliageResource = "OxfallFoliage";
+        public const string NeedlesResource = "OxfallNeedles";
+        public const string GrassCardsResource = "OxfallGrassCards";
 
         private static readonly int BaseColor = Shader.PropertyToID("_BaseColor");
         private static readonly int BaseMap = Shader.PropertyToID("_BaseMap");
@@ -37,7 +39,10 @@ namespace Oxfall.Game.Rendering
         /// <summary>Photo-leaf card materials for pines and broadleaf trees; null when not in the build.</summary>
         public Material[] NeedleCards { get; }
         public Material[] LeafCards { get; }
-        public bool HasFoliage => NeedleCards != null;
+        public bool HasNeedleCards => NeedleCards != null;
+        public bool HasLeafCards => LeafCards != null;
+        /// <summary>Whether <see cref="Grass"/> is the photo grass atlas (cut-out tufts) or plain blades.</summary>
+        public bool GrassIsCards { get; }
         public Material Stone { get; }
         public Material MetalOre { get; }
         public Material Hemp { get; }
@@ -64,53 +69,58 @@ namespace Oxfall.Game.Rendering
             if (Water.HasProperty(RippleMap)) Water.SetTexture(RippleMap, MakeRippleTexture());
             Bark = Textured("OxfallBark") ?? Make("Bark", new Color(0.34f, 0.27f, 0.20f), 0.04f);
             var foliage = Resources.Load<Material>(FoliageResource);
-            if (foliage != null)
+            var needles = Resources.Load<Material>(NeedlesResource);
+            if (needles != null)
             {
-                // Pines: the leaf photo darkened and cooled towards conifer green. Broadleaves: as shot.
+                // Fir branches made of twig photos, a little varied from tree to tree.
                 NeedleCards = new[]
                 {
-                    Tinted(foliage, "Needle cards A", new Color(0.50f, 0.62f, 0.50f)),
-                    Tinted(foliage, "Needle cards B", new Color(0.56f, 0.66f, 0.50f)),
-                    Tinted(foliage, "Needle cards C", new Color(0.46f, 0.58f, 0.48f)),
+                    Tinted(needles, "Needle cards A", new Color(1.00f, 1.05f, 1.00f)),
+                    Tinted(needles, "Needle cards B", new Color(1.08f, 1.08f, 0.95f)),
+                    Tinted(needles, "Needle cards C", new Color(0.92f, 1.00f, 0.98f)),
                 };
+            }
+            if (foliage != null)
+            {
                 LeafCards = new[]
                 {
                     Tinted(foliage, "Leaf cards A", new Color(0.95f, 1.00f, 0.85f)),
                     Tinted(foliage, "Leaf cards B", new Color(1.05f, 1.00f, 0.80f)),
                 };
-                // With cards, these are the dark cores inside the crowns: the shade between leaves.
-                Needles = new[]
+            }
+            // With cards, these are the dark cores inside the crowns: the shade between the leaves.
+            Needles = needles != null
+                ? new[]
                 {
                     Make("Needles A", new Color(0.12f, 0.17f, 0.10f), 0.04f),
                     Make("Needles B", new Color(0.14f, 0.19f, 0.11f), 0.04f),
                     Make("Needles C", new Color(0.11f, 0.16f, 0.10f), 0.04f),
-                };
-                Leaves = new[]
-                {
-                    Make("Leaves A", new Color(0.17f, 0.22f, 0.11f), 0.04f),
-                    Make("Leaves B", new Color(0.20f, 0.25f, 0.12f), 0.04f),
-                };
-            }
-            else
-            {
-                Needles = new[]
+                }
+                : new[]
                 {
                     Make("Needles A", new Color(0.22f, 0.30f, 0.19f), 0.06f),
                     Make("Needles B", new Color(0.28f, 0.36f, 0.22f), 0.06f),
                     Make("Needles C", new Color(0.25f, 0.32f, 0.18f), 0.06f),
                 };
-                Leaves = new[]
+            Leaves = foliage != null
+                ? new[]
+                {
+                    Make("Leaves A", new Color(0.17f, 0.22f, 0.11f), 0.04f),
+                    Make("Leaves B", new Color(0.20f, 0.25f, 0.12f), 0.04f),
+                }
+                : new[]
                 {
                     Make("Leaves A", new Color(0.33f, 0.40f, 0.22f), 0.06f),
                     Make("Leaves B", new Color(0.40f, 0.45f, 0.24f), 0.06f),
                 };
-            }
             Stone = Textured("OxfallStone") ?? Make("Stone", new Color(0.47f, 0.45f, 0.42f), 0.10f);
             MetalOre = Textured("OxfallOre") ?? Make("Metal ore", new Color(0.50f, 0.33f, 0.22f), 0.22f);
             Hemp = Make("Hemp", new Color(0.36f, 0.43f, 0.22f), 0.05f);
             HandRock = Textured("OxfallStone") ?? Make("Hand rock", new Color(0.50f, 0.48f, 0.45f), 0.12f);
             Planks = Textured("OxfallPlanks") ?? Make("Planks", new Color(0.49f, 0.36f, 0.25f), 0.06f);
-            Grass = MakeGrass();
+            var grassCards = Textured(GrassCardsResource);
+            GrassIsCards = grassCards != null;
+            Grass = grassCards ?? MakeGrass();
             GhostOk = Make("Ghost ok", new Color(0.35f, 0.85f, 0.45f), 0.1f);
             GhostBad = Make("Ghost bad", new Color(0.90f, 0.30f, 0.25f), 0.1f);
         }

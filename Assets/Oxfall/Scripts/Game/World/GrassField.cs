@@ -5,9 +5,10 @@ using UnityEngine.Rendering;
 namespace Oxfall.Game.World
 {
     /// <summary>
-    /// Grass blades around the player. The ground near the player is split into square tiles; each
-    /// tile is one mesh of blades, built when it comes within reach and destroyed when it leaves.
-    /// The same tile always gets the same blades, and blades grow only where the ground is green.
+    /// Grass around the player. The ground near the player is split into square tiles; each tile is
+    /// one mesh of grass, built when it comes within reach and destroyed when it leaves. The same tile
+    /// always gets the same grass, and grass grows only where the ground is green. With the photo
+    /// grass atlas each tuft is two crossed cards cut out of it; without, a fan of plain blades.
     /// </summary>
     public sealed class GrassField : MonoBehaviour
     {
@@ -15,6 +16,7 @@ namespace Oxfall.Game.World
 
         private IslandShape _shape;
         private Material _material;
+        private bool _cards;
         private Transform _viewer;
         private float _radius;
         private float _density;
@@ -37,12 +39,31 @@ namespace Oxfall.Game.World
 
         public int BladeCount { get; private set; }
 
-        public void Init(IslandShape shape, Material material, Transform viewer)
+        public void Init(IslandShape shape, Material material, bool cards, Transform viewer)
         {
             _shape = shape;
             _material = material;
+            _cards = cards;
             _viewer = viewer;
         }
+
+        /// <summary>
+        /// Tufts in the grass atlas (CC0 Bermuda grass from Poly Haven), roots at the bottom: their
+        /// boxes in UV space, measured from the atlas's alpha.
+        /// </summary>
+        private static readonly Vector4[] Tufts =
+        {
+            new Vector4(0.049f, 0.455f, 0.188f, 0.582f),
+            new Vector4(0.279f, 0.459f, 0.457f, 0.596f),
+            new Vector4(0.535f, 0.449f, 0.719f, 0.643f),
+            new Vector4(0.779f, 0.449f, 0.940f, 0.680f),
+            new Vector4(0.043f, 0.010f, 0.170f, 0.318f),
+            new Vector4(0.234f, 0.012f, 0.387f, 0.371f),
+            new Vector4(0.420f, 0.006f, 0.617f, 0.316f),
+            new Vector4(0.695f, 0.006f, 0.867f, 0.336f),
+            new Vector4(0.353f, 0.685f, 0.473f, 0.973f),
+            new Vector4(0.535f, 0.766f, 0.666f, 0.971f),
+        };
 
         /// <summary>Blades in each tuft.</summary>
         private const int TuftBlades = 4;
@@ -122,6 +143,12 @@ namespace Oxfall.Game.World
                 float amount = _shape.GrassAmount(x, z, h);
                 if (roll >= amount) continue;
 
+                if (_cards)
+                {
+                    AddTuftCards(new Vector3(lx, h - 0.03f, lz), yaw, size, amount, tint, leanX);
+                    continue;
+                }
+
                 // A tuft: a few short blades fanning out from one spot, shorter where grass thins out.
                 float tuftHeight = Mathf.Lerp(0.2f, 0.45f, size) * Mathf.Lerp(0.7f, 1f, amount);
                 float u = (Mathf.Floor(tint * 8f) + 0.5f) / 8f;
@@ -155,7 +182,8 @@ namespace Oxfall.Game.World
             var go = new GameObject($"Grass {key.x},{key.y}");
             go.transform.SetParent(transform, false);
             go.transform.position = new Vector3(x0, 0f, z0);
-            int blades = Triangles.Count / 3;
+            // Blades for plain grass, cards (two triangles each) for photo grass.
+            int blades = Triangles.Count / (_cards ? 6 : 3);
             BladeCount += blades;
             if (blades == 0) return new Tile { Object = go };
 
@@ -174,6 +202,44 @@ namespace Oxfall.Game.World
             renderer.shadowCastingMode = ShadowCastingMode.Off;
             renderer.receiveShadows = true;
             return new Tile { Object = go, Mesh = mesh, Blades = blades };
+        }
+
+        /// <summary>A tuft from the atlas on two crossed upright cards, shorter where grass thins out.</summary>
+        private static void AddTuftCards(Vector3 root, float yaw, float size, float amount, float pick, float lean)
+        {
+            var box = Tufts[Mathf.Min(Tufts.Length - 1, (int)(pick * Tufts.Length))];
+            float aspect = (box.z - box.x) / (box.w - box.y);
+            float height = Mathf.Lerp(0.28f, 0.55f, size) * Mathf.Lerp(0.65f, 1f, amount);
+            float width = height * aspect;
+            if (width > 0.6f)
+            {
+                width = 0.6f;
+                height = width / aspect;
+            }
+            var tilt = new Vector3(Mathf.Cos(yaw), 0f, Mathf.Sin(yaw)) * (lean * 0.15f * height);
+            for (int k = 0; k < 2; k++)
+            {
+                float angle = yaw + k * Mathf.PI * 0.5f;
+                var half = new Vector3(Mathf.Cos(angle), 0f, Mathf.Sin(angle)) * (width * 0.5f);
+                var top = root + Vector3.up * height + tilt;
+                int start = Vertices.Count;
+                Vertices.Add(root - half);
+                Vertices.Add(root + half);
+                Vertices.Add(top + half);
+                Vertices.Add(top - half);
+                // Normals point up so tufts light like the ground they stand on.
+                for (int n = 0; n < 4; n++) Normals.Add(Vector3.up);
+                Uvs.Add(new Vector2(box.x, box.y));
+                Uvs.Add(new Vector2(box.z, box.y));
+                Uvs.Add(new Vector2(box.z, box.w));
+                Uvs.Add(new Vector2(box.x, box.w));
+                Triangles.Add(start);
+                Triangles.Add(start + 2);
+                Triangles.Add(start + 1);
+                Triangles.Add(start);
+                Triangles.Add(start + 3);
+                Triangles.Add(start + 2);
+            }
         }
 
         private void DestroyTile(Tile tile)
