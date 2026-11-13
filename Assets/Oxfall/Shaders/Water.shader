@@ -6,11 +6,11 @@ Shader "Oxfall/Water"
 {
     Properties
     {
-        _DeepColor ("Deep colour", Color) = (0.07, 0.17, 0.19, 1)
+        _DeepColor ("Deep colour", Color) = (0.04, 0.15, 0.19, 1)
         _RippleMap ("Ripple normals (linear RGB)", 2D) = "bump" {}
         _RippleTiling ("Ripple tiling: metres per tile (x, y), speed (z)", Vector) = (9, 23, 0.03, 0)
         _RippleStrength ("Ripple strength", Range(0, 1.5)) = 0.6
-        _Reflection ("Reflection", Range(0, 1)) = 0.85
+        _Reflection ("Reflection", Range(0, 1)) = 0.6
         _Glint ("Sun glint", Range(0, 8)) = 3
     }
 
@@ -86,14 +86,16 @@ Shader "Oxfall/Water"
 
                 float3 viewWS = normalize(_WorldSpaceCameraPos - input.positionWS);
                 float3 reflected = reflect(-viewWS, normalWS);
-                half3 sky = lerp(_OxfallSkyHorizon.rgb, _OxfallSkyTop.rgb, pow(saturate(reflected.y), 0.6h));
+                // The horizon is reflected a little darker than it looks, or near the shore the sea
+                // reads as the same pale grey as the sky and the fog: a hole in the world.
+                half3 sky = lerp(_OxfallSkyHorizon.rgb * 0.8h, _OxfallSkyTop.rgb, pow(saturate(reflected.y), 0.4h));
                 half facing = saturate(dot(normalWS, viewWS));
                 half fresnel = 0.04h + 0.96h * pow(1.0h - facing, 5.0h);
 
                 Light mainLight = GetMainLight();
                 half lambert = saturate(dot(normalWS, mainLight.direction));
                 half3 body = _DeepColor.rgb * (mainLight.color * lambert * 0.35h + SampleSH(normalWS));
-                half3 colour = lerp(body, sky, saturate(fresnel * _Reflection + 0.12h));
+                half3 colour = lerp(body, sky, saturate(fresnel * _Reflection + 0.08h));
                 half glint = pow(saturate(dot(reflected, mainLight.direction)), 220.0h);
                 colour += mainLight.color * glint * _Glint;
 
