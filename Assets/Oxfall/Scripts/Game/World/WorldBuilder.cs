@@ -117,7 +117,7 @@ namespace Oxfall.Game.World
                 go.transform.SetParent(parent, false);
                 go.transform.position = new Vector3(pond.Centre.x, pond.Level, pond.Centre.y);
                 var p = pond;
-                go.AddComponent<MeshFilter>().sharedMesh = MeshFactory.PondSurface(pond.Radius + 3f, 18, 48,
+                go.AddComponent<MeshFilter>().sharedMesh = MeshFactory.PondSurface(pond.Radius + 3f, 26, 96,
                     (x, z) => TerrainBuilder.MeshHeight(shape, p.Centre.x + x, p.Centre.y + z) - p.Level);
                 var renderer = go.AddComponent<MeshRenderer>();
                 renderer.sharedMaterial = materials.Pond;

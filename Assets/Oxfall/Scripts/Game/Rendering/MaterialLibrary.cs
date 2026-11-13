@@ -164,7 +164,7 @@ namespace Oxfall.Game.Rendering
                 // Small, slow ripples and a dull reflection: still, murky fresh water, not the sea.
                 Pond.SetVector("_RippleTiling", new Vector4(3f, 7f, 0.01f, 0f));
                 Pond.SetFloat("_RippleStrength", 0.18f);
-                Pond.SetFloat("_Reflection", 0.3f);
+                Pond.SetFloat("_Reflection", 0.38f);
                 Pond.SetFloat("_Glint", 1.2f);
             }
         }

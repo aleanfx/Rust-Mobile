@@ -328,30 +328,34 @@ namespace Oxfall.Game.World
             var b = new FlatMeshBuilder(3);
             var centre = new Vector3(0f, 0.42f, 0f);
             // A leafy body, so the bush reads as one plant and the berries have something to hang on.
-            var body = new Vector3(0.42f, 0.33f, 0.42f);
+            // With leaf cards it is only the shaded heart of the bush, hidden by fronds all round.
+            var body = cards ? new Vector3(0.3f, 0.24f, 0.3f) : new Vector3(0.42f, 0.33f, 0.42f);
             b.AddBlob(LeavesSubmesh, centre, body, random, 0.25f);
             if (cards)
             {
-                for (int j = 0; j < 20; j++)
+                for (int j = 0; j < 32; j++)
                 {
-                    var dir = RandomDirection(random);
-                    dir.y = Mathf.Abs(dir.y) * 0.7f + 0.2f;
+                    // Even spread round the bush (golden angle), from level to nearly upright.
+                    float yaw = j * 137.5f + Rand(random, -15f, 15f);
+                    float rise = Rand(random, 0.05f, 0.85f);
+                    var dir = Quaternion.Euler(0f, yaw, 0f) * new Vector3(0f, rise, 1f);
                     dir.Normalize();
                     var flatSide = Vector3.Cross(Vector3.up, dir);
                     if (flatSide.sqrMagnitude < 1e-4f) flatSide = Vector3.right;
                     var side = Quaternion.AngleAxis(Rand(random, -40f, 40f), dir) * flatSide.normalized;
                     var frond = AllFronds[random.Next(AllFronds.Length)];
-                    float length = Rand(random, 0.45f, 0.65f);
-                    Card(b, centre + Vector3.Scale(dir, body) * 0.6f, dir, Rand(random, 10f, 30f), side,
+                    float length = Rand(random, 0.5f, 0.75f);
+                    Card(b, centre + Vector3.Scale(dir, body) * 0.35f, dir, Rand(random, 10f, 30f), side,
                         length, length / frond.Aspect, frond, centre - Vector3.up * 0.3f, false, 0.4f);
                 }
             }
-            // Clusters of berries sitting on the outside of the leaves, mostly on the upper half.
+            // Clusters of berries among the leaves, mostly on the upper half.
+            var reach = cards ? new Vector3(0.4f, 0.32f, 0.4f) : body * 1.05f;
             for (int i = 0; i < 9; i++)
             {
                 var d = RandomDirection(random);
                 d.y = Mathf.Abs(d.y) * 0.9f + 0.05f;
-                var spot = centre + Vector3.Scale(d.normalized, body * 1.05f);
+                var spot = centre + Vector3.Scale(d.normalized, reach);
                 for (int k = 0; k < 3; k++)
                     AddBerry(b, spot + RandomDirection(random) * 0.045f, random, 0.034f);
             }
@@ -656,8 +660,10 @@ namespace Oxfall.Game.World
             var triangles = new List<int>(segments * 3 + (rings - 1) * segments * 6);
             float Surface(float x, float z)
             {
+                // Flat until the bank is well above the water, then tucked under it: the shore line
+                // is where the drawn ground crosses the flat water, not where the rings happen to fall.
                 float ground = groundAbove(x, z);
-                return ground < -0.05f ? 0f : Mathf.Min(0f, ground) - 0.3f;
+                return ground < 0.25f ? 0f : -0.3f;
             }
             vertices.Add(new Vector3(0f, Surface(0f, 0f), 0f));
             for (int r = 1; r <= rings; r++)
