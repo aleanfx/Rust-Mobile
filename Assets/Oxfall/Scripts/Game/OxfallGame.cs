@@ -302,9 +302,9 @@ namespace Oxfall.Game
                     _inventory.Add(ItemIds.MetalOre, 240);
                     _inventory.Add(ItemIds.Cloth, 40);
                     break;
-                case "build": _hotbar.SelectItem(ItemIds.BuildingPlan); break;
-                case "hammer": _hotbar.SelectItem(ItemIds.Hammer); break;
-                case "door": _hotbar.SelectItem(ItemIds.WoodenDoor); break;
+                case "build": HoldItem(ItemIds.BuildingPlan); break;
+                case "hammer": HoldItem(ItemIds.Hammer); break;
+                case "door": HoldItem(ItemIds.WoodenDoor); break;
                 case "upgrade": _hammer.Upgrade(); break;
                 case "demolish": _hammer.Demolish(); break;
                 case "place-door": _doorPlacer.Place(); break;
@@ -385,6 +385,19 @@ namespace Oxfall.Game
             Debug.Log($"[Oxfall] Test hut at {cell}, doorway {doorway}, pieces={grid.PieceCount}");
         }
 
+        /// <summary>For tests: takes an item in hand, moving it from the backpack to the last hotbar slot if need be.</summary>
+        private void HoldItem(string id)
+        {
+            if (_hotbar.SelectItem(id)) return;
+            for (int slot = Inventory.HotbarSize; slot < _inventory.SlotCount; slot++)
+            {
+                if (_inventory[slot].ItemId != id) continue;
+                _inventory.Move(slot, Inventory.HotbarSize - 1);
+                _hotbar.Select(Inventory.HotbarSize - 1);
+                return;
+            }
+        }
+
         /// <summary>For tests: turns the player, where they stand, to look at the nearest wall or doorway.</summary>
         private void AimAtPiece(PieceType type, float height)
         {
@@ -404,6 +417,7 @@ namespace Oxfall.Game
             float yaw = Mathf.Atan2(to.x, to.z) * Mathf.Rad2Deg;
             float pitch = -Mathf.Atan2(to.y, new Vector2(to.x, to.z).magnitude) * Mathf.Rad2Deg;
             _player.Teleport(_player.transform.position, yaw, pitch);
+            Debug.Log($"[Oxfall] Aimed at {type} {target} from {eye}: yaw {yaw:0} pitch {pitch:0}");
         }
 
         /// <summary>For tests: raises every piece to a tier, free.</summary>

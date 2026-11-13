@@ -50,6 +50,8 @@ namespace Oxfall.Game.Rendering
         public Material Planks { get; }
         /// <summary>Twig building pieces: pale, freshly cut sticks.</summary>
         public Material Twig { get; }
+        /// <summary>Wood building pieces: the planks, lighter, so a wall in shade still reads as wood.</summary>
+        public Material WoodWall { get; }
         /// <summary>Stone building pieces: cut blocks.</summary>
         public Material StoneWall { get; }
         /// <summary>Doors: darker, older planks than the walls, so a door stands out.</summary>
@@ -136,6 +138,8 @@ namespace Oxfall.Game.Rendering
             Planks = Textured("OxfallPlanks") ?? Make("Planks", new Color(0.49f, 0.36f, 0.25f), 0.06f);
             Twig = Tinted(Bark, "Twig", Bark.HasProperty(BaseMap) && Bark.GetTexture(BaseMap) != null
                 ? new Color(1.25f, 1.12f, 0.88f) : new Color(0.62f, 0.52f, 0.36f));
+            var planks = Planks.HasProperty(BaseColor) ? Planks.GetColor(BaseColor) : Color.white;
+            WoodWall = Tinted(Planks, "Wood wall", new Color(planks.r * 1.35f, planks.g * 1.3f, planks.b * 1.25f, 1f));
             StoneWall = Textured("OxfallStoneWall") ?? Tinted(Stone, "Stone wall", new Color(0.95f, 0.93f, 0.90f));
             Door = Textured("OxfallDoor") ?? Tinted(Planks, "Door", new Color(0.72f, 0.62f, 0.52f));
             var grassCards = Textured(GrassCardsResource);

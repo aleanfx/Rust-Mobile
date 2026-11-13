@@ -144,7 +144,7 @@ namespace Oxfall.Game.Construction
             go.GetComponent<MeshFilter>().sharedMesh = tier == BuildingTier.Twig ? _twig[i] : _solid[i];
             var renderer = go.GetComponent<MeshRenderer>();
             renderer.sharedMaterial = tier == BuildingTier.Twig ? _materials.Twig
-                : tier == BuildingTier.Stone ? _materials.StoneWall : _materials.Planks;
+                : tier == BuildingTier.Stone ? _materials.StoneWall : _materials.WoodWall;
             // Thin sticks cast thin, flickering shadows for little gain.
             renderer.shadowCastingMode = tier == BuildingTier.Twig && piece.Type != PieceType.Foundation
                 ? ShadowCastingMode.Off : ShadowCastingMode.On;

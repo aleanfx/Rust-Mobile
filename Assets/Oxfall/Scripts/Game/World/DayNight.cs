@@ -20,9 +20,9 @@ namespace Oxfall.Game.World
         private static readonly Color DawnSun = new Color(1f, 0.62f, 0.38f);
         private static readonly Color MoonColour = new Color(0.60f, 0.70f, 1f);
 
-        private static readonly Color DaySky = new Color(0.55f, 0.62f, 0.72f);
-        private static readonly Color DayEquator = new Color(0.55f, 0.55f, 0.50f);
-        private static readonly Color DayGround = new Color(0.27f, 0.25f, 0.21f);
+        private static readonly Color DaySky = new Color(0.62f, 0.68f, 0.78f);
+        private static readonly Color DayEquator = new Color(0.62f, 0.61f, 0.56f);
+        private static readonly Color DayGround = new Color(0.32f, 0.30f, 0.25f);
         private static readonly Color NightSky = new Color(0.15f, 0.18f, 0.27f);
         private static readonly Color NightEquator = new Color(0.10f, 0.12f, 0.17f);
         private static readonly Color NightGround = new Color(0.05f, 0.05f, 0.065f);
