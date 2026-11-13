@@ -5,7 +5,6 @@
 
 # Ground
 leafy_grass diff nor_gl
-forest_leaves_02 diff nor_gl
 brown_mud_leaves_01 diff nor_gl
 dry_ground_01 diff nor_gl
 coast_sand_01 diff nor_gl
@@ -22,3 +21,10 @@ weathered_planks diff nor_gl
 old_planks_02 diff nor_gl
 rusty_corrugated_iron diff nor_gl
 rusty_metal_02 diff nor_gl
+
+# Leaves and needles: cut-outs (colour + alpha) from Poly Haven tree models.
+# Format: model <asset id> <texture prefix>
+model fir_sapling twigs
+model pine_sapling_small twig
+model jacaranda_tree leaves
+model island_tree_02 leaves
