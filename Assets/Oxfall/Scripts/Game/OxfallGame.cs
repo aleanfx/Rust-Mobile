@@ -85,7 +85,7 @@ namespace Oxfall.Game
             grass.Init(_world.Shape, materials.Grass, player.transform);
             _grass = grass;
 
-            _quality = new GraphicsQuality(camera, _world.Sun, grass);
+            _quality = new GraphicsQuality(camera, _world.Sun, grass, materials.Ground);
             _hud.SetQualityLabel(GraphicsQuality.Name(_quality.Tier));
             controls.QualityTapped += () =>
             {

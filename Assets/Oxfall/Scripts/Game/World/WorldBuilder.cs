@@ -39,7 +39,8 @@ namespace Oxfall.Game.World
             world.Sun = BuildAtmosphere(world.Root);
 
             var colourMap = TerrainBuilder.BuildColourMap(world.Shape);
-            TerrainBuilder.Build(world.Shape, materials.MakeGround(colourMap), world.Root);
+            var splatMap = materials.HasTexturedGround ? TerrainBuilder.BuildSplatMap(world.Shape) : null;
+            TerrainBuilder.Build(world.Shape, materials.MakeGround(colourMap, splatMap), world.Root);
             BuildSea(materials, world.Root);
             PlaceResources(world, materials, seed);
             FindSpawn(world, seed);
@@ -72,6 +73,10 @@ namespace Oxfall.Game.World
             RenderSettings.fogMode = FogMode.ExponentialSquared;
             RenderSettings.fogColor = FogColour;
             RenderSettings.fogDensity = 0.009f;
+
+            // The sea reflects these.
+            Shader.SetGlobalVector("_OxfallSkyTop", SkyTop.linear);
+            Shader.SetGlobalVector("_OxfallSkyHorizon", FogColour.linear);
 
             var sky = RenderSettings.skybox;
             if (sky != null && sky.HasProperty("_HorizonColor"))

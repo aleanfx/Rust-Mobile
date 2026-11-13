@@ -31,6 +31,7 @@ namespace Oxfall.Game.Rendering
         private readonly Camera _camera;
         private readonly Light _sun;
         private readonly GrassField _grass;
+        private readonly Material _ground;
 #if OXFALL_URP
         private Volume _volume;
         private Tonemapping _tonemapping;
@@ -40,11 +41,12 @@ namespace Oxfall.Game.Rendering
 
         public QualityTier Tier { get; private set; }
 
-        public GraphicsQuality(Camera camera, Light sun, GrassField grass)
+        public GraphicsQuality(Camera camera, Light sun, GrassField grass, Material ground)
         {
             _camera = camera;
             _sun = sun;
             _grass = grass;
+            _ground = ground;
             BuildPostProcessing();
             int saved = PlayerPrefs.GetInt(PrefKey, -1);
             Apply(saved >= 0 && saved <= 2 ? (QualityTier)saved : Recommended());
@@ -132,6 +134,12 @@ namespace Oxfall.Game.Rendering
             _camera.farClipPlane = far;
             _sun.shadows = shadows;
             _grass?.SetQuality(grassRadius, grassDensity);
+            // The photo-textured ground's normal maps are four extra texture reads: not on Low.
+            if (_ground != null && _ground.HasProperty("_SplatMap"))
+            {
+                if (tier == QualityTier.Low) _ground.DisableKeyword("_GROUND_NORMALS");
+                else _ground.EnableKeyword("_GROUND_NORMALS");
+            }
 
 #if OXFALL_URP
             if (GraphicsSettings.currentRenderPipeline is UniversalRenderPipelineAsset urp)

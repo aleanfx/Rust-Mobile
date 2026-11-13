@@ -59,6 +59,7 @@ namespace Oxfall.Editor
                 var sky = CreateSkybox();
                 CreateLitMaterial();
                 CreateGroundMaterial();
+                ArtSetup.Apply();
                 AssetDatabase.SaveAssets();
                 BuildScene(sky);
                 AssetDatabase.SaveAssets();

@@ -86,6 +86,33 @@ namespace Oxfall.Game.World
             return mesh;
         }
 
+        /// <summary>
+        /// Which ground texture shows where, (grass, dirt, sand, rock) in RGBA, one texel per ~1 m.
+        /// Linear: these are weights, not colours.
+        /// </summary>
+        public static Texture2D BuildSplatMap(IslandShape shape)
+        {
+            int size = ColourMapSize;
+            var pixels = new Color32[size * size];
+            for (int y = 0; y < size; y++)
+            for (int x = 0; x < size; x++)
+            {
+                float wx = -IslandShape.HalfSize + (x + 0.5f) / size * IslandShape.WorldSize;
+                float wz = -IslandShape.HalfSize + (y + 0.5f) / size * IslandShape.WorldSize;
+                pixels[y * size + x] = shape.GroundWeights(wx, wz);
+            }
+
+            var texture = new Texture2D(size, size, TextureFormat.RGBA32, true, true)
+            {
+                name = "Island splat",
+                wrapMode = TextureWrapMode.Clamp,
+                filterMode = FilterMode.Bilinear,
+            };
+            texture.SetPixels32(pixels);
+            texture.Apply(true, true);
+            return texture;
+        }
+
         /// <summary>The island's colours, one texel per ~1 m, smoothed by bilinear filtering.</summary>
         public static Texture2D BuildColourMap(IslandShape shape)
         {

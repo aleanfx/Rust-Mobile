@@ -18,7 +18,7 @@ namespace Oxfall.Game.World
         /// <summary>A pine: a trunk and three stacked cones of needles.</summary>
         public static Mesh Pine(System.Random random)
         {
-            var b = new FlatMeshBuilder(2);
+            var b = new FlatMeshBuilder(2) { UvScale = 1.3f };
             float trunkHeight = 7.5f;
             b.AddCylinder(BarkSubmesh, Vector3.zero, 0.34f, 0.12f, trunkHeight, 7, Rand(random, 0f, 60f));
 
@@ -41,7 +41,7 @@ namespace Oxfall.Game.World
         /// <summary>A broadleaf tree: a trunk and a lumpy crown.</summary>
         public static Mesh Broadleaf(System.Random random)
         {
-            var b = new FlatMeshBuilder(2);
+            var b = new FlatMeshBuilder(2) { UvScale = 1.3f };
             float trunkHeight = 4.2f;
             b.AddCylinder(BarkSubmesh, Vector3.zero, 0.3f, 0.2f, trunkHeight, 6, Rand(random, 0f, 60f));
             // A crown of several overlapping clumps reads as foliage rather than one ball on a stick.
@@ -67,7 +67,7 @@ namespace Oxfall.Game.World
         /// <summary>A boulder, about a metre across before scaling.</summary>
         public static Mesh Rock(System.Random random)
         {
-            var b = new FlatMeshBuilder(1);
+            var b = new FlatMeshBuilder(1) { UvScale = 1.1f };
             b.AddBlob(0, new Vector3(0f, 0.25f, 0f), new Vector3(1f, 0.7f, 1f), random, 0.28f);
             return b.Build("Rock", 42f);
         }
@@ -90,7 +90,7 @@ namespace Oxfall.Game.World
         /// <summary>The rock in the player's hand.</summary>
         public static Mesh HandRock()
         {
-            var b = new FlatMeshBuilder(1);
+            var b = new FlatMeshBuilder(1) { UvScale = 1.6f };
             b.AddBlob(0, Vector3.zero, new Vector3(1f, 0.8f, 1.2f), new System.Random(7), 0.2f);
             return b.Build("HandRock", 42f);
         }
@@ -98,7 +98,8 @@ namespace Oxfall.Game.World
         /// <summary>One flat-shaded mesh made of boxes. Building pieces are made of these.</summary>
         public static Mesh Boxes(string name, params Bounds[] boxes)
         {
-            var b = new FlatMeshBuilder(1);
+            // About eight planks per 1.6 m tile of the planks texture.
+            var b = new FlatMeshBuilder(1) { UvScale = 1.6f };
             foreach (var box in boxes) b.AddBox(0, box.min, box.max);
             return b.Build(name);
         }
@@ -138,6 +139,12 @@ namespace Oxfall.Game.World
             private readonly List<int> _submeshOf = new List<int>();
             private readonly List<int>[] _triangles;
 
+            /// <summary>
+            /// Metres per texture tile. Above 0, each face gets UVs projected along its main axis
+            /// (from above, or from the side with "up" up), and the mesh gets tangents for normal maps.
+            /// </summary>
+            public float UvScale;
+
             public FlatMeshBuilder(int submeshes)
             {
                 _triangles = new List<int>[submeshes];
@@ -155,9 +162,26 @@ namespace Oxfall.Game.World
                 _normals.Add(normal); _normals.Add(normal); _normals.Add(normal);
                 _areas.Add(area); _areas.Add(area); _areas.Add(area);
                 _submeshOf.Add(submesh); _submeshOf.Add(submesh); _submeshOf.Add(submesh);
-                _uvs.Add(new Vector2(0f, 0f)); _uvs.Add(new Vector2(1f, 0f)); _uvs.Add(new Vector2(0.5f, 1f));
+                if (UvScale > 0f)
+                {
+                    _uvs.Add(Project(a, normal)); _uvs.Add(Project(b, normal)); _uvs.Add(Project(c, normal));
+                }
+                else
+                {
+                    _uvs.Add(new Vector2(0f, 0f)); _uvs.Add(new Vector2(1f, 0f)); _uvs.Add(new Vector2(0.5f, 1f));
+                }
                 var list = _triangles[submesh];
                 list.Add(start); list.Add(start + 1); list.Add(start + 2);
+            }
+
+            private Vector2 Project(Vector3 p, Vector3 normal)
+            {
+                float ax = Mathf.Abs(normal.x), ay = Mathf.Abs(normal.y), az = Mathf.Abs(normal.z);
+                Vector2 uv;
+                if (ay >= ax && ay >= az) uv = new Vector2(p.x, p.z);
+                else if (ax >= az) uv = new Vector2(p.z, p.y);
+                else uv = new Vector2(p.x, p.y);
+                return uv / UvScale;
             }
 
             /// <summary>An axis-aligned box, every face wound to face outwards.</summary>
@@ -240,6 +264,7 @@ namespace Oxfall.Game.World
                 mesh.subMeshCount = _triangles.Length;
                 for (int i = 0; i < _triangles.Length; i++) mesh.SetTriangles(_triangles[i], i);
                 mesh.RecalculateBounds();
+                if (UvScale > 0f) mesh.RecalculateTangents();
                 mesh.UploadMeshData(true);
                 return mesh;
             }

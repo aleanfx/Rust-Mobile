@@ -124,6 +124,27 @@ namespace Oxfall.Game.World
         }
 
         /// <summary>
+        /// How much of each ground texture shows here, as (grass, dirt, sand, rock) summing to 1:
+        /// sand on the beach, rock on steep slopes and high up, dirt in patches and under forests.
+        /// </summary>
+        public Color GroundWeights(float x, float z)
+        {
+            float h = Height(x, z);
+            float slope = 1f - Normal(x, z).y;
+            float n = Fbm(x * 0.05f + _colourOffset.x, z * 0.05f + _colourOffset.y, 3);
+            float forest = Forest(x, z);
+
+            float rock = Mathf.Clamp01((slope - 0.1f) * 7f) + Mathf.Clamp01((h - 18f) / 5f);
+            rock = Mathf.Clamp01(rock);
+            float sand = 1f - Mathf.InverseLerp(1.5f, 2.5f, h);
+            sand = Mathf.Clamp01(sand) * (1f - rock);
+            float dirt = Mathf.Clamp01((n - 0.56f) * 3.5f) + Mathf.Clamp01((forest - 0.55f) * 2.5f) * 0.6f;
+            dirt = Mathf.Clamp01(dirt) * (1f - rock) * (1f - sand);
+            float grass = Mathf.Max(0f, 1f - rock - sand - dirt);
+            return new Color(grass, dirt, sand, rock);
+        }
+
+        /// <summary>
         /// 0..1, how much grass grows here: none on sand, rock, dirt patches or steep ground. Uses the
         /// same rules as <see cref="GroundColour"/> so blades stand where the ground is green.
         /// </summary>

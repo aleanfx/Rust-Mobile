@@ -49,6 +49,7 @@ namespace Oxfall.Editor
                     PlayerSettings.bundleVersion = $"0.1.{run}";
 
                 PreferSmallDownload();
+                PreferPhoneTextures();
                 var report = BuildPipeline.BuildPlayer(new BuildPlayerOptions
                 {
                     scenes = scenes,
@@ -68,6 +69,30 @@ namespace Oxfall.Editor
             finally
             {
                 PlayerSettings.bundleVersion = previousVersion;
+            }
+        }
+
+        /// <summary>
+        /// The web build is mainly played on phones, whose browsers read ASTC textures but not the
+        /// default DXT (iPhones never do). Set by reflection so a missing setting only warns.
+        /// </summary>
+        private static void PreferPhoneTextures()
+        {
+            try
+            {
+                var property = typeof(EditorUserBuildSettings).GetProperty("webGLBuildSubtarget",
+                    System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.Static);
+                if (property == null || !property.CanWrite || !Enum.GetNames(property.PropertyType).Contains("ASTC"))
+                {
+                    Debug.LogWarning("[Oxfall] WebGL texture subtarget setting not found; textures stay DXT.");
+                    return;
+                }
+                property.SetValue(null, Enum.Parse(property.PropertyType, "ASTC"));
+                Debug.Log("[Oxfall] WebGL textures: ASTC");
+            }
+            catch (Exception error)
+            {
+                Debug.LogWarning($"[Oxfall] Could not set the WebGL texture subtarget: {error.Message}");
             }
         }
 
