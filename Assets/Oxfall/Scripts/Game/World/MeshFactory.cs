@@ -22,18 +22,19 @@ namespace Oxfall.Game.World
             float trunkHeight = 7.5f;
             b.AddCylinder(BarkSubmesh, Vector3.zero, 0.34f, 0.12f, trunkHeight, 7, Rand(random, 0f, 60f));
 
-            // Four tiers that droop a little and lean a little, so no two pines look stamped out.
-            float y = 1.6f;
-            float radius = 2.4f;
-            float height = 2.9f;
-            for (int i = 0; i < 4; i++)
+            // Six overlapping tiers, narrowing to the top and leaning a little, so the crown reads as
+            // a dense conifer rather than stacked cones, and no two pines look stamped out.
+            float y = 1.3f;
+            float radius = 2.3f;
+            float height = 2.2f;
+            for (int i = 0; i < 6; i++)
             {
-                float jitter = Rand(random, 0.88f, 1.12f);
-                var offset = new Vector3(Rand(random, -0.12f, 0.12f), 0f, Rand(random, -0.12f, 0.12f));
+                float jitter = Rand(random, 0.85f, 1.15f);
+                var offset = new Vector3(Rand(random, -0.1f, 0.1f), 0f, Rand(random, -0.1f, 0.1f));
                 b.AddCone(LeavesSubmesh, new Vector3(0f, y, 0f) + offset, radius * jitter, height, 9, Rand(random, 0f, 60f));
-                y += height * 0.5f;
-                radius *= 0.76f;
-                height *= 0.88f;
+                y += height * 0.48f;
+                radius *= 0.82f;
+                height *= 0.92f;
             }
             return b.Build("Pine", 80f);
         }

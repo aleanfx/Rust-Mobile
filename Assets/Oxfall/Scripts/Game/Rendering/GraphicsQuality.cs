@@ -115,17 +115,17 @@ namespace Oxfall.Game.Rendering
                 case QualityTier.Low:
                     renderScale = 0.75f; shadows = LightShadows.None; shadowDistance = 0f;
                     msaa = 1; hdr = false; post = false; fogDensity = 0.0115f; far = 210f;
-                    grassRadius = 20f; grassDensity = 0.8f;
+                    grassRadius = 20f; grassDensity = 0.6f;
                     break;
                 case QualityTier.Medium:
                     renderScale = 0.9f; shadows = LightShadows.Hard; shadowDistance = 35f;
                     msaa = 1; hdr = false; post = true; fogDensity = 0.0095f; far = 270f;
-                    grassRadius = 30f; grassDensity = 1.4f;
+                    grassRadius = 30f; grassDensity = 1.0f;
                     break;
                 default:
                     renderScale = 1f; shadows = LightShadows.Hard; shadowDistance = 60f;
                     msaa = 2; hdr = true; post = true; fogDensity = 0.008f; far = 340f;
-                    grassRadius = 40f; grassDensity = 1.8f;
+                    grassRadius = 40f; grassDensity = 1.3f;
                     break;
             }
 
@@ -178,10 +178,10 @@ namespace Oxfall.Game.Rendering
             var profile = ScriptableObject.CreateInstance<VolumeProfile>();
             _tonemapping = profile.Add<Tonemapping>();
             _colour = profile.Add<ColorAdjustments>();
-            _colour.colorFilter.Override(new Color(1f, 0.97f, 0.93f));
+            _colour.colorFilter.Override(new Color(1f, 0.99f, 0.97f));
 
             var white = profile.Add<WhiteBalance>();
-            white.temperature.Override(6f);
+            white.temperature.Override(2f);
 
             _bloom = profile.Add<Bloom>();
             _bloom.intensity.Override(0.35f);

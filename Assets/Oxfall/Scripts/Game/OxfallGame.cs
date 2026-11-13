@@ -139,6 +139,9 @@ namespace Oxfall.Game
                 case "nearest-tree": FaceNearest(ResourceNodeType.Tree); break;
                 case "view-hill": ViewFromHill(); break;
                 case "view-forest": ViewInForest(); break;
+                case "view-sea":
+                    _player.Teleport(_world.SpawnPosition, _world.SpawnYaw + 180f, 4f);
+                    break;
                 case "nearest-stone": FaceNearest(ResourceNodeType.Stone); break;
                 case "nearest-ore": FaceNearest(ResourceNodeType.MetalOre); break;
                 case "nearest-hemp": FaceNearest(ResourceNodeType.Hemp); break;

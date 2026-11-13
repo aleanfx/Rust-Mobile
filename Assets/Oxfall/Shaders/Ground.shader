@@ -17,7 +17,8 @@ Shader "Oxfall/Ground"
         [Normal] _SandNormal ("Sand normal", 2D) = "bump" {}
         [Normal] _RockNormal ("Rock normal", 2D) = "bump" {}
         _Tiling ("Metres per tile: grass, dirt, sand, rock", Vector) = (5, 4, 6, 7)
-        _TintStrength ("Colour map strength", Range(0, 1)) = 0.3
+        _GrassColor ("Grass colour", Color) = (0.82, 0.95, 0.74, 1)
+        _TintStrength ("Colour map strength", Range(0, 1)) = 0.15
         _NormalStrength ("Normal strength", Range(0, 2)) = 1
         _Brightness ("Brightness", Range(0.5, 2)) = 1
     }
@@ -58,6 +59,7 @@ Shader "Oxfall/Ground"
                 float4 _BaseMap_ST;
                 float4 _SplatMap_ST;
                 float4 _Tiling;
+                half4 _GrassColor;
                 half _TintStrength;
                 half _NormalStrength;
                 half _Brightness;
@@ -105,7 +107,7 @@ Shader "Oxfall/Ground"
                 // Grass is most of the island: a second, larger copy breaks up the repeating tile.
                 half3 grass = SAMPLE_TEXTURE2D(_Grass, sampler_Grass, uvGrass).rgb;
                 half3 grassFar = SAMPLE_TEXTURE2D(_Grass, sampler_Grass, uvGrass * 0.27 + 0.37).rgb;
-                grass = lerp(grass, grassFar, 0.35h);
+                grass = lerp(grass, grassFar, 0.35h) * _GrassColor.rgb;
 
                 half3 albedo = grass * splat.r
                     + SAMPLE_TEXTURE2D(_Dirt, sampler_Grass, uvDirt).rgb * splat.g

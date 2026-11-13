@@ -94,6 +94,9 @@ namespace Oxfall.Game.Rendering
                 Ground = new Material(textured) { name = "Ground" };
                 Ground.SetTexture(BaseMap, colourMap);
                 Ground.SetTexture(SplatMap, splatMap);
+                // The grass photo is dry and yellow; this greens it, and the colour map only nudges.
+                Ground.SetColor("_GrassColor", new Color(0.82f, 0.95f, 0.74f));
+                Ground.SetFloat("_TintStrength", 0.15f);
                 return Ground;
             }
 
