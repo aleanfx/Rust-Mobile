@@ -14,10 +14,52 @@ namespace Oxfall.Game.World
     {
         public const int BarkSubmesh = 0;
         public const int LeavesSubmesh = 1;
+        /// <summary>Foliage cards: alpha-cut photo leaves, in trees made with cards.</summary>
+        public const int CardSubmesh = 2;
 
-        /// <summary>A pine: a trunk and three stacked cones of needles.</summary>
-        public static Mesh Pine(System.Random random)
+        /// <summary>
+        /// A leafy frond in the foliage atlas (the CC0 Jacaranda leaves from Poly Haven): its box in
+        /// UV space and which end the stem starts from. Measured from the alpha of the atlas.
+        /// </summary>
+        private readonly struct Frond
         {
+            private readonly float _u0, _u1, _v0, _v1;
+            private readonly bool _stemOnRight;
+
+            public Frond(float u0, float v0, float u1, float v1, bool stemOnRight)
+            {
+                _u0 = u0; _v0 = v0; _u1 = u1; _v1 = v1;
+                _stemOnRight = stemOnRight;
+            }
+
+            /// <summary>Length over width.</summary>
+            public float Aspect => (_u1 - _u0) / (_v1 - _v0);
+
+            /// <summary>The UV at a point across (0..1) and along (0 = stem, 1 = tip) the frond.</summary>
+            public Vector2 Uv(float across, float along) => new Vector2(
+                _stemOnRight ? _u1 - along * (_u1 - _u0) : _u0 + along * (_u1 - _u0),
+                _v0 + across * (_v1 - _v0));
+        }
+
+        private static readonly Frond[] LongFronds =
+        {
+            new Frond(0.119f, 0.500f, 0.988f, 0.973f, false),
+            new Frond(0.199f, 0.006f, 1.000f, 0.422f, true),
+        };
+        private static readonly Frond[] AllFronds =
+        {
+            LongFronds[0], LongFronds[1],
+            new Frond(0.000f, 0.281f, 0.459f, 0.762f, false),
+        };
+
+        /// <summary>
+        /// A pine. With cards: a trunk, a dark core and whorls of drooping photo-leaf branches.
+        /// Without: a trunk and stacked cones of needles.
+        /// </summary>
+        public static Mesh Pine(System.Random random, bool cards = false)
+        {
+            if (cards) return CardPine(random);
+
             var b = new FlatMeshBuilder(2) { UvScale = 1.3f };
             float trunkHeight = 7.5f;
             b.AddCylinder(BarkSubmesh, Vector3.zero, 0.34f, 0.12f, trunkHeight, 7, Rand(random, 0f, 60f));
@@ -39,9 +81,102 @@ namespace Oxfall.Game.World
             return b.Build("Pine", 80f);
         }
 
-        /// <summary>A broadleaf tree: a trunk and a lumpy crown.</summary>
-        public static Mesh Broadleaf(System.Random random)
+        private static Mesh CardPine(System.Random random)
         {
+            var b = new FlatMeshBuilder(3) { UvScale = 1.3f };
+            float height = Rand(random, 9f, 10.5f);
+            b.AddCylinder(BarkSubmesh, Vector3.zero, 0.32f, 0.05f, height, 7, Rand(random, 0f, 60f));
+
+            float crownBottom = 1.8f, crownTop = height - 0.6f;
+            // A dark core keeps the crown from looking hollow between the branches.
+            b.AddCone(LeavesSubmesh, new Vector3(0f, crownBottom + 0.3f, 0f), 1.2f, crownTop - crownBottom, 7,
+                Rand(random, 0f, 60f));
+
+            const int whorls = 11;
+            for (int w = 0; w < whorls; w++)
+            {
+                float t = w / (whorls - 1f);
+                float y = Mathf.Lerp(crownBottom, crownTop, t) + Rand(random, -0.15f, 0.15f);
+                float length = Mathf.Lerp(3.0f, 0.9f, Mathf.Pow(t, 0.9f)) * Rand(random, 0.85f, 1.1f);
+                int branches = t < 0.7f ? 6 : 5;
+                float whorlYaw = Rand(random, 0f, 360f);
+                for (int k = 0; k < branches; k++)
+                {
+                    float yaw = (whorlYaw + k * 360f / branches + Rand(random, -18f, 18f)) * Mathf.Deg2Rad;
+                    float droop = (Mathf.Lerp(24f, 6f, t) + Rand(random, -6f, 6f)) * Mathf.Deg2Rad;
+                    var outward = new Vector3(Mathf.Cos(yaw), 0f, Mathf.Sin(yaw));
+                    var dir = outward * Mathf.Cos(droop) + Vector3.down * Mathf.Sin(droop);
+                    var flatSide = Vector3.Cross(Vector3.up, dir).normalized;
+                    var start = new Vector3(0f, y, 0f) + outward * 0.1f;
+                    var frond = LongFronds[random.Next(LongFronds.Length)];
+                    float width = length / frond.Aspect * 0.85f;
+                    float bend = Rand(random, 8f, 18f);
+                    // A spray lying nearly flat and, on the long lower branches, a steeper one under it
+                    // so the branch has body seen from the side.
+                    var side = Quaternion.AngleAxis(Rand(random, -20f, 20f), dir) * flatSide;
+                    Card(b, start, dir, bend, side, length, width, frond, Vector3.zero, true, 0.55f);
+                    if (t >= 0.6f) continue;
+                    side = Quaternion.AngleAxis(Rand(random, 65f, 110f), dir) * flatSide;
+                    frond = LongFronds[random.Next(LongFronds.Length)];
+                    Card(b, start, dir, bend, side, length * 0.85f, width * 0.7f, frond, Vector3.zero, true, 0.55f);
+                }
+            }
+
+            // The leader: two crossed upright sprays at the very top.
+            var top = new Vector3(0f, crownTop - 0.3f, 0f);
+            Card(b, top, Vector3.up, 0f, Vector3.right, 1.5f, 0.8f, LongFronds[0], Vector3.zero, true, 1f);
+            Card(b, top, Vector3.up, 0f, Vector3.forward, 1.4f, 0.75f, LongFronds[1], Vector3.zero, true, 1f);
+            return b.Build("Pine", 80f);
+        }
+
+        /// <summary>
+        /// One foliage card: a strip of two quads from the stem end along a direction, the outer half
+        /// bending down by some degrees. Normals point away from a centre (or from the trunk's axis,
+        /// when axial) and up, so the crown is lit like one soft volume instead of flat cards.
+        /// </summary>
+        private static void Card(FlatMeshBuilder b, Vector3 start, Vector3 dir, float bendDegrees, Vector3 side,
+            float length, float width, Frond frond, Vector3 centre, bool axial, float upBias)
+        {
+            var bendAxis = Vector3.Cross(Vector3.up, dir);
+            bendAxis = bendAxis.sqrMagnitude > 1e-4f ? bendAxis.normalized : side;
+            var outer = Quaternion.AngleAxis(bendDegrees, bendAxis) * dir;
+            var half = side.normalized * (width * 0.5f);
+            var mid = start + dir * (length * 0.5f);
+            var tip = mid + outer * (length * 0.5f);
+            var spine = new[] { start, mid, tip };
+
+            int first = -1;
+            for (int r = 0; r < 3; r++)
+            {
+                float along = r * 0.5f;
+                for (int c = 0; c < 2; c++)
+                {
+                    var p = spine[r] + (c == 0 ? -half : half);
+                    var from = axial ? new Vector3(0f, p.y, 0f) : centre;
+                    var away = p - from;
+                    if (axial) away.y = 0f;
+                    if (away.sqrMagnitude < 0.04f) away = new Vector3(dir.x, 0f, dir.z);
+                    var normal = (away.normalized + Vector3.up * upBias).normalized;
+                    int index = b.CardVertex(p, normal, frond.Uv(c, along));
+                    if (first < 0) first = index;
+                }
+            }
+            for (int r = 0; r < 2; r++)
+            {
+                int l0 = first + r * 2, r0 = l0 + 1, l1 = l0 + 2, r1 = l0 + 3;
+                b.CardTriangle(CardSubmesh, l0, r0, r1);
+                b.CardTriangle(CardSubmesh, l0, r1, l1);
+            }
+        }
+
+        /// <summary>
+        /// A broadleaf tree. With cards: a trunk, boughs, dark inner clumps and photo-leaf sprays
+        /// around them. Without: a trunk and a lumpy crown.
+        /// </summary>
+        public static Mesh Broadleaf(System.Random random, bool cards = false)
+        {
+            if (cards) return CardBroadleaf(random);
+
             var b = new FlatMeshBuilder(2) { UvScale = 1.3f };
             float trunkHeight = 4.2f;
             b.AddCylinder(BarkSubmesh, Vector3.zero, 0.3f, 0.2f, trunkHeight, 6, Rand(random, 0f, 60f));
@@ -65,12 +200,78 @@ namespace Oxfall.Game.World
             return b.Build("Broadleaf", 75f);
         }
 
-        /// <summary>A boulder, about a metre across before scaling.</summary>
+        private static Mesh CardBroadleaf(System.Random random)
+        {
+            var b = new FlatMeshBuilder(3) { UvScale = 1.3f };
+            float trunkHeight = Rand(random, 3.8f, 4.5f);
+            b.AddCylinder(BarkSubmesh, Vector3.zero, 0.3f, 0.14f, trunkHeight + 0.8f, 6, Rand(random, 0f, 60f));
+
+            var crown = new Vector3(Rand(random, 2.4f, 2.9f), Rand(random, 1.8f, 2.2f), Rand(random, 2.4f, 2.9f));
+            var centre = new Vector3(0f, trunkHeight + crown.y * 0.45f, 0f);
+            var clumpCentres = new List<Vector3> { centre + new Vector3(0f, 0.5f, 0f) };
+            var clumpSizes = new List<Vector3> { crown * 0.85f };
+            for (int i = 0; i < 4; i++)
+            {
+                float angle = (i * 90f + Rand(random, -25f, 25f)) * Mathf.Deg2Rad;
+                var offset = new Vector3(Mathf.Cos(angle), 0f, Mathf.Sin(angle)) * Rand(random, 1.1f, 1.5f);
+                var c = new Vector3(offset.x, centre.y + Rand(random, -0.5f, 0.3f), offset.z);
+                clumpCentres.Add(c);
+                clumpSizes.Add(crown * Rand(random, 0.55f, 0.7f));
+                // A bough from the trunk out to the clump.
+                var from = new Vector3(0f, trunkHeight - 0.6f, 0f);
+                var to = c - new Vector3(0f, 0.3f, 0f);
+                var lean = Quaternion.FromToRotation(Vector3.up, to - from);
+                b.AddCylinder(BarkSubmesh, from, 0.12f, 0.05f, (to - from).magnitude, 5, 0f, lean);
+            }
+
+            for (int i = 0; i < clumpCentres.Count; i++)
+            {
+                var c = clumpCentres[i];
+                var size = clumpSizes[i];
+                // Dark inner clump: the shade inside the crown, seen through gaps between the sprays.
+                b.AddBlob(LeavesSubmesh, c, size * 0.6f, random, 0.15f);
+                int count = i == 0 ? 16 : 9;
+                for (int j = 0; j < count; j++)
+                {
+                    var d = RandomDirection(random);
+                    d.y = d.y * 0.7f + 0.2f;
+                    d.Normalize();
+                    var p = c + Vector3.Scale(d, size) * Rand(random, 0.45f, 0.75f);
+                    // Sprays point outwards and a little down, faces turned roughly to the sky.
+                    var flat = new Vector3(d.x, 0f, d.z);
+                    if (flat.sqrMagnitude < 0.05f) flat = RandomDirection(random);
+                    flat.y = 0f;
+                    var dir = (flat.normalized + Vector3.down * Rand(random, 0.1f, 0.45f)).normalized;
+                    var side = Quaternion.AngleAxis(Rand(random, -50f, 50f), dir) * Vector3.Cross(Vector3.up, dir).normalized;
+                    var frond = AllFronds[random.Next(AllFronds.Length)];
+                    float length = Rand(random, 1.4f, 2.0f) * (frond.Aspect < 1.2f ? 0.7f : 1f);
+                    float width = length / frond.Aspect;
+                    Card(b, p - dir * (length * 0.35f), dir, Rand(random, 5f, 20f), side, length, width, frond,
+                        centre, false, 0.35f);
+                }
+            }
+            return b.Build("Broadleaf", 75f);
+        }
+
+        private static Vector3 RandomDirection(System.Random random)
+        {
+            while (true)
+            {
+                var v = new Vector3(Rand(random, -1f, 1f), Rand(random, -1f, 1f), Rand(random, -1f, 1f));
+                float m = v.sqrMagnitude;
+                if (m > 0.01f && m <= 1f) return v / Mathf.Sqrt(m);
+            }
+        }
+
+        /// <summary>
+        /// A boulder, about a metre across before scaling: a finer sphere bent by smooth noise and
+        /// split by a few flat fracture faces, so it reads as weathered stone, not a faceted ball.
+        /// </summary>
         public static Mesh Rock(System.Random random)
         {
             var b = new FlatMeshBuilder(1) { UvScale = 1.1f };
-            b.AddBlob(0, new Vector3(0f, 0.25f, 0f), new Vector3(1f, 0.7f, 1f), random, 0.28f);
-            return b.Build("Rock", 42f);
+            b.AddRock(0, new Vector3(0f, 0.25f, 0f), new Vector3(1f, 0.7f, 1f), random);
+            return b.Build("Rock", 50f);
         }
 
         /// <summary>A hemp plant: a few stalks topped with leaves.</summary>
@@ -92,8 +293,8 @@ namespace Oxfall.Game.World
         public static Mesh HandRock()
         {
             var b = new FlatMeshBuilder(1) { UvScale = 1.6f };
-            b.AddBlob(0, Vector3.zero, new Vector3(1f, 0.8f, 1.2f), new System.Random(7), 0.2f);
-            return b.Build("HandRock", 42f);
+            b.AddRock(0, Vector3.zero, new Vector3(1f, 0.8f, 1.2f), new System.Random(7));
+            return b.Build("HandRock", 50f);
         }
 
         /// <summary>One flat-shaded mesh made of boxes. Building pieces are made of these.</summary>
@@ -140,6 +341,14 @@ namespace Oxfall.Game.World
             private readonly List<int> _submeshOf = new List<int>();
             private readonly List<int>[] _triangles;
 
+            // Vertices with their own normals and UVs (foliage cards), kept out of the smoothing and
+            // appended when the mesh is built.
+            private readonly List<Vector3> _cardVertices = new List<Vector3>();
+            private readonly List<Vector3> _cardNormals = new List<Vector3>();
+            private readonly List<Vector2> _cardUvs = new List<Vector2>();
+            private readonly List<int> _cardTriangles = new List<int>();
+            private readonly List<int> _cardSubmesh = new List<int>();
+
             /// <summary>
             /// Metres per texture tile. Above 0, each face gets UVs projected along its main axis
             /// (from above, or from the side with "up" up), and the mesh gets tangents for normal maps.
@@ -150,6 +359,22 @@ namespace Oxfall.Game.World
             {
                 _triangles = new List<int>[submeshes];
                 for (int i = 0; i < submeshes; i++) _triangles[i] = new List<int>();
+            }
+
+            /// <summary>A vertex for a card, with its own normal and UV. Returns its index among card vertices.</summary>
+            public int CardVertex(Vector3 position, Vector3 normal, Vector2 uv)
+            {
+                _cardVertices.Add(position);
+                _cardNormals.Add(normal);
+                _cardUvs.Add(uv);
+                return _cardVertices.Count - 1;
+            }
+
+            /// <summary>A triangle between three card vertices.</summary>
+            public void CardTriangle(int submesh, int a, int b, int c)
+            {
+                _cardTriangles.Add(a); _cardTriangles.Add(b); _cardTriangles.Add(c);
+                _cardSubmesh.Add(submesh);
             }
 
             public void Triangle(int submesh, Vector3 a, Vector3 b, Vector3 c)
@@ -236,10 +461,48 @@ namespace Oxfall.Game.World
                 }
             }
 
+            /// <summary>
+            /// A stone: a twice-subdivided icosahedron pushed in and out by smooth noise, with a few
+            /// fracture planes that cut it flat where they pass.
+            /// </summary>
+            public void AddRock(int submesh, Vector3 centre, Vector3 size, System.Random random)
+            {
+                Icosphere(2, out var points, out var faces);
+                var seed = new Vector3(Rand(random, 0f, 100f), Rand(random, 0f, 100f), Rand(random, 0f, 100f));
+                int cuts = 3 + random.Next(3);
+                var planes = new Vector4[cuts];
+                for (int c = 0; c < cuts; c++)
+                {
+                    var n = RandomDirection(random);
+                    planes[c] = new Vector4(n.x, n.y, n.z, Rand(random, 0.62f, 0.85f));
+                }
+                for (int i = 0; i < points.Count; i++)
+                {
+                    var p = points[i];
+                    float shape = Noise3(p * 1.3f + seed) - 0.5f;
+                    float bumps = Noise3(p * 3.4f + seed * 1.7f) - 0.5f;
+                    p *= 1f + shape * 0.5f + bumps * 0.14f;
+                    foreach (var plane in planes)
+                    {
+                        var n = new Vector3(plane.x, plane.y, plane.z);
+                        float d = Vector3.Dot(p, n);
+                        if (d > plane.w) p -= n * (d - plane.w);
+                    }
+                    points[i] = centre + new Vector3(p.x * size.x, p.y * size.y, p.z * size.z);
+                }
+                for (int f = 0; f < faces.Count; f += 3)
+                    Triangle(submesh, points[faces[f]], points[faces[f + 1]], points[faces[f + 2]]);
+            }
+
+            /// <summary>Smooth noise in 3D, about 0..1, from three crossed 2D Perlin planes.</summary>
+            private static float Noise3(Vector3 p) =>
+                (Mathf.PerlinNoise(p.x, p.y) + Mathf.PerlinNoise(p.y + 31.7f, p.z) +
+                 Mathf.PerlinNoise(p.z + 57.3f, p.x + 11.1f)) / 3f;
+
             /// <summary>A lumpy, squashed sphere (a subdivided icosahedron with its corners pushed about).</summary>
             public void AddBlob(int submesh, Vector3 centre, Vector3 size, System.Random random, float lumpiness)
             {
-                Icosphere(out var points, out var faces);
+                Icosphere(1, out var points, out var faces);
                 for (int i = 0; i < points.Count; i++)
                 {
                     float push = 1f + ((float)random.NextDouble() * 2f - 1f) * lumpiness;
@@ -257,6 +520,17 @@ namespace Oxfall.Game.World
             public Mesh Build(string name, float smoothAngle = 0f)
             {
                 if (smoothAngle > 0f) SmoothNormals(smoothAngle);
+                int offset = _vertices.Count;
+                _vertices.AddRange(_cardVertices);
+                _normals.AddRange(_cardNormals);
+                _uvs.AddRange(_cardUvs);
+                for (int t = 0; t < _cardSubmesh.Count; t++)
+                {
+                    var list = _triangles[_cardSubmesh[t]];
+                    list.Add(offset + _cardTriangles[t * 3]);
+                    list.Add(offset + _cardTriangles[t * 3 + 1]);
+                    list.Add(offset + _cardTriangles[t * 3 + 2]);
+                }
                 var mesh = new Mesh { name = name };
                 if (_vertices.Count > 65000) mesh.indexFormat = IndexFormat.UInt32;
                 mesh.SetVertices(_vertices);
@@ -301,7 +575,7 @@ namespace Oxfall.Game.World
                 return new Vector3(Mathf.Cos(a) * radius, 0f, Mathf.Sin(a) * radius);
             }
 
-            private static void Icosphere(out List<Vector3> points, out List<int> faces)
+            private static void Icosphere(int subdivisions, out List<Vector3> points, out List<int> faces)
             {
                 float t = (1f + Mathf.Sqrt(5f)) / 2f;
                 points = new List<Vector3>
@@ -319,16 +593,21 @@ namespace Oxfall.Game.World
                     4, 9, 5, 2, 4, 11, 6, 2, 10, 8, 6, 7, 9, 8, 1,
                 };
 
-                // One subdivision: 80 faces, enough to look like a rock and still cheap.
-                faces = new List<int>(baseFaces.Count * 4);
-                var midpoints = new Dictionary<long, int>();
-                for (int f = 0; f < baseFaces.Count; f += 3)
+                // Each subdivision splits every face in four: 80 faces after one, 320 after two.
+                faces = baseFaces;
+                for (int s = 0; s < subdivisions; s++)
                 {
-                    int a = baseFaces[f], b = baseFaces[f + 1], c = baseFaces[f + 2];
-                    int ab = Midpoint(points, midpoints, a, b);
-                    int bc = Midpoint(points, midpoints, b, c);
-                    int ca = Midpoint(points, midpoints, c, a);
-                    faces.AddRange(new[] { a, ab, ca, b, bc, ab, c, ca, bc, ab, bc, ca });
+                    var finer = new List<int>(faces.Count * 4);
+                    var midpoints = new Dictionary<long, int>();
+                    for (int f = 0; f < faces.Count; f += 3)
+                    {
+                        int a = faces[f], b = faces[f + 1], c = faces[f + 2];
+                        int ab = Midpoint(points, midpoints, a, b);
+                        int bc = Midpoint(points, midpoints, b, c);
+                        int ca = Midpoint(points, midpoints, c, a);
+                        finer.AddRange(new[] { a, ab, ca, b, bc, ab, c, ca, bc, ab, bc, ca });
+                    }
+                    faces = finer;
                 }
             }
 

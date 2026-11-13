@@ -1,5 +1,6 @@
 using UnityEditor;
 using UnityEngine;
+using UnityEngine.Rendering;
 
 namespace Oxfall.Editor
 {
@@ -27,11 +28,16 @@ namespace Oxfall.Editor
             MakeLit("OxfallPlanks", "weathered_planks", new Color(1.05f, 0.98f, 0.90f), 0.08f);
             MakeGround();
             MakeWater();
+            MakeFoliage();
             AssetDatabase.SaveAssets();
             Debug.Log("[Oxfall] Art materials made from the CC0 textures.");
         }
 
-        /// <summary>512 px, tiling, mipmapped and compressed; "_nor_gl" files are normal maps.</summary>
+        /// <summary>
+        /// 512 px, mipmapped and compressed; "_nor_gl" files are normal maps. PNG files are leaf
+        /// cut-outs: their alpha is kept, their mipmaps keep the same coverage (so trees don't go
+        /// bald in the distance) and they don't tile.
+        /// </summary>
         private static void ConfigureImports()
         {
             foreach (var guid in AssetDatabase.FindAssets("t:Texture2D", new[] { TexturesFolder }))
@@ -41,17 +47,27 @@ namespace Oxfall.Editor
                 if (importer == null) continue;
 
                 bool normal = path.Contains("_nor_gl");
+                bool cutout = path.EndsWith(".png");
                 var type = normal ? TextureImporterType.NormalMap : TextureImporterType.Default;
+                var wrap = cutout ? TextureWrapMode.Clamp : TextureWrapMode.Repeat;
                 if (importer.textureType == type && importer.maxTextureSize == 512 && importer.mipmapEnabled
-                    && importer.wrapMode == TextureWrapMode.Repeat && importer.anisoLevel == 4
-                    && importer.sRGBTexture == !normal)
+                    && importer.wrapMode == wrap && importer.anisoLevel == 4
+                    && importer.sRGBTexture == !normal && importer.alphaIsTransparency == cutout
+                    && importer.mipMapsPreserveCoverage == cutout)
                     continue;
 
                 importer.textureType = type;
                 importer.sRGBTexture = !normal;
                 importer.maxTextureSize = 512;
                 importer.mipmapEnabled = true;
-                importer.wrapMode = TextureWrapMode.Repeat;
+                importer.wrapMode = wrap;
+                importer.alphaIsTransparency = cutout;
+                importer.mipMapsPreserveCoverage = cutout;
+                if (cutout)
+                {
+                    importer.alphaSource = TextureImporterAlphaSource.FromInput;
+                    importer.alphaTestReferenceValue = 0.5f;
+                }
                 importer.anisoLevel = 4;
                 importer.textureCompression = TextureImporterCompression.Compressed;
                 importer.SaveAndReimport();
@@ -129,6 +145,37 @@ namespace Oxfall.Editor
             else Debug.LogWarning($"[Oxfall] Ground layer {id} is missing.");
             var normal = Load(id, "nor_gl");
             if (normal != null) material.SetTexture(property + "Normal", normal);
+        }
+
+        /// <summary>
+        /// Leaves for the foliage cards: URP Lit, cut out by the alpha of the leaf atlas, both faces
+        /// drawn. Saved as an asset so the build keeps the alpha-test shader variants.
+        /// </summary>
+        private static void MakeFoliage()
+        {
+            var atlas = AssetDatabase.LoadAssetAtPath<Texture2D>($"{TexturesFolder}/jacaranda_tree/jacaranda_tree_leaves.png");
+            if (atlas == null)
+            {
+                Debug.LogWarning("[Oxfall] Leaf atlas missing; trees keep their plain crowns.");
+                return;
+            }
+            var shader = Shader.Find("Universal Render Pipeline/Lit");
+            if (shader == null) return;
+
+            var material = LoadOrCreate("OxfallFoliage", shader);
+            material.SetTexture("_BaseMap", atlas);
+            material.SetColor("_BaseColor", Color.white);
+            material.SetFloat("_Smoothness", 0.1f);
+            material.SetFloat("_Metallic", 0f);
+            material.SetFloat("_AlphaClip", 1f);
+            material.SetFloat("_Cutoff", 0.5f);
+            material.EnableKeyword("_ALPHATEST_ON");
+            material.SetFloat("_Cull", (float)CullMode.Off);
+            material.doubleSidedGI = true;
+            material.SetOverrideTag("RenderType", "TransparentCutout");
+            material.renderQueue = (int)RenderQueue.AlphaTest;
+            material.enableInstancing = true;
+            EditorUtility.SetDirty(material);
         }
 
         /// <summary>The sea. Its ripple texture is made by the game at start-up.</summary>

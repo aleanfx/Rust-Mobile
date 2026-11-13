@@ -107,14 +107,18 @@ namespace Oxfall.Game.World
             var random = new System.Random(seed * 31 + 7);
             var shape = world.Shape;
 
+            // Meshes draw from their own random numbers, so where things stand (which every player
+            // must agree on) never depends on how they are drawn.
+            var shapes = new System.Random(seed * 17 + 3);
+            bool cards = materials.HasFoliage;
             var pines = new Mesh[4];
-            for (int i = 0; i < pines.Length; i++) pines[i] = MeshFactory.Pine(random);
+            for (int i = 0; i < pines.Length; i++) pines[i] = MeshFactory.Pine(shapes, cards);
             var broadleaves = new Mesh[3];
-            for (int i = 0; i < broadleaves.Length; i++) broadleaves[i] = MeshFactory.Broadleaf(random);
+            for (int i = 0; i < broadleaves.Length; i++) broadleaves[i] = MeshFactory.Broadleaf(shapes, cards);
             var rocks = new Mesh[4];
-            for (int i = 0; i < rocks.Length; i++) rocks[i] = MeshFactory.Rock(random);
+            for (int i = 0; i < rocks.Length; i++) rocks[i] = MeshFactory.Rock(shapes);
             var hemps = new Mesh[2];
-            for (int i = 0; i < hemps.Length; i++) hemps[i] = MeshFactory.Hemp(random);
+            for (int i = 0; i < hemps.Length; i++) hemps[i] = MeshFactory.Hemp(shapes);
 
             var parent = new GameObject("Resources").transform;
             parent.SetParent(world.Root, false);
@@ -151,7 +155,12 @@ namespace Oxfall.Game.World
                     var leaves = pine ? materials.Needles[random.Next(materials.Needles.Length)]
                                       : materials.Leaves[random.Next(materials.Leaves.Length)];
                     float scale = 0.8f + (float)random.NextDouble() * 0.5f;
-                    var go = MakeNode(pine ? "Pine" : "Tree", mesh, new[] { materials.Bark, leaves },
+                    var treeMaterials = cards
+                        ? new[] { materials.Bark, leaves, pine
+                            ? materials.NeedleCards[nextId % materials.NeedleCards.Length]
+                            : materials.LeafCards[nextId % materials.LeafCards.Length] }
+                        : new[] { materials.Bark, leaves };
+                    var go = MakeNode(pine ? "Pine" : "Tree", mesh, treeMaterials,
                         position - new Vector3(0f, 0.2f, 0f), yaw, Vector3.one * scale, parent);
                     var capsule = go.AddComponent<CapsuleCollider>();
                     capsule.center = new Vector3(0f, 2.5f, 0f);

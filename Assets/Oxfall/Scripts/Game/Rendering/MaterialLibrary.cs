@@ -16,6 +16,7 @@ namespace Oxfall.Game.Rendering
         public const string BaseMaterialResource = "OxfallLit";
         public const string GroundMaterialResource = "OxfallGround";
         public const string TexturedGroundResource = "OxfallTerrain";
+        public const string FoliageResource = "OxfallFoliage";
 
         private static readonly int BaseColor = Shader.PropertyToID("_BaseColor");
         private static readonly int BaseMap = Shader.PropertyToID("_BaseMap");
@@ -33,6 +34,10 @@ namespace Oxfall.Game.Rendering
         public Material Bark { get; }
         public Material[] Needles { get; }
         public Material[] Leaves { get; }
+        /// <summary>Photo-leaf card materials for pines and broadleaf trees; null when not in the build.</summary>
+        public Material[] NeedleCards { get; }
+        public Material[] LeafCards { get; }
+        public bool HasFoliage => NeedleCards != null;
         public Material Stone { get; }
         public Material MetalOre { get; }
         public Material Hemp { get; }
@@ -58,17 +63,48 @@ namespace Oxfall.Game.Rendering
             Water = Textured("OxfallWater") ?? Make("Water", new Color(0.20f, 0.31f, 0.33f), 0.82f);
             if (Water.HasProperty(RippleMap)) Water.SetTexture(RippleMap, MakeRippleTexture());
             Bark = Textured("OxfallBark") ?? Make("Bark", new Color(0.34f, 0.27f, 0.20f), 0.04f);
-            Needles = new[]
+            var foliage = Resources.Load<Material>(FoliageResource);
+            if (foliage != null)
             {
-                Make("Needles A", new Color(0.22f, 0.30f, 0.19f), 0.06f),
-                Make("Needles B", new Color(0.28f, 0.36f, 0.22f), 0.06f),
-                Make("Needles C", new Color(0.25f, 0.32f, 0.18f), 0.06f),
-            };
-            Leaves = new[]
+                // Pines: the leaf photo darkened and cooled towards conifer green. Broadleaves: as shot.
+                NeedleCards = new[]
+                {
+                    Tinted(foliage, "Needle cards A", new Color(0.50f, 0.62f, 0.50f)),
+                    Tinted(foliage, "Needle cards B", new Color(0.56f, 0.66f, 0.50f)),
+                    Tinted(foliage, "Needle cards C", new Color(0.46f, 0.58f, 0.48f)),
+                };
+                LeafCards = new[]
+                {
+                    Tinted(foliage, "Leaf cards A", new Color(0.95f, 1.00f, 0.85f)),
+                    Tinted(foliage, "Leaf cards B", new Color(1.05f, 1.00f, 0.80f)),
+                };
+                // With cards, these are the dark cores inside the crowns: the shade between leaves.
+                Needles = new[]
+                {
+                    Make("Needles A", new Color(0.12f, 0.17f, 0.10f), 0.04f),
+                    Make("Needles B", new Color(0.14f, 0.19f, 0.11f), 0.04f),
+                    Make("Needles C", new Color(0.11f, 0.16f, 0.10f), 0.04f),
+                };
+                Leaves = new[]
+                {
+                    Make("Leaves A", new Color(0.17f, 0.22f, 0.11f), 0.04f),
+                    Make("Leaves B", new Color(0.20f, 0.25f, 0.12f), 0.04f),
+                };
+            }
+            else
             {
-                Make("Leaves A", new Color(0.33f, 0.40f, 0.22f), 0.06f),
-                Make("Leaves B", new Color(0.40f, 0.45f, 0.24f), 0.06f),
-            };
+                Needles = new[]
+                {
+                    Make("Needles A", new Color(0.22f, 0.30f, 0.19f), 0.06f),
+                    Make("Needles B", new Color(0.28f, 0.36f, 0.22f), 0.06f),
+                    Make("Needles C", new Color(0.25f, 0.32f, 0.18f), 0.06f),
+                };
+                Leaves = new[]
+                {
+                    Make("Leaves A", new Color(0.33f, 0.40f, 0.22f), 0.06f),
+                    Make("Leaves B", new Color(0.40f, 0.45f, 0.24f), 0.06f),
+                };
+            }
             Stone = Textured("OxfallStone") ?? Make("Stone", new Color(0.47f, 0.45f, 0.42f), 0.10f);
             MetalOre = Textured("OxfallOre") ?? Make("Metal ore", new Color(0.50f, 0.33f, 0.22f), 0.22f);
             Hemp = Make("Hemp", new Color(0.36f, 0.43f, 0.22f), 0.05f);
@@ -141,6 +177,13 @@ namespace Oxfall.Game.Rendering
             var material = Make("Grass", Color.white, 0f);
             material.SetTexture(BaseMap, texture);
             if (material.HasProperty(Cull)) material.SetFloat(Cull, 0f); // both faces
+            return material;
+        }
+
+        private static Material Tinted(Material source, string name, Color tint)
+        {
+            var material = new Material(source) { name = name };
+            material.SetColor(BaseColor, tint);
             return material;
         }
 
