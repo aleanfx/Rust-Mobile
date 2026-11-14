@@ -36,6 +36,7 @@ namespace Oxfall.Core.Net
 
             player.LastHitTime = now;
             s.Inventory.Remove(ItemIds.Arrow, 1);
+            Spend(record, player, ToolKind.Bow);
             if (!_arrows.TryGetValue(playerId, out var flying)) _arrows[playerId] = flying = new Queue<(float, float, float, float)>();
             flying.Enqueue((x, y, z, now));
             while (flying.Count > MaxArrowsInFlight) flying.Dequeue();

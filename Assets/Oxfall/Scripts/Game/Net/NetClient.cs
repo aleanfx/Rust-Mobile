@@ -148,6 +148,9 @@ namespace Oxfall.Game.Net
         /// <summary>The blueprints this player has learned, as the server says (on joining and after learning one).</summary>
         public event Action<List<string>> BlueprintsSeen;
 
+        /// <summary>A tool or weapon of this player's wore out and broke (its item id).</summary>
+        public event Action<string> Broke;
+
         private readonly List<string> _blueprints = new List<string>();
 
         /// <summary>The weather as the server says it is: rain and fog, 0..1 each.</summary>
@@ -574,6 +577,9 @@ namespace Oxfall.Game.Net
                     WeatherSeen?.Invoke(rain, fog);
                     break;
                 }
+                case MessageType.Broke:
+                    Broke?.Invoke(Messages.ReadBroke(reader));
+                    break;
                 case MessageType.Blueprints:
                 {
                     Messages.ReadBlueprints(reader, _blueprints);

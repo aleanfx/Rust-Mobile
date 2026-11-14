@@ -51,6 +51,7 @@ namespace Oxfall.Core.Net
 
             s.Inventory.Remove(gun.Ammo, 1);
             state.Fire(gun, now);
+            Spend(record, player, tool);
             _lastShot[playerId] = new Shot { Gun = gun, X = x, Y = y, Z = z, Yaw = yaw, Pitch = pitch, Time = now, PelletsLeft = gun.Pellets };
             return true;
         }

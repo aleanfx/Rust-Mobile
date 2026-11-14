@@ -206,6 +206,15 @@ namespace Oxfall.Core.Net
             return itemId;
         }
 
+        /// <summary>Tools and weapons that broke since the last tick: whose (player id) and what.</summary>
+        public List<(ushort PlayerId, string ItemId)> Broken { get; } = new List<(ushort, string)>();
+
+        /// <summary>A use of the tool or weapon of this kind a player has in hand: it wears, and may break.</summary>
+        private void Spend(SurvivorRecord record, ServerState.Player player, ToolKind tool)
+        {
+            if (record.Survivor.UseTool(tool, player.Held, out string broke)) Broken.Add((record.PlayerId, broke));
+        }
+
         /// <summary>A player goes away; their survivor stays where they stood, asleep (see <see cref="Sleepers"/>).</summary>
         public void Leave(ushort playerId)
         {
@@ -270,6 +279,7 @@ namespace Oxfall.Core.Net
                 _yields.Add((y.ItemId, y.Amount));
                 lost += record.Survivor.Inventory.Add(y.ItemId, y.Amount);
             }
+            if (_yields.Count > 0) Spend(record, player, tool);
             return _yields;
         }
 
@@ -295,6 +305,7 @@ namespace Oxfall.Core.Net
             if (attacker.Pose.HorizontalDistance(target.Pose) > reach || Math.Abs(attacker.Pose.Y - target.Pose.Y) > 2.2f) return false;
 
             attacker.LastHitTime = now;
+            Spend(a, attacker, tool);
             damage = t.Survivor.TakeHit(Combat.MeleeDamage(tool));
             killed = t.Survivor.Vitals.IsDead;
             return true;

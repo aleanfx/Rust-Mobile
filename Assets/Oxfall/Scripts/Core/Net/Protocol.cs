@@ -12,7 +12,7 @@ namespace Oxfall.Core.Net
     public static class Protocol
     {
         /// <summary>Raised whenever a message changes shape; a client of another version is turned away.</summary>
-        public const ushort Version = 16;
+        public const ushort Version = 17;
 
         /// <summary>Snapshots per second the server sends.</summary>
         public const int TickRate = 20;
@@ -174,6 +174,8 @@ namespace Oxfall.Core.Net
         Blueprints = 61,
         /// <summary>The weather now: rain and fog, a byte each (0..255 for 0..1).</summary>
         Weather = 62,
+        /// <summary>A tool or weapon of this player's wore out and broke (its item id).</summary>
+        Broke = 63,
     }
 
     /// <summary>What a player does to their own belongings (inside an <see cref="MessageType.Act"/> message).</summary>
@@ -569,6 +571,7 @@ namespace Oxfall.Core.Net
             w.String(stack.ItemId, 64);
             w.UShort((ushort)Math.Min(ushort.MaxValue, stack.Amount));
             w.Int(stack.SkinId);
+            w.UShort((ushort)Math.Min(ushort.MaxValue, stack.Used));
         }
 
         private static (int, Items.ItemStack) ReadStack(NetReader r)
@@ -578,7 +581,8 @@ namespace Oxfall.Core.Net
             if (id.Length == 0) return (slot, Items.ItemStack.Empty);
             int amount = r.UShort();
             int skin = r.Int();
-            return (slot, amount > 0 ? new Items.ItemStack(id, amount, skin) : Items.ItemStack.Empty);
+            int used = r.UShort();
+            return (slot, amount > 0 ? new Items.ItemStack(id, amount, skin, used) : Items.ItemStack.Empty);
         }
 
         /// <summary>Inventory slots that changed: (slot, stack), an empty item id for an empty slot.</summary>
@@ -598,6 +602,7 @@ namespace Oxfall.Core.Net
                 w.String(stack.ItemId, 64);
                 w.UShort((ushort)Math.Min(ushort.MaxValue, stack.Amount));
                 w.Int(stack.SkinId);
+                w.UShort((ushort)Math.Min(ushort.MaxValue, stack.Used));
             }
         }
 
@@ -616,7 +621,8 @@ namespace Oxfall.Core.Net
                 }
                 int amount = r.UShort();
                 int skin = r.Int();
-                into.Add((slot, amount > 0 ? new Items.ItemStack(id, amount, skin) : Items.ItemStack.Empty));
+                int used = r.UShort();
+                into.Add((slot, amount > 0 ? new Items.ItemStack(id, amount, skin, used) : Items.ItemStack.Empty));
             }
         }
 
@@ -673,7 +679,17 @@ namespace Oxfall.Core.Net
             water = r.Float();
         }
 
-        /// <summary>The island's clock (0 to 24), so everyone has the same day and night.</summary>
+        /// <summary>A tool or weapon of the player's wore out and broke.</summary>
+        public static void Broke(NetWriter w, string itemId)
+        {
+            w.Reset();
+            w.Byte((byte)MessageType.Broke);
+            w.String(itemId ?? "", 64);
+        }
+
+        public static string ReadBroke(NetReader r) => r.String();
+
+        /// <summary>The weather now: how much rain and how much fog.</summary>
         public static void Weather(NetWriter w, float rain, float fog)
         {
             w.Reset();

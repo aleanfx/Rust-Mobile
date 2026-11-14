@@ -390,6 +390,7 @@ namespace Oxfall.Game.Player
             bool full = false;
             foreach (var y in yields) full |= _inventory.Add(y.ItemId, y.Amount) > 0;
             if (full) Message?.Invoke("Inventario lleno: parte se perdió");
+            Actions?.Spend(_hotbar.HeldTool);
         }
 
         private void PlayHitSound(ResourceNodeType type) =>

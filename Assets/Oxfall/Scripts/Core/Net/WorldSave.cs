@@ -15,7 +15,10 @@ namespace Oxfall.Core.Net
     public sealed partial class ServerWorld
     {
         /// <summary>Raised whenever the save's layout changes; older saves are then not loaded.</summary>
-        public const ushort SaveVersion = 4;
+        public const ushort SaveVersion = 5;
+
+        /// <summary>The layout of the save being read (4 had no tool wear).</summary>
+        private int _reading = SaveVersion;
 
         private static readonly byte[] Magic = { (byte)'O', (byte)'X', (byte)'S', (byte)'V' };
 
@@ -128,6 +131,7 @@ namespace Oxfall.Core.Net
                 if (stack.IsEmpty) continue;
                 w.UShort((ushort)stack.Amount);
                 w.Int(stack.SkinId);
+                w.UShort((ushort)Math.Min(ushort.MaxValue, stack.Used));
             }
         }
 
@@ -142,8 +146,10 @@ namespace Oxfall.Core.Net
                 if (item.Length == 0) continue;
                 int amount = r.UShort();
                 int skin = r.Int();
+                // How worn a tool is came with layout 5.
+                int used = _reading >= 5 ? r.UShort() : 0;
                 if (Catalog.TryGet(item, out var def) && slot < slotLimit)
-                    into.Add((slot, new ItemStack(item, Math.Min(amount, def.MaxStack), skin)));
+                    into.Add((slot, new ItemStack(item, Math.Min(amount, def.MaxStack), skin, used)));
             }
         }
 
@@ -159,7 +165,8 @@ namespace Oxfall.Core.Net
             {
                 foreach (byte b in Magic)
                     if (r.Byte() != b) { why = "not an Oxfall save"; return false; }
-                if (r.UShort() != SaveVersion) { why = "an older save layout"; return false; }
+                _reading = r.UShort();
+                if (_reading != SaveVersion && _reading != 4) { why = "an older save layout"; return false; }
                 int seed = r.Int();
                 if (seed != Seed) { why = $"seed {seed}, another wipe"; return false; }
                 if (_records.Count > 0 || Settlement.Grid.PieceCount > 0 || Settlement.DeployableCount > 0) { why = "the world is not fresh"; return false; }

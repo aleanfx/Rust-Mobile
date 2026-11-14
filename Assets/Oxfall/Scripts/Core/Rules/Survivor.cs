@@ -72,6 +72,46 @@ namespace Oxfall.Core.Rules
             return done;
         }
 
+        /// <summary>A tool or weapon of theirs wore out and broke (its item id).</summary>
+        public event Action<string> ToolBroke;
+
+        /// <summary>
+        /// A tool or weapon of this kind was used (a swing that landed, an arrow loosed, a shot): the one
+        /// in hand wears, the item <paramref name="held"/> if it is that, else the first such carried
+        /// (the hotbar comes first). True if it broke.
+        /// </summary>
+        public bool UseTool(ToolKind tool, string held, out string broke)
+        {
+            broke = null;
+            if (tool == ToolKind.None) return false;
+            int slot = -1;
+            for (int i = 0; i < Inventory.SlotCount; i++)
+            {
+                var stack = Inventory[i];
+                if (stack.IsEmpty || !Inventory.Catalog.TryGet(stack.ItemId, out var def) || def.Tool != tool) continue;
+                if (slot < 0) slot = i;
+                if (stack.ItemId == held)
+                {
+                    slot = i;
+                    break;
+                }
+            }
+            if (slot < 0) return false;
+            broke = Inventory[slot].ItemId;
+            if (UseSlot(slot)) return true;
+            broke = null;
+            return false;
+        }
+
+        /// <summary>The tool or weapon in this slot was used: it wears. True if it broke.</summary>
+        public bool UseSlot(int slot)
+        {
+            string item = Inventory[slot].ItemId;
+            if (!Inventory.Spend(slot)) return false;
+            ToolBroke?.Invoke(item);
+            return true;
+        }
+
         /// <summary>Whether they carry something that works as this tool (bare hands always do).</summary>
         public bool HasTool(ToolKind tool)
         {

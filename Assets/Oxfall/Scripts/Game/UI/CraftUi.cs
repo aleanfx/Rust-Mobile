@@ -52,6 +52,7 @@ namespace Oxfall.Game.UI
         {
             switch (itemId)
             {
+                case ItemIds.Rock:
                 case ItemIds.StoneHatchet:
                 case ItemIds.StonePickaxe:
                 case ItemIds.MetalHatchet:

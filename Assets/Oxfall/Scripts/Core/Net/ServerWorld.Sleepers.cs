@@ -67,6 +67,7 @@ namespace Oxfall.Core.Net
             if (attacker.Pose.HorizontalDistance(sleeper.Pose) > reach || Math.Abs(attacker.Pose.Y - sleeper.Pose.Y) > 2.2f) return false;
 
             attacker.LastHitTime = now;
+            Spend(a, attacker, tool);
             return HurtSleeper(sleeper, Combat.MeleeDamage(tool), a.Name, out damage, out killed);
         }
 

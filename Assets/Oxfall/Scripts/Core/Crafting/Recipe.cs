@@ -100,6 +100,8 @@ namespace Oxfall.Core.Crafting
         /// <summary>The MVP recipes. Costs follow the survival-genre baseline so veterans feel at home.</summary>
         public static RecipeBook CreateDefault(ItemCatalog catalog) => new RecipeBook(catalog, new[]
         {
+            // A rock wears out like any tool: another is only some stone.
+            new Recipe("rock", ItemIds.Rock, 1, 5f, new Ingredient(ItemIds.Stone, 10)),
             new Recipe("stone_hatchet", ItemIds.StoneHatchet, 1, 10f,
                 new Ingredient(ItemIds.Wood, 200), new Ingredient(ItemIds.Stone, 100)),
             new Recipe("stone_pickaxe", ItemIds.StonePickaxe, 1, 10f,

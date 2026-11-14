@@ -66,12 +66,14 @@ namespace Oxfall.Core.Net
                 player.LastHitTime = now;
                 var yields = Fauna.Harvest(animalId, tool);
                 if (yields.Length == 0) return AnimalBlow.NeedsBlade;
+                Spend(record, player, tool);
                 foreach (var (item, amount) in yields)
                     if (amount > 0) lost += record.Survivor.Inventory.Add(item, amount);
                 return animal.Carcass > 0 ? AnimalBlow.Cut : AnimalBlow.UsedUp;
             }
             if (!Combat.CanHurt(tool)) return AnimalBlow.None;
             player.LastHitTime = now;
+            Spend(record, player, tool);
             damage = Math.Min(Combat.MeleeDamage(tool), animal.Health);
             return Fauna.Hit(animalId, Combat.MeleeDamage(tool), playerId, player.Pose.X, player.Pose.Z) ? AnimalBlow.Killed : AnimalBlow.Hurt;
         }

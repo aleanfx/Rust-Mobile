@@ -41,6 +41,20 @@ namespace Oxfall.Game.Net
         /// <summary>The island's animals when playing alone (online the server keeps them).</summary>
         public Fauna Fauna { get; set; }
 
+        /// <summary>The hotbar, for which tool is in hand when one wears (alone; online the server wears it).</summary>
+        public Hotbar Hotbar { get; set; }
+
+        /// <summary>
+        /// A use of the tool or weapon of this kind in hand (a swing that landed, an arrow, a shot): alone
+        /// it wears here, and may break; online the server wears it and says when one breaks.
+        /// </summary>
+        public void Spend(ToolKind tool)
+        {
+            if (Online || tool == ToolKind.None) return;
+            if (Hotbar != null && Hotbar.HeldTool == tool && Inventory.IsHotbarSlot(Hotbar.Selected)) _survivor.UseSlot(Hotbar.Selected);
+            else _survivor.UseTool(tool, null, out _);
+        }
+
         /// <summary>What a blow at an animal did (its id, the blow, the damage): at once alone, when the server says online.</summary>
         public event System.Action<int, AnimalBlow, float> AnimalHit;
 
@@ -68,12 +82,14 @@ namespace Oxfall.Game.Net
                     foreach (var (item, amount) in yields)
                         if (amount > 0) Inventory.Add(item, amount);
                     blow = animal.Carcass > 0 ? AnimalBlow.Cut : AnimalBlow.UsedUp;
+                    Spend(tool);
                 }
             }
             else
             {
                 if (!Combat.CanHurt(tool)) return;
                 damage = Mathf.Min(Combat.MeleeDamage(tool), animal.Health);
+                Spend(tool);
                 var p = _player.position;
                 blow = Fauna.Hit(id, Combat.MeleeDamage(tool), 0, p.x, p.z) ? AnimalBlow.Killed : AnimalBlow.Hurt;
             }
@@ -93,6 +109,7 @@ namespace Oxfall.Game.Net
                 return true;
             }
             Inventory.Remove(ItemIds.Arrow, 1);
+            Spend(ToolKind.Bow);
             _shots.Enqueue(new Vector3(origin.x, origin.y, origin.z));
             while (_shots.Count > 6) _shots.Dequeue();
             return true;
@@ -130,6 +147,7 @@ namespace Oxfall.Game.Net
                 return true;
             }
             Inventory.Remove(gun.Ammo, 1);
+            Spend(tool);
             _lastGun = gun;
             _lastGunFrom = origin;
             _lastGunAt = Time.time;

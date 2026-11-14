@@ -329,6 +329,9 @@ namespace Oxfall.Game
             _crafting.Overflow = (itemId, amount) => _hud.ShowToast("Inventario lleno");
             _hud.BuildCraftPanel(_recipes, _catalog, _inventory, _crafting, TryCraft, r => _survivor.Knows(r), TryLearn);
             _survivor.LearnedChanged += _hud.RefreshCraftPanel;
+            // A tool or weapon worn out (alone it wears here; online the server says).
+            _actions.Hotbar = _hotbar;
+            _survivor.ToolBroke += ToolBroke;
             _hud.NearWorkbench = () =>
             {
                 var p = _player.transform.position;
@@ -586,6 +589,7 @@ namespace Oxfall.Game
             _net.AnimalsSeen += animals => _animalViews.Apply(animals);
             _net.AirdropSeen += drop => _airdropViews.Add(drop);
             _net.WeatherSeen += (rain, fog) => _weather.SetTarget(rain, fog);
+            _net.Broke += ToolBroke;
             // What this player has learned; one more than before is one just learned.
             _net.BlueprintsSeen += ids =>
             {
@@ -1286,6 +1290,16 @@ namespace Oxfall.Game
             Debug.Log("[Oxfall] Opened box " + id);
         }
 
+        /// <summary>A tool or weapon wore out: a crack, and a word on what broke.</summary>
+        private void ToolBroke(string itemId)
+        {
+            string name = _inventory.Catalog.TryGet(itemId, out var def) ? def.DisplayName : itemId;
+            bool metal = itemId == ItemIds.MetalHatchet || itemId == ItemIds.MetalPickaxe || itemId == ItemIds.Revolver || itemId == ItemIds.Blunderbuss;
+            _audio.Play(metal ? SoundCue.Metal : SoundCue.Wood);
+            _hud.ShowToast($"Se rompió: {name}. Fabrica otro");
+            Debug.Log("[Oxfall] Broke " + itemId);
+        }
+
         private void OpenCupboard(int id)
         {
             _inventoryUi.Close();
@@ -1501,6 +1515,17 @@ namespace Oxfall.Game
                     if (!_actions.Online) _settlement.Upkeep.Hurry();
                     break;
                 case "close-cupboard": _cupboard.Close(); break;
+                case "worn-held":
+                    // Test, alone: the tool in hand is two uses from breaking.
+                    if (!_actions.Online && Inventory.IsHotbarSlot(_hotbar.Selected) && Durability.Wears(_hotbar.Held.ItemId))
+                        _inventory.SetSlot(_hotbar.Selected, _hotbar.Held.WithUsed(Durability.Uses(_hotbar.Held.ItemId) - 2));
+                    break;
+                case "half-worn":
+                    // Test, alone: everything that wears is half used.
+                    for (int i = 0; i < _inventory.SlotCount; i++)
+                        if (!_actions.Online && Durability.Wears(_inventory[i].ItemId))
+                            _inventory.SetSlot(i, _inventory[i].WithUsed(Durability.Uses(_inventory[i].ItemId) * (i % 3 + 1) / 4));
+                    break;
                 case "put-materials":
                     // Test: the first stack of wood and of stone carried go into the open box.
                     foreach (string material in new[] { ItemIds.Wood, ItemIds.Stone })

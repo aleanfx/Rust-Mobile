@@ -149,6 +149,14 @@ namespace Oxfall.Server
                         Broadcast(writer.ToArray());
                     }
                     _world.Bites.Clear();
+                    // A tool or weapon that wore out: its owner is told (the slot itself follows in their update).
+                    foreach (var (owner, item) in _world.Broken)
+                        if (_sessions.TryGetValue(owner, out var broke))
+                        {
+                            Messages.Broke(writer, item);
+                            broke.Connection.Send(writer.ToArray());
+                        }
+                    _world.Broken.Clear();
                     // A supply plane set off: everyone sees it cross and the crate come down.
                     foreach (var drop in _world.AirdropsStarted)
                     {

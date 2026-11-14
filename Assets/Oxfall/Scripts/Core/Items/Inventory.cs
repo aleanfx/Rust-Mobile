@@ -127,12 +127,12 @@ namespace Oxfall.Core.Items
         /// Adds as much as fits: first onto matching stacks, then into empty slots. Tools and
         /// placeables prefer the hotbar; resources prefer the backpack. Returns the amount that did not fit.
         /// </summary>
-        public int Add(string itemId, int amount, int skinId = 0)
+        public int Add(string itemId, int amount, int skinId = 0, int used = 0)
         {
             if (amount < 0) throw new ArgumentOutOfRangeException(nameof(amount));
             if (amount == 0) return 0;
             var def = _catalog.Get(itemId);
-            var probe = new ItemStack(itemId, 1, skinId);
+            var probe = new ItemStack(itemId, 1, skinId, used);
             int remaining = amount;
             bool changed = false;
 
@@ -152,7 +152,7 @@ namespace Oxfall.Core.Items
                 if (remaining <= 0) break;
                 if (!_slots[i].IsEmpty) continue;
                 int put = Math.Min(def.MaxStack, remaining);
-                _slots[i] = new ItemStack(itemId, put, skinId);
+                _slots[i] = new ItemStack(itemId, put, skinId, used);
                 remaining -= put;
                 changed = true;
             }
@@ -219,6 +219,22 @@ namespace Oxfall.Core.Items
 
             Changed?.Invoke(-1);
             return true;
+        }
+
+        /// <summary>
+        /// One use of the tool or weapon in a slot: it wears a little, and once used up it breaks and the
+        /// slot is emptied (true then). False if it still holds, or wears not at all.
+        /// </summary>
+        public bool Spend(int slot)
+        {
+            CheckSlot(slot);
+            var stack = _slots[slot];
+            int uses = Durability.Uses(stack.ItemId);
+            if (stack.IsEmpty || uses <= 0) return false;
+            bool broke = stack.Used + 1 >= uses;
+            _slots[slot] = broke ? ItemStack.Empty : stack.WithUsed(stack.Used + 1);
+            Changed?.Invoke(slot);
+            return broke;
         }
 
         /// <summary>Removes up to <paramref name="amount"/> from one slot and returns what was taken.</summary>
@@ -303,7 +319,7 @@ namespace Oxfall.Core.Items
             from.CheckSlot(fromSlot);
             var moving = from._slots[fromSlot];
             if (moving.IsEmpty || ReferenceEquals(from, to)) return false;
-            int left = to.Add(moving.ItemId, moving.Amount, moving.SkinId);
+            int left = to.Add(moving.ItemId, moving.Amount, moving.SkinId, moving.Used);
             if (left == moving.Amount) return false;
             from._slots[fromSlot] = moving.WithAmount(left);
             from.Changed?.Invoke(fromSlot);

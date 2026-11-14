@@ -94,6 +94,9 @@ namespace Oxfall.Game.UI
             public Text Amount;
             /// <summary>A wear slot's outline of what goes there, shown while it is empty.</summary>
             public Image Placeholder;
+            /// <summary>For a tool or weapon, how much of it is left: a bar up its left side.</summary>
+            public RectTransform ConditionTrack;
+            public Image Condition;
         }
 
         private Text _protection;
@@ -420,6 +423,15 @@ namespace Oxfall.Game.UI
             if (view.Placeholder != null && view.Placeholder.enabled != stack.IsEmpty) view.Placeholder.enabled = stack.IsEmpty;
             var back = frame == Color.clear ? UiTheme.Slot : UiTheme.SlotHover;
             if (view.Back.color != back) view.Back.color = back;
+            bool wears = !stack.IsEmpty && Durability.Wears(stack.ItemId);
+            if (view.ConditionTrack.gameObject.activeSelf != wears) view.ConditionTrack.gameObject.SetActive(wears);
+            if (wears)
+            {
+                float left = Durability.Left(stack);
+                view.Condition.rectTransform.anchorMax = new Vector2(1f, left);
+                var tint = ConditionColour(left);
+                if (view.Condition.color != tint) view.Condition.color = tint;
+            }
             if (stack.IsEmpty)
             {
                 view.Icon.enabled = false;
@@ -459,6 +471,9 @@ namespace Oxfall.Game.UI
             bool worn = _inventory.IsWearSlot(_picked);
             _detail.text = def.Description
                            + (attire ? $"\n\nProtege {Mathf.RoundToInt(def.Protection * 100f)} % de cada golpe, flecha o mordisco." : "")
+                           + (Durability.Wears(stack.ItemId)
+                               ? $"\n\nEstado: {Mathf.CeilToInt(Durability.Left(stack) * 100f)} %. Se gasta con el uso y al final se rompe."
+                               : "")
                            + "\n\nToca otra casilla para moverlo.";
             _quickLabel.text = worn ? "QUITAR" : attire ? "PONER" : Inventory.IsHotbarSlot(_picked) ? "A LA MOCHILA" : "A LA BARRA";
         }
@@ -676,10 +691,25 @@ namespace Oxfall.Game.UI
                 UiFactory.AddText(key, number.ToString(), 20, TextAnchor.UpperLeft, UiTheme.TextFaint, true);
             }
 
+            // How much of a tool or weapon is left, up its left side (hidden for anything that never wears).
+            var leftMiddle = new Vector2(0f, 0.5f);
+            view.ConditionTrack = UiFactory.NewRect("Condition", view.Rect, leftMiddle, leftMiddle, new Vector2(7f, 0f), new Vector2(7f, SlotSize - 26f));
+            UiFactory.AddImage(view.ConditionTrack, null, new Color(0f, 0f, 0f, 0.4f));
+            var fill = UiFactory.NewRect("Fill", view.ConditionTrack, Vector2.zero, Vector2.zero, Vector2.zero, Vector2.zero);
+            fill.anchorMin = Vector2.zero;
+            fill.anchorMax = Vector2.one;
+            fill.offsetMin = fill.offsetMax = Vector2.zero;
+            view.Condition = UiFactory.AddImage(fill, null, UiTheme.Good);
+            view.ConditionTrack.gameObject.SetActive(false);
+
             // The frame: an outline over the slot, in a colour when chosen.
             var frame = UiFactory.NewRect("Frame", view.Rect, half, half, Vector2.zero, new Vector2(SlotSize, SlotSize));
             view.Frame = UiFactory.AddImage(frame, UiFactory.Outline, Color.clear);
             return view;
         }
+
+        /// <summary>A tool's condition bar: green while it is good, orange as it wears, red near the end.</summary>
+        private static Color ConditionColour(float left) =>
+            left > 0.5f ? UiTheme.Good : left > 0.2f ? UiTheme.Accent : UiTheme.Bad;
     }
 }
