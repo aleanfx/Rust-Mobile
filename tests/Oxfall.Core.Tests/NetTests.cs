@@ -71,10 +71,14 @@ namespace Oxfall.Core.Tests
         public void HelloAndMoveRoundTrip()
         {
             var w = new NetWriter();
-            Messages.Hello(w, "Ale");
-            Messages.ReadHello(After(w, MessageType.Hello), out var version, out var name);
+            Messages.Hello(w, "Ale", "0123456789abcdef0123456789abcdef");
+            Messages.ReadHello(After(w, MessageType.Hello), out var version, out var name, out var token);
             Assert.AreEqual(Protocol.Version, version);
             Assert.AreEqual("Ale", name);
+            Assert.AreEqual("0123456789abcdef0123456789abcdef", token);
+            Assert.IsTrue(Protocol.IsValidToken(token));
+            Assert.IsFalse(Protocol.IsValidToken("short"));
+            Assert.IsFalse(Protocol.IsValidToken("0123456789abcdef0123456789abcde!"));
 
             Messages.Move(w, new Pose(1f, 2f, 3f, 90f), true);
             Messages.ReadMove(After(w, MessageType.Move), out var pose, out var teleport);
@@ -86,12 +90,12 @@ namespace Oxfall.Core.Tests
         public void ServerMessagesRoundTrip()
         {
             var w = new NetWriter();
-            Messages.Welcome(w, 7, 1234, 5.5f);
-            Messages.ReadWelcome(After(w, MessageType.Welcome), out var id, out var seed, out var time);
-            Assert.AreEqual((7, 1234, 5.5f), (id, seed, time));
+            Messages.Welcome(w, 7, 1234, 5.5f, new Pose(1f, 2f, 3f, 4f));
+            Messages.ReadWelcome(After(w, MessageType.Welcome), out var id, out var seed, out var time, out var pose);
+            Assert.AreEqual((7, 1234, 5.5f, new Pose(1f, 2f, 3f, 4f)), (id, seed, time, pose));
 
             Messages.Joined(w, 9, "Bea", new Pose(4f, 5f, 6f, 10f));
-            Messages.ReadJoined(After(w, MessageType.Joined), out id, out var name, out var pose);
+            Messages.ReadJoined(After(w, MessageType.Joined), out id, out var name, out pose);
             Assert.AreEqual((9, "Bea", new Pose(4f, 5f, 6f, 10f)), (id, name, pose));
 
             Messages.Left(w, 9);
@@ -123,8 +127,9 @@ namespace Oxfall.Core.Tests
 
         private static ServerState.Player Placed(ServerState s, string name, Pose at)
         {
-            var p = s.Join(Protocol.Version, name, 0f, out _);
-            Assert.IsTrue(s.ApplyMove(p.Id, at, false, 0f), "the first move places the player");
+            var p = s.Join(Protocol.Version, name, at, 0f, out _);
+            Assert.IsTrue(p.Placed, "the server places a player as they join");
+            Assert.AreEqual(at, p.Pose);
             return p;
         }
 
@@ -132,8 +137,8 @@ namespace Oxfall.Core.Tests
         public void PlayersJoinWithDistinctIdsAndCleanNames()
         {
             var s = new ServerState(42);
-            var a = s.Join(Protocol.Version, "Ale<script>", 0f, out var why);
-            var b = s.Join(Protocol.Version, "", 0f, out _);
+            var a = s.Join(Protocol.Version, "Ale<script>", Spawn, 0f, out var why);
+            var b = s.Join(Protocol.Version, "", Spawn, 0f, out _);
             Assert.IsNull(why);
             Assert.AreNotEqual(a.Id, b.Id);
             Assert.AreNotEqual(0, a.Id);
@@ -148,7 +153,7 @@ namespace Oxfall.Core.Tests
         public void AnotherVersionIsTurnedAway()
         {
             var s = new ServerState(42);
-            Assert.IsNull(s.Join((ushort)(Protocol.Version - 1), "Old", 0f, out var why));
+            Assert.IsNull(s.Join((ushort)(Protocol.Version - 1), "Old", Spawn, 0f, out var why));
             StringAssert.Contains("antigua", why);
             Assert.AreEqual(0, s.Count);
         }
@@ -157,8 +162,8 @@ namespace Oxfall.Core.Tests
         public void AFullServerTurnsPlayersAway()
         {
             var s = new ServerState(42);
-            for (int i = 0; i < Protocol.MaxPlayers; i++) Assert.IsNotNull(s.Join(Protocol.Version, "P" + i, 0f, out _));
-            Assert.IsNull(s.Join(Protocol.Version, "One more", 0f, out var why));
+            for (int i = 0; i < Protocol.MaxPlayers; i++) Assert.IsNotNull(s.Join(Protocol.Version, "P" + i, Spawn, 0f, out _));
+            Assert.IsNull(s.Join(Protocol.Version, "One more", Spawn, 0f, out var why));
             StringAssert.Contains("lleno", why);
         }
 
@@ -171,7 +176,11 @@ namespace Oxfall.Core.Tests
             Assert.IsFalse(s.ApplyMove(p.Id, new Pose(60f, 1f, 0f, 0f), false, 1f), "112 m/s is not");
             Assert.AreEqual(new Pose(4f, 1f, 0f, 0f), p.Pose, "the old position stays");
             Assert.AreEqual(1, p.RejectedMoves);
-            Assert.IsTrue(s.ApplyMove(p.Id, new Pose(60f, 1f, 0f, 0f), true, 1.1f), "waking up elsewhere is allowed");
+            Assert.IsFalse(s.ApplyMove(p.Id, new Pose(60f, 1f, 0f, 0f), true, 1.1f), "a client saying it teleported is not believed");
+            s.AllowTeleports = true;
+            Assert.IsTrue(s.ApplyMove(p.Id, new Pose(60f, 1f, 0f, 0f), true, 1.2f), "except on a test server");
+            s.Place(p.Id, new Pose(-80f, 2f, 3f, 90f), 1.3f);
+            Assert.AreEqual(new Pose(-80f, 2f, 3f, 90f), p.Pose, "the server moves players itself (waking up)");
         }
 
         [Test]
@@ -197,8 +206,18 @@ namespace Oxfall.Core.Tests
             var s = new ServerState(42);
             Placed(s, "A", Spawn);
             Placed(s, "B", new Pose(5f, 1f, 5f, 0f));
-            s.Join(Protocol.Version, "C", 0f, out _);
-            Assert.AreEqual(2, s.Snapshot().Count, "C has not said where it is yet");
+            Assert.AreEqual(2, s.Snapshot().Count);
+        }
+
+        [Test]
+        public void RunningIsToldFromWalking()
+        {
+            var s = new ServerState(42);
+            var p = Placed(s, "Ale", Spawn);
+            for (int i = 1; i <= 20; i++) s.ApplyMove(p.Id, new Pose(i * 0.4f, 1f, 0f, 0f), false, i * 0.066f);
+            Assert.Greater(p.Speed, ServerWorld.RunningSpeed, "6 m/s");
+            for (int i = 1; i <= 20; i++) s.ApplyMove(p.Id, new Pose(8f + i * 0.2f, 1f, 0f, 0f), false, 1.32f + i * 0.066f);
+            Assert.Less(p.Speed, ServerWorld.RunningSpeed, "3 m/s");
         }
     }
 
@@ -270,12 +289,15 @@ namespace Oxfall.Core.Tests
 
     public class ServerWorldTests
     {
+        private const string Token = "0123456789abcdef0123456789abcdef";
+
         private static (ServerWorld world, ServerState.Player player, NodeSpawn tree) Setup()
         {
-            var world = new ServerWorld(20261113);
+            var world = new ServerWorld(20261113) { DevMode = true };
             var tree = ResourceLayout.Generate(world.Ground).First(s => s.Type == ResourceNodeType.Tree);
-            var player = world.Players.Join(Protocol.Version, "Ale", 0f, out _);
-            world.Players.ApplyMove(player.Id, new Pose(tree.X + 1.5f, tree.Y, tree.Z, 0f), false, 0f);
+            var record = world.Join(Protocol.Version, "Ale", Token, 0f, out var player, out _, out _);
+            record.Survivor.Inventory.Add(ItemIds.StoneHatchet, 1);
+            world.Players.Place(player.Id, new Pose(tree.X + 1.5f, tree.Y, tree.Z, 0f), 0f);
             return (world, player, tree);
         }
 
@@ -290,22 +312,27 @@ namespace Oxfall.Core.Tests
         public void AHitInReachGivesWood()
         {
             var (world, player, tree) = Setup();
-            var got = world.Hit(player.Id, tree.Id, ToolKind.Hatchet, 1f);
+            var got = world.Hit(player.Id, tree.Id, ToolKind.Hatchet, 1f, out int lost);
             Assert.AreEqual(1, got.Count);
             Assert.AreEqual(ItemIds.Wood, got[0].ItemId);
-            Assert.AreEqual(GatherTable.PerHit(ResourceNodeType.Tree, ToolKind.Hatchet), got[0].Amount);
+            int perHit = GatherTable.PerHit(ResourceNodeType.Tree, ToolKind.Hatchet);
+            Assert.AreEqual(perHit, got[0].Amount);
+            Assert.AreEqual(0, lost);
+            world.TryGetRecord(player.Id, out var record);
+            Assert.AreEqual(perHit, record.Survivor.Inventory.Count(ItemIds.Wood), "the wood is in the server's inventory");
         }
 
         [Test]
         public void SwingingTooFastOrTooFarGivesNothing()
         {
             var (world, player, tree) = Setup();
-            Assert.AreEqual(1, world.Hit(player.Id, tree.Id, ToolKind.Rock, 1f).Count);
-            Assert.AreEqual(0, world.Hit(player.Id, tree.Id, ToolKind.Rock, 1.1f).Count, "faster than a swing");
+            Assert.AreEqual(1, world.Hit(player.Id, tree.Id, ToolKind.Rock, 1f, out _).Count);
+            Assert.AreEqual(0, world.Hit(player.Id, tree.Id, ToolKind.Rock, 1.1f, out _).Count, "faster than a swing");
+            Assert.AreEqual(0, world.Hit(player.Id, tree.Id, ToolKind.Pickaxe, 2f, out _).Count, "a pickaxe they do not have");
             world.Players.ApplyMove(player.Id, new Pose(tree.X + 30f, tree.Y, tree.Z, 0f), true, 2f);
-            Assert.AreEqual(0, world.Hit(player.Id, tree.Id, ToolKind.Rock, 3f).Count, "30 m away");
-            Assert.AreEqual(0, world.Hit(player.Id, -5, ToolKind.Rock, 4f).Count, "no such node");
-            Assert.AreEqual(0, world.Hit(player.Id, tree.Id, (ToolKind)99, 5f).Count, "no such tool");
+            Assert.AreEqual(0, world.Hit(player.Id, tree.Id, ToolKind.Rock, 3f, out _).Count, "30 m away");
+            Assert.AreEqual(0, world.Hit(player.Id, -5, ToolKind.Rock, 4f, out _).Count, "no such node");
+            Assert.AreEqual(0, world.Hit(player.Id, tree.Id, (ToolKind)99, 5f, out _).Count, "no such tool");
         }
 
         [Test]
@@ -315,7 +342,7 @@ namespace Oxfall.Core.Tests
             float t = 1f;
             while (world.TryGetNode(tree.Id, out var node, out _, out _) && !node.IsDepleted)
             {
-                world.Hit(player.Id, tree.Id, ToolKind.Hatchet, t);
+                world.Hit(player.Id, tree.Id, ToolKind.Hatchet, t, out _);
                 t += 1f;
             }
             Assert.IsTrue(world.NotFull().Any(n => n.Id == tree.Id && n.Remaining == 0));

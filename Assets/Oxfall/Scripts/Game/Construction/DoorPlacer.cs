@@ -1,5 +1,7 @@
 using System;
 using Oxfall.Core.Building;
+using Oxfall.Core.Rules;
+using Oxfall.Game.Net;
 using Oxfall.Core.Items;
 using Oxfall.Game.Controls;
 using Oxfall.Game.Rendering;
@@ -33,6 +35,9 @@ namespace Oxfall.Game.Construction
 
         /// <summary>A door was hung.</summary>
         public event Action Placed;
+
+        /// <summary>Where hanging a door goes (the shared rules alone, the server online).</summary>
+        public GameActions Actions { get; set; }
 
         public void Init(BuildingViews views, PlayerInput input, Inventory inventory, Transform head, Hud hud, MaterialLibrary materials)
         {
@@ -80,8 +85,12 @@ namespace Oxfall.Game.Construction
                 _hud.ShowToast("Apunta a un marco de puerta vacío (constrúyelo con el plano)");
                 return;
             }
-            if (_grid.PlaceDoor(_edge) != PlaceResult.Ok) return;
-            _inventory.Remove(ItemIds.WoodenDoor, 1);
+            var result = Actions.Build(BuildOp.Door(_edge));
+            if (result != ActionResult.Ok)
+            {
+                _hud.ShowToast(GameActions.Explain(result));
+                return;
+            }
             _hud.ShowToast("Puerta colocada: tócala con ABRIR");
             Debug.Log($"[Oxfall] Door hung at {_edge}");
             Placed?.Invoke();

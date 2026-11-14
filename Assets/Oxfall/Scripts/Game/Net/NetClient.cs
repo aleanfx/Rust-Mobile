@@ -1,6 +1,8 @@
 using System;
 using System.Collections.Generic;
+using Oxfall.Core.Items;
 using Oxfall.Core.Net;
+using Oxfall.Core.Rules;
 using Oxfall.Game.Rendering;
 using UnityEngine;
 using Pose = Oxfall.Core.Net.Pose;
@@ -48,17 +50,57 @@ namespace Oxfall.Game.Net
         /// <summary>How much is left in some trees, rocks or plants (0: gone until they grow back).</summary>
         public event Action<List<(int Id, int Remaining)>> NodesChanged;
 
-        /// <summary>What one of this player's hits gave.</summary>
+        /// <summary>What one of this player's hits gave (it is already in the inventory the server keeps).</summary>
         public event Action<List<(string ItemId, int Amount)>> Gathered;
+
+        /// <summary>The server let the player in, at this spot (where they were last time, or a beach).</summary>
+        public event Action<Pose> Welcomed;
+
+        /// <summary>Inventory slots the server changed.</summary>
+        public event Action<List<(int Slot, ItemStack Stack)>> SlotsChanged;
+
+        /// <summary>The crafting queue as the server runs it: (recipe id, seconds done).</summary>
+        public event Action<List<(string RecipeId, float Elapsed)>> CraftsChanged;
+
+        /// <summary>A job finished on the server: recipe id, and how many did not fit.</summary>
+        public event Action<string, int> Crafted;
+
+        /// <summary>Health, food and water as the server has them.</summary>
+        public event Action<float, float, float> VitalsChanged;
+
+        /// <summary>Something this player asked for did not happen.</summary>
+        public event Action<ActionResult> ActionFailed;
+
+        /// <summary>Changes to what stands on the island, to apply in order.</summary>
+        public event Action<List<BuildOp>> Built;
 
         private readonly List<(int Id, int Remaining)> _nodeStates = new List<(int, int)>();
         private readonly List<(string ItemId, int Amount)> _gathered = new List<(string, int)>();
+        private readonly List<(int Slot, ItemStack Stack)> _slots = new List<(int, ItemStack)>();
+        private readonly List<(string RecipeId, float Elapsed)> _crafts = new List<(string, float)>();
+        private readonly List<BuildOp> _ops = new List<BuildOp>();
 
         /// <summary>A swing at a node; the server answers with what it gave.</summary>
-        public void SendHit(int nodeId, Oxfall.Core.Items.ToolKind tool)
+        public void SendHit(int nodeId, ToolKind tool)
         {
             if (State != Status.Online || _socket == null) return;
             Messages.Hit(_writer, nodeId, (byte)tool);
+            _socket.Send(_writer.Buffer, _writer.Length);
+        }
+
+        /// <summary>Something done to the player's own belongings; the server answers with the change.</summary>
+        public void SendAct(ActKind kind, int a = 0, int b = 0, string recipe = null)
+        {
+            if (State != Status.Online || _socket == null) return;
+            Messages.Act(_writer, kind, a, b, recipe);
+            _socket.Send(_writer.Buffer, _writer.Length);
+        }
+
+        /// <summary>A change to what stands on the island; the server tells everyone if it was made.</summary>
+        public void SendBuild(BuildOp op)
+        {
+            if (State != Status.Online || _socket == null) return;
+            Messages.Build(_writer, op);
             _socket.Send(_writer.Buffer, _writer.Length);
         }
 
@@ -132,7 +174,7 @@ namespace Oxfall.Game.Net
 
             if (State == Status.Connecting && PlayerId == 0 && !_helloSent)
             {
-                Messages.Hello(_writer, _name);
+                Messages.Hello(_writer, _name, Token);
                 _socket.Send(_writer.Buffer, _writer.Length);
                 _helloSent = true;
             }
@@ -147,6 +189,11 @@ namespace Oxfall.Game.Net
                 {
                     Fail("Mensaje inválido del servidor: " + e.Message);
                     return;
+                }
+                catch (Exception e)
+                {
+                    // A handler in the game failed: logged, and the connection carries on.
+                    Debug.LogException(e);
                 }
             }
             if (_socket == null || State != Status.Online) return;
@@ -176,13 +223,14 @@ namespace Oxfall.Game.Net
             {
                 case MessageType.Welcome:
                 {
-                    Messages.ReadWelcome(reader, out var id, out var seed, out var serverTime);
+                    Messages.ReadWelcome(reader, out var id, out var seed, out var serverTime, out var pose);
                     PlayerId = id;
                     Seed = seed;
                     _clock.Observe(serverTime, Time.unscaledTime);
-                    _teleportPending = true;
+                    _teleportPending = false;
                     SetState(Status.Online);
-                    Debug.Log($"[Oxfall] Online as player {id} on {Url} (seed {seed})");
+                    Debug.Log($"[Oxfall] Online as player {id} on {Url} (seed {seed}) at {pose}");
+                    Welcomed?.Invoke(pose);
                     break;
                 }
                 case MessageType.Rejected:
@@ -221,6 +269,33 @@ namespace Oxfall.Game.Net
                     Messages.ReadGathered(reader, _gathered);
                     Gathered?.Invoke(_gathered);
                     break;
+                case MessageType.Slots:
+                    Messages.ReadSlots(reader, _slots);
+                    SlotsChanged?.Invoke(_slots);
+                    break;
+                case MessageType.Crafts:
+                    Messages.ReadCrafts(reader, _crafts);
+                    CraftsChanged?.Invoke(_crafts);
+                    break;
+                case MessageType.Crafted:
+                {
+                    string recipe = Messages.ReadCrafted(reader, out int lost);
+                    Crafted?.Invoke(recipe, lost);
+                    break;
+                }
+                case MessageType.VitalsState:
+                {
+                    Messages.ReadVitals(reader, out float health, out float food, out float water);
+                    VitalsChanged?.Invoke(health, food, water);
+                    break;
+                }
+                case MessageType.Failed:
+                    ActionFailed?.Invoke(Messages.ReadFailed(reader));
+                    break;
+                case MessageType.Built:
+                    Messages.ReadBuilt(reader, _ops);
+                    Built?.Invoke(_ops);
+                    break;
                 case MessageType.Correction:
                 {
                     var pose = Messages.ReadCorrection(reader);
@@ -232,6 +307,23 @@ namespace Oxfall.Game.Net
         }
 
         private void OnDestroy() => _socket?.Dispose();
+
+        /// <summary>
+        /// This phone's own secret, made the first time and kept: it is how the server knows the
+        /// player's survivor when they come back.
+        /// </summary>
+        public static string Token
+        {
+            get
+            {
+                string token = PlayerPrefs.GetString("oxfall.token", "");
+                if (Protocol.IsValidToken(token)) return token;
+                token = Guid.NewGuid().ToString("N");
+                PlayerPrefs.SetString("oxfall.token", token);
+                PlayerPrefs.Save();
+                return token;
+            }
+        }
 
         /// <summary>
         /// The server to play on: <c>?server=wss://…</c> in the web page's address, or what was saved

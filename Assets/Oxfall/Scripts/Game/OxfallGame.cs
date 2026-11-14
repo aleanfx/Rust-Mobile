@@ -3,6 +3,8 @@ using Oxfall.Core.Crafting;
 using Oxfall.Core.Environment;
 using Oxfall.Core.Gathering;
 using Oxfall.Core.Items;
+using Oxfall.Core.Net;
+using Oxfall.Core.Rules;
 using Oxfall.Core.Survival;
 using Oxfall.Game.Audio;
 using Oxfall.Game.Construction;
@@ -51,6 +53,10 @@ namespace Oxfall.Game
         private VitalsUi _vitalsUi;
         private PlayerInput _input;
         private NetClient _net;
+        private Survivor _survivor;
+        private Settlement _settlement;
+        private GameActions _actions;
+        private bool _quietPickups;
         private NameTags _nameTags;
         private Camera _camera;
         private int _shownOnline = -1;
@@ -85,14 +91,15 @@ namespace Oxfall.Game
             Debug.Log($"[Oxfall] World built in {clock.ElapsedMilliseconds} ms: {_world.Nodes.Count} resources, " +
                       $"spawn {_world.SpawnPosition}, {SystemInfo.graphicsDeviceName}, {SystemInfo.systemMemorySize} MB RAM.");
 
+            // The player's survivor (a rock and a torch to start) and what stands on the island. Alone
+            // they are the real thing; online they are copies the server keeps up to date.
             _catalog = ItemCatalog.CreateDefault();
-            _inventory = new Inventory(_catalog);
-            // What a fresh player starts with in the genre: a rock to gather with and a torch.
-            _inventory.Add(ItemIds.Rock, 1);
-            _inventory.Add(ItemIds.Torch, 1);
+            _survivor = new Survivor(_catalog);
+            _inventory = _survivor.Inventory;
+            _vitals = _survivor.Vitals;
+            _settlement = new Settlement(_world.Shape.Ground);
             _hotbar = new Hotbar(_inventory);
             var models = ItemModels.Create(materials);
-            _vitals = new Vitals();
 
             var input = new PlayerInput();
             _input = input;
@@ -108,9 +115,14 @@ namespace Oxfall.Game
             var camera = CreateCamera(player.Head);
             _camera = camera;
 
+            // Every change the player makes goes through the actions: the shared rules alone, the server online.
+            _net = gameObject.AddComponent<NetClient>();
+            _actions = new GameActions(_survivor, _settlement, playerObject.transform, _net);
+
             var gatherer = playerObject.AddComponent<Gatherer>();
             gatherer.Init(input, _inventory, _hotbar, _catalog, player.Head, models, materials.Flame, _vitals, _world.Shape);
             _gatherer = gatherer;
+            gatherer.Actions = _actions;
 
             _hud = Hud.Create();
             _hud.HeadingSource = player.Head;
@@ -118,7 +130,7 @@ namespace Oxfall.Game
             controls.Init(input, _hud);
 
             // The hotbar and the inventory panel; their icons are rendered from the item models.
-            _inventoryUi = new InventoryUi(_hud, _inventory, _hotbar);
+            _inventoryUi = new InventoryUi(_hud, _inventory, _hotbar, _actions);
             controls.SlotKey += slot => _hotbar.Select(slot);
             controls.InventoryKey += _inventoryUi.Toggle;
             ItemIcons.Render(models, _world.Sun).Ready += () =>
@@ -170,29 +182,34 @@ namespace Oxfall.Game
             };
             // Crafting: the Core queue takes the ingredients up front and hands the item over when done.
             _recipes = RecipeBook.CreateDefault(_catalog);
-            _crafting = new CraftingQueue(_inventory);
-            _crafting.Completed += (recipe, amount) =>
+            _crafting = _survivor.Crafting;
+            void Crafted(Recipe recipe, int lost)
             {
                 audio.Play(SoundCue.Crafted);
                 var made = _catalog.Get(recipe.OutputItemId);
                 bool onBar = false;
                 for (int i = 0; i < Inventory.HotbarSize; i++) onBar |= _inventory[i].ItemId == made.Id;
-                if (onBar && made.Category != ItemCategory.Resource)
+                if (lost > 0) _hud.ShowToast("Inventario lleno: " + made.DisplayName + " se perdió");
+                else if (onBar && made.Category != ItemCategory.Resource)
                     _hud.ShowToast(made.DisplayName + ": tócalo en la barra para usarlo");
                 Debug.Log("[Oxfall] Crafted " + made.DisplayName);
-            };
+            }
+            _crafting.Completed += Crafted;
             _crafting.Overflow = (itemId, amount) => _hud.ShowToast("Inventario lleno");
             _hud.BuildCraftPanel(_recipes, _catalog, _inventory, _crafting, TryCraft);
 
             // Building: the Core grid holds what stands where and BuildingViews draws it. The plan in
             // hand places twig pieces, the hammer upgrades and demolishes them, a door in hand hangs it.
-            var grid = new BuildingGrid();
+            var grid = _settlement.Grid;
             _buildings = new BuildingViews(grid, materials) { Viewer = player.transform };
             _build = playerObject.AddComponent<BuildSystem>();
             _build.Init(_buildings, input, _inventory, _world.Shape, player, materials, _hud);
+            _build.Actions = _actions;
+            _build.Settlement = _settlement;
             _build.Placed += () => audio.Play(SoundCue.Place);
             _hammer = playerObject.AddComponent<HammerTool>();
             _hammer.Init(grid, input, _inventory, _catalog, player.Head, _hud);
+            _hammer.Actions = _actions;
             _hammer.Upgraded += () => { audio.Play(SoundCue.Place); _gatherer.PlaySwing(); };
             _hammer.Demolished += () => audio.Play(SoundCue.Wood);
             _hud.PieceTapped += () =>
@@ -202,9 +219,11 @@ namespace Oxfall.Game
             };
             _doorPlacer = playerObject.AddComponent<DoorPlacer>();
             _doorPlacer.Init(_buildings, input, _inventory, player.Head, _hud, materials);
+            _doorPlacer.Actions = _actions;
             _doorPlacer.Placed += () => audio.Play(SoundCue.Place);
             _doorUser = playerObject.AddComponent<DoorUser>();
             _doorUser.Init(grid, player.Head, _hud);
+            _doorUser.Actions = _actions;
             _doorUser.Used += () => audio.Play(SoundCue.Wood);
             _hud.UseTapped += _doorUser.Use;
 
@@ -212,11 +231,11 @@ namespace Oxfall.Game
             var campfire = models[ItemIds.Campfire];
             _campfires = playerObject.AddComponent<CampfirePlacer>();
             _campfires.Init(input, _inventory, player, materials, _hud, campfire.Mesh, campfire.Materials);
-            _campfires.Placed += fire =>
-            {
-                audio.Play(SoundCue.Place);
-                GameAudio.Attach(fire, audio.Bank.FireLoop, 0.7f, 16f);
-            };
+            _campfires.Actions = _actions;
+            _campfires.Placed += () => audio.Play(SoundCue.Place);
+            _campfires.Spawned += fire => GameAudio.Attach(fire, audio.Bank.FireLoop, 0.7f, 16f);
+            _settlement.CampfireAdded += _campfires.Show;
+            _settlement.CampfireRemoved += _campfires.Hide;
 
             _inventory.Changed += _ =>
             {
@@ -229,7 +248,6 @@ namespace Oxfall.Game
 
             // Multiplayer: with a server chosen (?server=wss://… in the web address), join it;
             // without one, the island is yours alone.
-            _net = gameObject.AddComponent<NetClient>();
             _net.Init(materials, player.transform);
             _net.StatusChanged += OnNetStatus;
             _net.Corrected += pose => _player.Teleport(new Vector3(pose.X, pose.Y, pose.Z), pose.Yaw, 0f);
@@ -238,11 +256,49 @@ namespace Oxfall.Game
                 foreach (var (id, remaining) in nodes)
                     if (_world.NodesById.TryGetValue(id, out var view)) view.Sync(remaining);
             };
-            _net.Gathered += items =>
+            // Online, the server keeps the real survivor and settlement; these keep the copies in step.
+            _net.Welcomed += pose =>
             {
-                bool full = false;
-                foreach (var (item, amount) in items) full |= _inventory.Add(item, amount) > 0;
-                if (full) _hud.ShowToast("Inventario lleno: parte se perdió");
+                // A fresh copy of everything comes next: what was here alone makes way for it.
+                _quietPickups = true;
+                _inventory.Clear();
+                _crafting.Clear();
+                _crafting.Mirror = true;
+                _settlement.Clear();
+                _player.Teleport(new Vector3(pose.X, pose.Y, pose.Z), pose.Yaw, 0f);
+            };
+            _net.SlotsChanged += slots =>
+            {
+                _inventory.SetSlots(slots);
+                if (_quietPickups) CountOwned(_owned);
+                _quietPickups = false;
+            };
+            _net.CraftsChanged += jobs =>
+            {
+                var loaded = new System.Collections.Generic.List<(Recipe, float)>(jobs.Count);
+                foreach (var (id, elapsed) in jobs)
+                    if (_recipes.TryGet(id, out var recipe)) loaded.Add((recipe, elapsed));
+                _crafting.Load(loaded);
+                _hud.RefreshCraftPanel();
+            };
+            _net.Crafted += (id, lost) =>
+            {
+                if (_recipes.TryGet(id, out var recipe)) Crafted(recipe, lost);
+            };
+            _net.VitalsChanged += (health, food, water) =>
+            {
+                _vitals.Set(health, food, water);
+                _vitalsUi.Refresh();
+            };
+            _net.ActionFailed += why =>
+            {
+                _hud.ShowToast(GameActions.Explain(why));
+                Debug.Log("[Oxfall] The server refused: " + why);
+            };
+            _net.Built += ops =>
+            {
+                foreach (var op in ops)
+                    if (!BuildOps.Apply(_settlement, op)) Debug.LogWarning("[Oxfall] A building change did not fit: " + op);
             };
             _nameTags = new NameTags(_hud);
             var server = NetClient.ChosenServer(out var playerName);
@@ -293,6 +349,8 @@ namespace Oxfall.Game
         /// </summary>
         private void ShowPickups()
         {
+            // The first copy from the server is not a pickup.
+            if (_quietPickups) return;
             CountOwned(_counting);
             foreach (var pair in _counting)
             {
@@ -340,12 +398,15 @@ namespace Oxfall.Game
                         Debug.LogWarning($"[Oxfall] The server's island (seed {_net.Seed}) is not this one ({DefaultSeed}).");
                     break;
                 case NetClient.Status.Failed:
+                    // Carries on alone with what the server last said.
                     _gatherer.RemoteHit = null;
+                    _crafting.Mirror = false;
                     _hud.SetOnline("SIN CONEXIÓN", false);
                     _hud.ShowToast(_net.FailReason);
                     break;
                 default:
                     _gatherer.RemoteHit = null;
+                    _crafting.Mirror = false;
                     _hud.SetOnline(null, false);
                     break;
             }
@@ -385,16 +446,13 @@ namespace Oxfall.Game
         /// </summary>
         private void WakeUp()
         {
-            _inventory.Clear();
-            _inventory.Add(ItemIds.Rock, 1);
-            _inventory.Add(ItemIds.Torch, 1);
+            if (_actions.Respawn() != ActionResult.Ok) return;
+            // Alone the game picks the beach; online the server does and moves the player there.
+            if (!_actions.Online) _player.Teleport(_world.SpawnPosition, _world.SpawnYaw, 0f);
             if (_hotbar.Selected != 0) _hotbar.Select(0);
-            _vitals.Respawn();
             _warnedHungry = _warnedThirsty = false;
             _player.enabled = true;
             _gatherer.enabled = true;
-            _player.Teleport(_world.SpawnPosition, _world.SpawnYaw, 0f);
-            _net?.MarkTeleport();
             _vitalsUi.ShowDeath(false);
             _vitalsUi.Refresh();
             _hud.ShowToast("Has despertado en la playa");
@@ -430,6 +488,11 @@ namespace Oxfall.Game
                 case "craft-hatchet": TryCraft(_recipes.Get("stone_hatchet")); break;
                 case "craft-pickaxe": TryCraft(_recipes.Get("stone_pickaxe")); break;
                 case "craft-panel": _hud.ToggleCraftPanel(); break;
+                case "give" when _actions.Online:
+                case "give-all" when _actions.Online:
+                    // A test server hands out the kit itself (a real one refuses).
+                    _net.SendAct(ActKind.DevGive);
+                    break;
                 case "give":
                     _inventory.Add(ItemIds.Wood, 1000);
                     _inventory.Add(ItemIds.Stone, 1000);
@@ -543,7 +606,7 @@ namespace Oxfall.Game
             for (int slot = Inventory.HotbarSize; slot < _inventory.SlotCount; slot++)
             {
                 if (_inventory[slot].ItemId != id) continue;
-                _inventory.Move(slot, Inventory.HotbarSize - 1);
+                _actions.MoveSlot(slot, Inventory.HotbarSize - 1);
                 _hotbar.Select(Inventory.HotbarSize - 1);
                 return;
             }
@@ -584,16 +647,17 @@ namespace Oxfall.Game
         private void TryCraft(Recipe recipe)
         {
             string item = _catalog.Get(recipe.OutputItemId).DisplayName;
-            switch (_crafting.Enqueue(recipe))
+            var result = _actions.Craft(recipe);
+            switch (result)
             {
-                case CraftingQueue.EnqueueResult.Queued:
+                case ActionResult.Ok:
                     _hud.ShowToast($"Fabricando {item}… {recipe.CraftSeconds:0} s");
                     break;
-                case CraftingQueue.EnqueueResult.MissingIngredients:
+                case ActionResult.NotEnoughResources:
                     _hud.ShowToast("Faltan materiales para " + item);
                     break;
                 default:
-                    _hud.ShowToast("La cola de fabricación está llena");
+                    _hud.ShowToast(GameActions.Explain(result));
                     break;
             }
         }
@@ -692,8 +756,9 @@ namespace Oxfall.Game
         private void TickVitals(float dt)
         {
             if (_vitals == null || _vitals.IsDead) return;
+            // Online, hunger and thirst run on the server; the copy here is updated from it.
             bool running = _input.Sprint && _input.Move.sqrMagnitude > 0.01f;
-            _vitals.Tick(dt, running ? 1.8f : 1f);
+            if (!_actions.Online) _vitals.Tick(dt, running ? 1.8f : 1f);
             _vitalsTimer -= dt;
             if (_vitalsTimer > 0f) return;
             _vitalsTimer = 0.5f;

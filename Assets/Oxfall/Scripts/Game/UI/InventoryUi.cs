@@ -1,4 +1,6 @@
 using Oxfall.Core.Items;
+using Oxfall.Core.Rules;
+using Oxfall.Game.Net;
 using UnityEngine;
 using UnityEngine.UI;
 
@@ -7,8 +9,8 @@ namespace Oxfall.Game.UI
     /// <summary>
     /// The hotbar along the bottom of the screen (tap a slot to hold it, tap it again to empty the
     /// hands) and the inventory panel behind the MOCHILA button: all 30 slots, where tapping one
-    /// item and then another slot moves it there. All moves go through the Core
-    /// <see cref="Inventory"/>, which either completes a move or changes nothing.
+    /// item and then another slot moves it there. Moves go through <see cref="GameActions"/>: the
+    /// shared rules alone, the server online.
     /// </summary>
     public sealed class InventoryUi
     {
@@ -24,6 +26,7 @@ namespace Oxfall.Game.UI
         private readonly Hud _hud;
         private readonly Inventory _inventory;
         private readonly Hotbar _hotbar;
+        private readonly GameActions _actions;
         private readonly SlotView[] _bar = new SlotView[Inventory.HotbarSize];
         private readonly SlotView[] _grid;
 
@@ -52,11 +55,12 @@ namespace Oxfall.Game.UI
             public Text Amount;
         }
 
-        public InventoryUi(Hud hud, Inventory inventory, Hotbar hotbar)
+        public InventoryUi(Hud hud, Inventory inventory, Hotbar hotbar, GameActions actions)
         {
             _hud = hud;
             _inventory = inventory;
             _hotbar = hotbar;
+            _actions = actions;
             _grid = new SlotView[inventory.SlotCount];
             BuildBar();
             BuildPanel();
@@ -95,7 +99,7 @@ namespace Oxfall.Game.UI
             }
             else
             {
-                if (slot != _picked) _inventory.Move(_picked, slot);
+                if (slot != _picked) _actions.MoveSlot(_picked, slot);
                 _picked = -1;
             }
             Refresh();
@@ -163,7 +167,7 @@ namespace Oxfall.Game.UI
         private void QuickMove()
         {
             if (_picked < 0) return;
-            if (!_inventory.QuickMove(_picked))
+            if (_actions.QuickMove(_picked) == ActionResult.NoSpace)
                 _hud.ShowToast(Inventory.IsHotbarSlot(_picked) ? "La mochila está llena" : "La barra está llena");
             _picked = -1;
             Refresh();
@@ -172,7 +176,7 @@ namespace Oxfall.Game.UI
         private void Split()
         {
             if (_picked < 0) return;
-            if (_inventory.Split(_picked) < 0) _hud.ShowToast("No hay casillas libres");
+            if (_actions.Split(_picked) == ActionResult.NoSpace) _hud.ShowToast("No hay casillas libres");
             Refresh();
         }
 

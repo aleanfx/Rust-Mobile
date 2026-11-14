@@ -25,10 +25,12 @@ namespace Oxfall.Core.Net
             public string Name { get; internal set; }
             public Pose Pose { get; internal set; }
             public float LastMoveTime { get; internal set; }
-            /// <summary>False until the client has said where it is (its first move is taken as is).</summary>
+            /// <summary>False until the player has a position: the server gives one when they join.</summary>
             public bool Placed { get; internal set; }
             public int RejectedMoves { get; internal set; }
             public float LastHitTime { get; internal set; } = -100f;
+            /// <summary>Ground speed lately (metres a second), to tell running from walking.</summary>
+            public float Speed { get; internal set; }
         }
 
         private readonly Dictionary<ushort, Player> _players = new Dictionary<ushort, Player>();
@@ -40,13 +42,19 @@ namespace Oxfall.Core.Net
         /// <summary>The island everyone shares this wipe.</summary>
         public int Seed { get; }
 
+        /// <summary>
+        /// For tests only: a client may move its player anywhere by saying it teleported. A real
+        /// server never believes that; it moves players itself (waking up) and tells them.
+        /// </summary>
+        public bool AllowTeleports { get; set; }
+
         public int Count => _players.Count;
         public IEnumerable<Player> Players => _players.Values;
 
         public bool TryGet(ushort id, out Player player) => _players.TryGetValue(id, out player);
 
-        /// <summary>A new player in, or null with a reason when they cannot come in.</summary>
-        public Player Join(ushort version, string name, float now, out string reason)
+        /// <summary>A new player in at <paramref name="pose"/>, or null with a reason when they cannot come in.</summary>
+        public Player Join(ushort version, string name, Pose pose, float now, out string reason)
         {
             reason = null;
             if (version != Protocol.Version)
@@ -61,7 +69,7 @@ namespace Oxfall.Core.Net
                 reason = "El servidor está lleno.";
                 return null;
             }
-            var player = new Player { Id = NextId(), Name = Protocol.CleanName(name), LastMoveTime = now };
+            var player = new Player { Id = NextId(), Name = Protocol.CleanName(name), LastMoveTime = now, Pose = pose, Placed = true };
             _players.Add(player.Id, player);
             return player;
         }
@@ -77,7 +85,7 @@ namespace Oxfall.Core.Net
             if (!_players.TryGetValue(id, out var player) || !pose.IsFinite) return false;
             // Capped: standing still a long time does not earn a long jump.
             float dt = Math.Min(1f, Math.Max(0f, now - player.LastMoveTime));
-            bool believable = teleport || !player.Placed
+            bool believable = (teleport && AllowTeleports) || !player.Placed
                 || (player.Pose.HorizontalDistance(pose) <= MaxHorizontalSpeed * dt + Slack
                     && Math.Abs(pose.Y - player.Pose.Y) <= MaxVerticalSpeed * dt + Slack);
             if (!believable)
@@ -87,10 +95,25 @@ namespace Oxfall.Core.Net
                 player.LastMoveTime = now;
                 return false;
             }
+            if (dt > 0f && player.Placed)
+            {
+                float speed = Math.Min(MaxHorizontalSpeed, player.Pose.HorizontalDistance(pose) / dt);
+                player.Speed += (speed - player.Speed) * Math.Min(1f, dt * 4f);
+            }
             player.Pose = pose;
             player.LastMoveTime = now;
             player.Placed = true;
             return true;
+        }
+
+        /// <summary>Moves a player on the server's say (waking up on the beach); the client must be told.</summary>
+        public void Place(ushort id, Pose pose, float now)
+        {
+            if (!_players.TryGetValue(id, out var player)) return;
+            player.Pose = pose;
+            player.LastMoveTime = now;
+            player.Placed = true;
+            player.Speed = 0f;
         }
 
         /// <summary>Everyone's position (once known), for the snapshot sent to all.</summary>

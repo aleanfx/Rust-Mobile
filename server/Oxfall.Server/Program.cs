@@ -9,9 +9,11 @@ using Oxfall.Core.Net;
 using Oxfall.Server;
 
 // Oxfall game server. Listens on PORT (default 7777): GET / says it is alive, /ws is the game.
-// The island seed comes from OXFALL_SEED; changing it is the weekly wipe.
+// The island seed comes from OXFALL_SEED; changing it is the weekly wipe. OXFALL_DEV=1 is for
+// automated tests only: clients may teleport and everyone wakes up on the same beach.
 var port = Environment.GetEnvironmentVariable("PORT") ?? "7777";
 int seed = int.TryParse(Environment.GetEnvironmentVariable("OXFALL_SEED"), out var s) ? s : 20261113;
+bool dev = Environment.GetEnvironmentVariable("OXFALL_DEV") == "1";
 
 var builder = WebApplication.CreateBuilder(args);
 builder.Logging.SetMinimumLevel(LogLevel.Information);
@@ -19,7 +21,7 @@ builder.Logging.AddFilter("Microsoft", LogLevel.Warning);
 var app = builder.Build();
 app.UseWebSockets(new WebSocketOptions { KeepAliveInterval = TimeSpan.FromSeconds(15) });
 
-var game = new GameServer(seed, app.Logger);
+var game = new GameServer(seed, dev, app.Logger);
 var stopping = app.Lifetime.ApplicationStopping;
 
 app.MapGet("/", (Func<string>)(() => $"Oxfall server · protocol {Protocol.Version} · seed {game.Seed} · {game.PlayerCount} online"));

@@ -253,34 +253,15 @@ namespace Oxfall.Game.World
             world.NodesById[id] = view;
         }
 
-        /// <summary>A spot on the beach, facing inland. Walks in from the sea until it finds sand.</summary>
+        /// <summary>
+        /// A spot on the beach, facing inland: the same rule (and with the same seed, the same spot)
+        /// as a test server's, from the shared Core.
+        /// </summary>
         private static void FindSpawn(WorldInstance world, int seed)
         {
-            var shape = world.Shape;
-            var random = new System.Random(seed ^ 0x5f3759df);
-            float startAngle = (float)random.NextDouble() * 360f;
-
-            for (int attempt = 0; attempt < 36; attempt++)
-            {
-                float angle = (startAngle + attempt * 10f) * Mathf.Deg2Rad;
-                var dir = new Vector2(Mathf.Cos(angle), Mathf.Sin(angle));
-                for (float r = IslandShape.HalfSize - 5f; r > 10f; r -= 2f)
-                {
-                    float x = dir.x * r, z = dir.y * r;
-                    if (shape.Height(x, z) < 0.6f) continue;
-
-                    // A few steps further in, so the player starts dry.
-                    x -= dir.x * 6f;
-                    z -= dir.y * 6f;
-                    if (shape.Normal(x, z).y < 0.9f) break;
-                    world.SpawnPosition = new Vector3(x, shape.Height(x, z) + 0.2f, z);
-                    world.SpawnYaw = Mathf.Atan2(-dir.x, -dir.y) * Mathf.Rad2Deg;
-                    return;
-                }
-            }
-
-            world.SpawnPosition = new Vector3(0f, shape.Height(0f, 0f) + 1f, 0f);
-            world.SpawnYaw = 0f;
+            var (x, y, z, yaw) = Oxfall.Core.World.Spawns.Beach(world.Shape.Ground, new System.Random(seed ^ 0x5f3759df));
+            world.SpawnPosition = new Vector3(x, y, z);
+            world.SpawnYaw = yaw;
         }
     }
 }

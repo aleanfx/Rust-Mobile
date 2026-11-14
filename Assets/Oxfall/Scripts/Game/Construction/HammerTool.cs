@@ -1,5 +1,7 @@
 using System;
 using Oxfall.Core.Building;
+using Oxfall.Core.Rules;
+using Oxfall.Game.Net;
 using Oxfall.Core.Items;
 using Oxfall.Game.Controls;
 using Oxfall.Game.Player;
@@ -37,6 +39,9 @@ namespace Oxfall.Game.Construction
         public event Action Upgraded;
         /// <summary>Something was taken down.</summary>
         public event Action Demolished;
+
+        /// <summary>Where hammering goes (the shared rules alone, the server online).</summary>
+        public GameActions Actions { get; set; }
 
         public void Init(BuildingGrid grid, PlayerInput input, Inventory inventory, ItemCatalog catalog, Transform head, Hud hud)
         {
@@ -91,8 +96,12 @@ namespace Oxfall.Game.Construction
                 _hud.ShowToast("Faltan materiales: " + BuildCosts.Describe(cost, _catalog));
                 return;
             }
-            if (_grid.Upgrade(_aimed, next) != PlaceResult.Ok) return;
-            BuildCosts.TryPay(_inventory, cost);
+            var result = Actions.Build(BuildOp.Upgrade(_aimed, next));
+            if (result != ActionResult.Ok)
+            {
+                _hud.ShowToast(GameActions.Explain(result));
+                return;
+            }
             _hud.ShowToast($"{BuildSystem.Name(_aimed.Type)} de {BuildingTiers.Name(next).ToLowerInvariant()}");
             Debug.Log($"[Oxfall] Upgraded {_aimed} to {next}");
             Upgraded?.Invoke();
@@ -115,28 +124,20 @@ namespace Oxfall.Game.Construction
                 return;
             }
             _confirmUntil = -1f;
-            int pieces = 0;
-            void Refund(PieceRef piece, BuildingTier tier)
+            // Counted as they fall: alone at once, online when the server's change arrives.
+            int before = _grid.PieceCount;
+            var result = Actions.Build(BuildOp.Remove(_aimed));
+            if (result != ActionResult.Ok)
             {
-                pieces++;
-                foreach (var item in BuildCosts.Refund(piece.Type, tier)) Give(item.ItemId, item.Amount);
+                _hud.ShowToast(GameActions.Explain(result));
+                return;
             }
-            void ReturnDoor(Edge edge) => Give(ItemIds.WoodenDoor, 1);
-            _grid.PieceRemoved += Refund;
-            _grid.DoorRemoved += ReturnDoor;
-            _grid.Remove(_aimed);
-            _grid.PieceRemoved -= Refund;
-            _grid.DoorRemoved -= ReturnDoor;
+            int pieces = before - _grid.PieceCount;
             _hasAim = false;
             _info = null;
             _hud.ShowToast(pieces > 1 ? $"Demolido: {pieces} piezas (recuperas la mitad)" : "Demolido (recuperas la mitad)");
-            Debug.Log($"[Oxfall] Demolished {pieces} pieces");
+            Debug.Log($"[Oxfall] Demolished {_aimed} ({pieces} pieces here)");
             Demolished?.Invoke();
-        }
-
-        private void Give(string itemId, int amount)
-        {
-            if (_inventory.Add(itemId, amount) > 0) _hud.ShowToast("Inventario lleno: parte se perdió");
         }
 
         /// <summary>Finds the piece in the crosshair and shows what the hammer would do to it.</summary>

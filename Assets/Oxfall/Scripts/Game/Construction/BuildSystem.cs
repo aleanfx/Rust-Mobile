@@ -1,6 +1,8 @@
 using Oxfall.Core.Building;
 using Oxfall.Core.Items;
+using Oxfall.Core.Rules;
 using Oxfall.Game.Controls;
+using Oxfall.Game.Net;
 using Oxfall.Game.Player;
 using Oxfall.Game.Rendering;
 using Oxfall.Game.UI;
@@ -13,9 +15,9 @@ namespace Oxfall.Game.Construction
     /// <summary>
     /// Building mode, while the building plan is in hand: shows a ghost of the chosen piece where
     /// it would go, green when it can be placed, and places it when attack is pressed. Where pieces
-    /// may go and what they cost is decided by the Core's <see cref="BuildingGrid"/> and
-    /// <see cref="BuildCosts"/>; this adds the terrain checks. <see cref="BuildingViews"/> draws
-    /// what gets built.
+    /// may go and what they cost is decided by the shared rules (<see cref="PlayerActions"/>), here
+    /// alone or on the server online, through <see cref="GameActions"/>. <see cref="BuildingViews"/>
+    /// draws what gets built.
     /// </summary>
     public sealed class BuildSystem : MonoBehaviour
     {
@@ -48,6 +50,12 @@ namespace Oxfall.Game.Construction
 
         /// <summary>Raised after a piece is built.</summary>
         public event System.Action Placed;
+
+        /// <summary>Where placing goes (the shared rules alone, the server online).</summary>
+        public GameActions Actions { get; set; }
+
+        /// <summary>The settlement the grid belongs to, for the floor-height rule shared with the server.</summary>
+        public Settlement Settlement { get; set; }
 
         public bool Active { get; private set; }
         public PieceType Current => Order[_index];
@@ -114,19 +122,15 @@ namespace Oxfall.Game.Construction
                 return;
             }
 
-            PlaceResult result;
-            switch (Current)
+            var op = Current == PieceType.Foundation ? BuildOp.Foundation(_cell, _top)
+                : Current == PieceType.Roof ? BuildOp.Roof(_cell)
+                : BuildOp.Edge(_edge, Current);
+            var result = Actions.Build(op);
+            if (result != ActionResult.Ok)
             {
-                case PieceType.Foundation: result = _grid.PlaceFoundation(_cell, _top); break;
-                case PieceType.Roof: result = _grid.PlaceRoof(_cell); break;
-                default: result = _grid.PlaceEdge(_edge, Current); break;
-            }
-            if (result != PlaceResult.Ok)
-            {
-                _hud.ShowToast(Explain(result));
+                _hud.ShowToast(GameActions.Explain(result));
                 return;
             }
-            BuildCosts.TryPay(_inventory, Current);
 
             // A floor built under the player's feet lifts them onto it instead of trapping them.
             if (Current == PieceType.Foundation && BuildingGrid.CellAt(_player.transform.position.x,
@@ -193,28 +197,11 @@ namespace Oxfall.Game.Construction
             _ghostFilter.transform.SetPositionAndRotation(position, rotation);
         }
 
+        /// <summary>The floor's height and whether the ground allows it: the same rule the server checks.</summary>
         private void AimFoundation()
         {
-            float x0 = _cell.X * S, z0 = _cell.Z * S;
-            float a = _shape.Height(x0, z0), b = _shape.Height(x0 + S, z0);
-            float c = _shape.Height(x0, z0 + S), d = _shape.Height(x0 + S, z0 + S);
-            float e = _shape.Height(x0 + S * 0.5f, z0 + S * 0.5f);
-            float highest = Mathf.Max(Mathf.Max(a, b), Mathf.Max(c, Mathf.Max(d, e)));
-            float lowest = Mathf.Min(Mathf.Min(a, b), Mathf.Min(c, Mathf.Min(d, e)));
-
-            // Level with a neighbouring floor if there is one, so rooms come out flat.
-            _top = highest + 0.25f;
-            if (_grid.TryGetFoundationTop(new Cell(_cell.X + 1, _cell.Z), out float t)
-                || _grid.TryGetFoundationTop(new Cell(_cell.X - 1, _cell.Z), out t)
-                || _grid.TryGetFoundationTop(new Cell(_cell.X, _cell.Z + 1), out t)
-                || _grid.TryGetFoundationTop(new Cell(_cell.X, _cell.Z - 1), out t))
-                _top = t;
-
-            Check(_grid.CanPlaceFoundation(_cell));
-            if (!_valid) return;
-            if (lowest < 0.4f) Fail("No se puede construir en el agua");
-            else if (_top - lowest > 2.4f) Fail("El terreno es demasiado inclinado");
-            else if (_top < highest - 0.4f) Fail("El terreno tapa el cimiento");
+            var r = PlayerActions.FoundationTop(Settlement, _cell, out _top);
+            if (r != ActionResult.Ok) Fail(GameActions.Explain(r));
         }
 
         private void Check(PlaceResult result)

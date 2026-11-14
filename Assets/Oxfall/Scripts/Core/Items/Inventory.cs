@@ -224,6 +224,18 @@ namespace Oxfall.Core.Items
             Changed?.Invoke(slot);
         }
 
+        /// <summary>Puts several stacks in at once (a server's update), announced as one change.</summary>
+        public void SetSlots(IReadOnlyList<(int Slot, ItemStack Stack)> stacks)
+        {
+            if (stacks.Count == 0) return;
+            foreach (var (slot, stack) in stacks)
+            {
+                CheckSlot(slot);
+                _slots[slot] = stack.IsEmpty ? ItemStack.Empty : stack;
+            }
+            Changed?.Invoke(-1);
+        }
+
         public void Clear()
         {
             Array.Clear(_slots, 0, _slots.Length);

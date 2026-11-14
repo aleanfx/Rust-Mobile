@@ -94,6 +94,14 @@ namespace Oxfall.Core.Survival
             return IsDead;
         }
 
+        /// <summary>Takes the values as they are somewhere else (the server). Dying here is announced as usual.</summary>
+        public void Set(float health, float food, float water)
+        {
+            Food = Clamp(food, MaxFood);
+            Water = Clamp(water, MaxWater);
+            SetHealth(health);
+        }
+
         /// <summary>Back to life, as a fresh player wakes up on the beach.</summary>
         public void Respawn(float health = 60f, float food = 200f, float water = 150f)
         {

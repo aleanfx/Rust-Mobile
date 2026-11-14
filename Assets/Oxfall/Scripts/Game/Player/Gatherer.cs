@@ -3,10 +3,12 @@ using System.Collections.Generic;
 using System.Text;
 using Oxfall.Core.Gathering;
 using Oxfall.Core.Items;
+using Oxfall.Core.Rules;
 using Oxfall.Core.Survival;
 using Oxfall.Game.Audio;
 using Oxfall.Game.Controls;
 using Oxfall.Game.Items;
+using Oxfall.Game.Net;
 using Oxfall.Game.World;
 using UnityEngine;
 using UnityEngine.Rendering;
@@ -36,6 +38,9 @@ namespace Oxfall.Game.Player
 
         /// <summary>The crackle of a burning torch, when there is one to play.</summary>
         public AudioClip FireSound { get; set; }
+
+        /// <summary>Eating and drinking go through here (the shared rules alone, the server online).</summary>
+        public GameActions Actions { get; set; }
 
         private PlayerInput _input;
         private Inventory _inventory;
@@ -176,8 +181,8 @@ namespace Oxfall.Game.Player
         /// <summary>Eats one of what is in hand.</summary>
         private void Eat(ItemDefinition food)
         {
-            if (_vitals == null || !_inventory.Remove(food.Id, 1)) return;
-            _vitals.Consume(food.Nourishment);
+            int slot = _hotbar.Selected;
+            if (_vitals == null || Actions == null || slot < 0 || Actions.Eat(slot) != ActionResult.Ok) return;
             Sound?.Invoke(SoundCue.Eat);
             _text.Clear();
             _text.Append("Comes ").Append(food.DisplayName.ToLowerInvariant());
@@ -202,7 +207,7 @@ namespace Oxfall.Game.Player
                 if (t < 0f || t > Reach + 1.5f) continue;
                 var p = origin + forward * t;
                 if ((new Vector2(p.x, p.z) - pond.Centre).sqrMagnitude > pond.Radius * pond.Radius) continue;
-                _vitals.Consume(new Nourishment(0f, DrinkWater));
+                if (Actions == null || Actions.Drink() != ActionResult.Ok) return true;
                 Sound?.Invoke(SoundCue.Drink);
                 Message?.Invoke($"Bebes agua dulce   +{DrinkWater:0} agua");
                 return true;

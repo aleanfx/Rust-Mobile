@@ -1,4 +1,6 @@
 using Oxfall.Core.Items;
+using Oxfall.Core.Rules;
+using Oxfall.Game.Net;
 using Oxfall.Game.Controls;
 using Oxfall.Game.Player;
 using Oxfall.Game.Rendering;
@@ -39,11 +41,36 @@ namespace Oxfall.Game.Construction
         private string _whyNot = "";
         private Vector3 _point;
 
-        /// <summary>Raised with each campfire put down (for its crackle and the knock of placing it).</summary>
-        public event System.Action<GameObject> Placed;
+        /// <summary>This player put a campfire down (the knock of placing it).</summary>
+        public event System.Action Placed;
+
+        /// <summary>A campfire appeared, anyone's (for its crackle).</summary>
+        public event System.Action<GameObject> Spawned;
+
+        /// <summary>Where placing goes (the shared rules alone, the server online).</summary>
+        public GameActions Actions { get; set; }
+
+        private readonly System.Collections.Generic.Dictionary<int, GameObject> _fires =
+            new System.Collections.Generic.Dictionary<int, GameObject>();
 
         public bool Active { get; private set; }
-        public int PlacedCount => _placed.childCount;
+        public int PlacedCount => _fires.Count;
+
+        /// <summary>Draws a campfire of the settlement (this player's or anyone's).</summary>
+        public void Show(Campfire fire)
+        {
+            if (_fires.ContainsKey(fire.Id)) return;
+            var go = Spawn(new Vector3(fire.X, fire.Y, fire.Z), Quaternion.Euler(0f, fire.Yaw, 0f));
+            _fires.Add(fire.Id, go);
+            Spawned?.Invoke(go);
+        }
+
+        public void Hide(int id)
+        {
+            if (!_fires.TryGetValue(id, out var go)) return;
+            _fires.Remove(id);
+            Destroy(go);
+        }
 
         public void Init(PlayerInput input, Inventory inventory, PlayerController player, MaterialLibrary materials, Hud hud,
             Mesh campfireMesh, Material[] campfireMaterials)
@@ -86,9 +113,14 @@ namespace Oxfall.Game.Construction
                 _hud.ShowToast(_whyNot);
                 return;
             }
-            if (!_inventory.Remove(ItemIds.Campfire, 1)) return;
-            var fire = Spawn(_point, _ghost.transform.rotation);
-            Placed?.Invoke(fire);
+            var result = Actions.Build(BuildOp.PlaceCampfire(
+                new Campfire(0, _point.x, _point.y, _point.z, _ghost.transform.eulerAngles.y)));
+            if (result != ActionResult.Ok)
+            {
+                _hud.ShowToast(GameActions.Explain(result));
+                return;
+            }
+            Placed?.Invoke();
             _hud.ShowToast("Fogata encendida");
             Debug.Log($"[Oxfall] Placed a campfire at {_point}");
         }

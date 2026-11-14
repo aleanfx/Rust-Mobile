@@ -1,5 +1,6 @@
-// Two players on one server: each should see the other walk, with a name over the head.
-// Needs the server running (dotnet server/Oxfall.Server) and the web build on :8080.
+// Two players on one server: each should see the other walk, with a name over the head, and what
+// one builds; a player who leaves and comes back finds their things. Needs a test server running
+// (OXFALL_DEV=1 dotnet server/Oxfall.Server) and the web build on :8080.
 // Usage: node multi.js [outDir] [server]
 const { chromium } = require('playwright');
 const fs = require('fs');
@@ -12,8 +13,8 @@ const t0 = Date.now();
 const stamp = () => ((Date.now() - t0) / 1000).toFixed(1).padStart(6);
 const wait = ms => new Promise(r => setTimeout(r, ms));
 
-async function open(browser, name) {
-  const context = await browser.newContext({
+async function open(browser, name, context) {
+  context = context || await browser.newContext({
     viewport: { width: 844, height: 390 }, deviceScaleFactor: 2, isMobile: true, hasTouch: true,
   });
   const page = await context.newPage();
@@ -55,8 +56,41 @@ async function open(browser, name) {
   await ana.keyboard.up('w'); await wait(500);
   await cmd(ana, 'Ana', 'stats', 600);
   await cmd(beto, 'Beto', 'stats', 600);
+
+  // Ana gets a kit from the test server, builds a floor and a wall and starts a hatchet: the server
+  // does it, and Beto's copy of the island shows the same pieces.
+  const lastStats = who => [...log].reverse().find(l => l.includes(`${who} [log] [Oxfall] Stats`)) || '';
+  const field = (line, key) => (line.match(new RegExp(key + '=([^ ]+)')) || [])[1];
+  await cmd(ana, 'Ana', 'give-all', 1500);
+  await cmd(ana, 'Ana', 'build', 1500);
+  await cmd(ana, 'Ana', 'place', 1500);
+  await cmd(ana, 'Ana', 'piece', 500);
+  await cmd(ana, 'Ana', 'place', 1500);
+  await cmd(ana, 'Ana', 'craft-hatchet', 500);
+  await cmd(ana, 'Ana', 'stats', 800);
+  await cmd(beto, 'Beto', 'face-player', 2000);
+  await shot(beto, '4-beto-sees-ana-build');
+  await cmd(beto, 'Beto', 'stats', 800);
+  const anaPieces = field(lastStats('Ana'), 'pieces'), betoPieces = field(lastStats('Beto'), 'pieces');
+  log.push(`${stamp()} [test] pieces Ana=${anaPieces} Beto=${betoPieces}: ${anaPieces > 0 && anaPieces === betoPieces}`);
+  log.push(`${stamp()} [test] hatchet crafted on the server: ${await waitForLog('Ana [log] [Oxfall] Crafted', 15000)}`);
+  await cmd(ana, 'Ana', 'stats', 800);
+  const woodBefore = field(lastStats('Ana'), 'wood');
+  const anaContext = ana.context();
   await ana.close();
   log.push(`${stamp()} [test] Beto sees Ana leave: ${await waitForLog('Beto [log] [Oxfall] Ana left', 10000)}`);
+
+  // Ana comes back on the same phone: her survivor kept her wood.
+  log.push(`${stamp()} [test] Ana reopens`);
+  const again = await open(browser, 'Ana', anaContext);
+  const back = log.length;
+  const end = Date.now() + 240000;
+  while (Date.now() < end && !log.slice(back).some(l => l.includes('Ana [log] [Oxfall] Online'))) await wait(500);
+  await wait(3000);
+  await cmd(again, 'Ana', 'stats', 800);
+  const woodAfter = field(lastStats('Ana'), 'wood');
+  log.push(`${stamp()} [test] Ana's wood ${woodBefore} -> ${woodAfter}: ${woodBefore === woodAfter && +woodAfter > 0}`);
+  await shot(again, '5-ana-back');
 
   fs.writeFileSync(path.join(out, 'console.log'), log.join('\n'));
   console.log(log.filter(l => /\[(cmd|test|shot|pageerror|error)\]|Oxfall\] (Stats|Online|Offline|Facing|.* joined|.* left|The server)|xception/.test(l)).join('\n'));

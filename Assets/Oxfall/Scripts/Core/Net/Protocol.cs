@@ -11,7 +11,7 @@ namespace Oxfall.Core.Net
     public static class Protocol
     {
         /// <summary>Raised whenever a message changes shape; a client of another version is turned away.</summary>
-        public const ushort Version = 2;
+        public const ushort Version = 3;
 
         /// <summary>Snapshots per second the server sends.</summary>
         public const int TickRate = 20;
@@ -20,6 +20,7 @@ namespace Oxfall.Core.Net
         public const int SendRate = 15;
 
         public const int MaxNameBytes = 32;
+        public const int MaxTokenBytes = 64;
         public const int MaxPlayers = 100;
 
         public static MessageType PeekType(byte[] data, int count)
@@ -39,6 +40,18 @@ namespace Oxfall.Core.Net
             var clean = new string(chars.ToArray()).Trim();
             return clean.Length >= 2 ? clean : "Superviviente";
         }
+
+        /// <summary>
+        /// Whether a player's secret token looks like one the game makes (16 to 64 letters and digits).
+        /// It is what keeps their survivor theirs between visits.
+        /// </summary>
+        public static bool IsValidToken(string token)
+        {
+            if (token == null || token.Length < 16 || token.Length > MaxTokenBytes) return false;
+            foreach (char c in token)
+                if (!((c >= '0' && c <= '9') || (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z'))) return false;
+            return true;
+        }
     }
 
     public enum MessageType : byte
@@ -47,6 +60,8 @@ namespace Oxfall.Core.Net
         Hello = 1,
         Move = 2,
         Hit = 3,
+        Act = 4,
+        Build = 5,
 
         // Server to client
         Welcome = 10,
@@ -57,6 +72,27 @@ namespace Oxfall.Core.Net
         Correction = 15,
         NodeStates = 16,
         Gathered = 17,
+        Slots = 18,
+        Crafts = 19,
+        Crafted = 20,
+        VitalsState = 21,
+        Failed = 22,
+        Built = 23,
+    }
+
+    /// <summary>What a player does to their own belongings (inside an <see cref="MessageType.Act"/> message).</summary>
+    public enum ActKind : byte
+    {
+        MoveSlot = 1,
+        QuickMove = 2,
+        Split = 3,
+        Craft = 4,
+        CancelCraft = 5,
+        Eat = 6,
+        Drink = 7,
+        Respawn = 8,
+        /// <summary>Test servers only: a kit of tools and materials. A real server refuses it.</summary>
+        DevGive = 9,
     }
 
     /// <summary>Where a player stands and which way the body faces (degrees about up).</summary>
@@ -111,18 +147,24 @@ namespace Oxfall.Core.Net
     {
         // ---- Client to server
 
-        public static void Hello(NetWriter w, string name)
+        /// <param name="token">The player's own secret, kept on the phone, that brings back their survivor.</param>
+        public static void Hello(NetWriter w, string name, string token)
         {
             w.Reset();
             w.Byte((byte)MessageType.Hello);
             w.UShort(Protocol.Version);
             w.String(name, Protocol.MaxNameBytes);
+            w.String(token ?? "", Protocol.MaxTokenBytes);
         }
 
-        public static void ReadHello(NetReader r, out ushort version, out string name)
+        /// <summary>Reads a Hello. An older client's Hello ends after the version; name and token are then empty.</summary>
+        public static void ReadHello(NetReader r, out ushort version, out string name, out string token)
         {
             version = r.UShort();
+            name = token = "";
+            if (version != Protocol.Version) return;
             name = r.String();
+            token = r.String();
         }
 
         /// <param name="teleport">The client moved the player on purpose (woke up on the beach).</param>
@@ -154,6 +196,70 @@ namespace Oxfall.Core.Net
             nodeId = r.Int();
             tool = r.Byte();
         }
+
+        /// <summary>Something done to the player's own belongings: a slot or index, or a recipe.</summary>
+        public static void Act(NetWriter w, ActKind kind, int a = 0, int b = 0, string recipe = null)
+        {
+            w.Reset();
+            w.Byte((byte)MessageType.Act);
+            w.Byte((byte)kind);
+            switch (kind)
+            {
+                case ActKind.MoveSlot:
+                    w.Byte((byte)a);
+                    w.Byte((byte)b);
+                    break;
+                case ActKind.QuickMove:
+                case ActKind.Split:
+                case ActKind.CancelCraft:
+                case ActKind.Eat:
+                    w.Byte((byte)a);
+                    break;
+                case ActKind.Craft:
+                    w.String(recipe ?? "", 64);
+                    break;
+            }
+        }
+
+        public static ActKind ReadAct(NetReader r, out int a, out int b, out string recipe)
+        {
+            var kind = (ActKind)r.Byte();
+            a = b = 0;
+            recipe = null;
+            switch (kind)
+            {
+                case ActKind.MoveSlot:
+                    a = r.Byte();
+                    b = r.Byte();
+                    break;
+                case ActKind.QuickMove:
+                case ActKind.Split:
+                case ActKind.CancelCraft:
+                case ActKind.Eat:
+                    a = r.Byte();
+                    break;
+                case ActKind.Craft:
+                    recipe = r.String();
+                    break;
+                case ActKind.Drink:
+                case ActKind.Respawn:
+                case ActKind.DevGive:
+                    break;
+                default:
+                    throw new ProtocolException("Unknown action " + (byte)kind + ".");
+            }
+            return kind;
+        }
+
+        /// <summary>A change the player asks to make to what stands on the island.</summary>
+        public static void Build(NetWriter w, Rules.BuildOp op)
+        {
+            w.Reset();
+            w.Byte((byte)MessageType.Build);
+            op.Write(w);
+        }
+
+        public static Rules.BuildOp ReadBuild(NetReader r) => Rules.BuildOp.Read(r);
 
         // ---- Server to client
 
@@ -200,20 +306,142 @@ namespace Oxfall.Core.Net
             return id;
         }
 
-        public static void Welcome(NetWriter w, ushort playerId, int seed, float serverTime)
+        /// <param name="pose">Where the player is: where they were last time, or a beach for a newcomer.</param>
+        public static void Welcome(NetWriter w, ushort playerId, int seed, float serverTime, Pose pose)
         {
             w.Reset();
             w.Byte((byte)MessageType.Welcome);
             w.UShort(playerId);
             w.Int(seed);
             w.Float(serverTime);
+            pose.Write(w);
         }
 
-        public static void ReadWelcome(NetReader r, out ushort playerId, out int seed, out float serverTime)
+        public static void ReadWelcome(NetReader r, out ushort playerId, out int seed, out float serverTime, out Pose pose)
         {
             playerId = r.UShort();
             seed = r.Int();
             serverTime = r.Float();
+            pose = Pose.Read(r);
+        }
+
+        /// <summary>Inventory slots that changed: (slot, stack), an empty item id for an empty slot.</summary>
+        public static void Slots(NetWriter w, IReadOnlyList<(int Slot, Items.ItemStack Stack)> slots)
+        {
+            w.Reset();
+            w.Byte((byte)MessageType.Slots);
+            w.Byte((byte)slots.Count);
+            foreach (var (slot, stack) in slots)
+            {
+                w.Byte((byte)slot);
+                if (stack.IsEmpty)
+                {
+                    w.String("");
+                    continue;
+                }
+                w.String(stack.ItemId, 64);
+                w.UShort((ushort)Math.Min(ushort.MaxValue, stack.Amount));
+                w.Int(stack.SkinId);
+            }
+        }
+
+        public static void ReadSlots(NetReader r, List<(int Slot, Items.ItemStack Stack)> into)
+        {
+            into.Clear();
+            int n = r.Byte();
+            for (int i = 0; i < n; i++)
+            {
+                int slot = r.Byte();
+                string id = r.String();
+                if (id.Length == 0)
+                {
+                    into.Add((slot, Items.ItemStack.Empty));
+                    continue;
+                }
+                int amount = r.UShort();
+                int skin = r.Int();
+                into.Add((slot, amount > 0 ? new Items.ItemStack(id, amount, skin) : Items.ItemStack.Empty));
+            }
+        }
+
+        /// <summary>The crafting queue as it is now: each job's recipe and seconds done.</summary>
+        public static void Crafts(NetWriter w, IReadOnlyList<Crafting.CraftingQueue.Job> jobs)
+        {
+            w.Reset();
+            w.Byte((byte)MessageType.Crafts);
+            w.Byte((byte)jobs.Count);
+            foreach (var job in jobs)
+            {
+                w.String(job.Recipe.Id, 64);
+                w.Float(job.Elapsed);
+            }
+        }
+
+        public static void ReadCrafts(NetReader r, List<(string RecipeId, float Elapsed)> into)
+        {
+            into.Clear();
+            int n = r.Byte();
+            if (n > Crafting.CraftingQueue.MaxJobs) throw new ProtocolException("Too many crafting jobs.");
+            for (int i = 0; i < n; i++) into.Add((r.String(), r.Float()));
+        }
+
+        /// <summary>A job finished; <paramref name="lost"/> of what it made did not fit.</summary>
+        public static void Crafted(NetWriter w, string recipeId, int lost)
+        {
+            w.Reset();
+            w.Byte((byte)MessageType.Crafted);
+            w.String(recipeId, 64);
+            w.UShort((ushort)Math.Max(0, Math.Min(ushort.MaxValue, lost)));
+        }
+
+        public static string ReadCrafted(NetReader r, out int lost)
+        {
+            string id = r.String();
+            lost = r.UShort();
+            return id;
+        }
+
+        public static void Vitals(NetWriter w, float health, float food, float water)
+        {
+            w.Reset();
+            w.Byte((byte)MessageType.VitalsState);
+            w.Float(health);
+            w.Float(food);
+            w.Float(water);
+        }
+
+        public static void ReadVitals(NetReader r, out float health, out float food, out float water)
+        {
+            health = r.Float();
+            food = r.Float();
+            water = r.Float();
+        }
+
+        /// <summary>Something the player asked for did not happen, and why.</summary>
+        public static void Failed(NetWriter w, Rules.ActionResult why)
+        {
+            w.Reset();
+            w.Byte((byte)MessageType.Failed);
+            w.Byte((byte)why);
+        }
+
+        public static Rules.ActionResult ReadFailed(NetReader r) => (Rules.ActionResult)r.Byte();
+
+        /// <summary>Changes made to what stands on the island, in order, to apply to every copy.</summary>
+        public static void Built(NetWriter w, IReadOnlyList<Rules.BuildOp> ops, int start = 0, int count = -1)
+        {
+            if (count < 0) count = ops.Count - start;
+            w.Reset();
+            w.Byte((byte)MessageType.Built);
+            w.UShort((ushort)count);
+            for (int i = start; i < start + count; i++) ops[i].Write(w);
+        }
+
+        public static void ReadBuilt(NetReader r, List<Rules.BuildOp> into)
+        {
+            into.Clear();
+            int n = r.UShort();
+            for (int i = 0; i < n; i++) into.Add(Rules.BuildOp.Read(r));
         }
 
         public static void Rejected(NetWriter w, string reason)

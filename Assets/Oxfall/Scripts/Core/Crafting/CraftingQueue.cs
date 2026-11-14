@@ -35,6 +35,12 @@ namespace Oxfall.Core.Crafting
         public IReadOnlyList<Job> Jobs => _jobs;
         public bool IsBusy => _jobs.Count > 0;
 
+        /// <summary>
+        /// A copy of a queue that runs somewhere else (the server): time still moves the bar along,
+        /// but nothing finishes here; the real queue says when it has.
+        /// </summary>
+        public bool Mirror { get; set; }
+
         public CraftingQueue(Inventory inventory)
         {
             _inventory = inventory ?? throw new ArgumentNullException(nameof(inventory));
@@ -68,11 +74,30 @@ namespace Oxfall.Core.Crafting
             return true;
         }
 
+        /// <summary>Drops every job without giving anything back (the crafter died).</summary>
+        public void Clear() => _jobs.Clear();
+
+        /// <summary>Replaces the jobs with these (recipe, seconds done), as the real queue reported them.</summary>
+        public void Load(IEnumerable<(Recipe Recipe, float Elapsed)> jobs)
+        {
+            _jobs.Clear();
+            foreach (var (recipe, elapsed) in jobs)
+            {
+                if (recipe == null) continue;
+                _jobs.Add(new Job(recipe) { Elapsed = Math.Max(0f, Math.Min(recipe.CraftSeconds, elapsed)) });
+            }
+        }
+
         /// <summary>Advances the front job. Several short jobs can finish in one long tick.</summary>
         public void Tick(float deltaSeconds)
         {
             if (deltaSeconds < 0) throw new ArgumentOutOfRangeException(nameof(deltaSeconds));
             float time = deltaSeconds;
+            if (Mirror)
+            {
+                if (_jobs.Count > 0) _jobs[0].Elapsed = Math.Min(_jobs[0].Recipe.CraftSeconds, _jobs[0].Elapsed + time);
+                return;
+            }
             while (_jobs.Count > 0)
             {
                 var job = _jobs[0];

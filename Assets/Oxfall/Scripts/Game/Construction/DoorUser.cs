@@ -1,4 +1,6 @@
 using Oxfall.Core.Building;
+using Oxfall.Core.Rules;
+using Oxfall.Game.Net;
 using Oxfall.Game.UI;
 using UnityEngine;
 
@@ -21,6 +23,9 @@ namespace Oxfall.Game.Construction
 
         /// <summary>A door opened or closed.</summary>
         public event System.Action Used;
+
+        /// <summary>Where opening goes (the shared rules alone, the server online).</summary>
+        public GameActions Actions { get; set; }
 
         public void Init(BuildingGrid grid, Transform head, Hud hud)
         {
@@ -56,8 +61,8 @@ namespace Oxfall.Game.Construction
         /// <summary>Opens or closes the door in sight, if there is one.</summary>
         public void Use()
         {
-            if (!_hasDoor || !_grid.ToggleDoor(_door)) return;
-            Debug.Log($"[Oxfall] Door at {_door} {(_grid.IsDoorOpen(_door) ? "opened" : "closed")}");
+            if (!_hasDoor || Actions.Build(BuildOp.ToggleDoor(_door, !_grid.IsDoorOpen(_door))) != ActionResult.Ok) return;
+            Debug.Log($"[Oxfall] Door at {_door} {(_grid.IsDoorOpen(_door) ? "opened" : "toggled")}");
             Used?.Invoke();
         }
 
