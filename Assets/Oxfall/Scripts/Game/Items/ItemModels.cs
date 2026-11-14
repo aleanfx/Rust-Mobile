@@ -215,9 +215,9 @@ namespace Oxfall.Game.Items
                     Materials = new[] { m.Satchel, m.Rope, m.Metal, m.Char },
                     ShowInHand = true,
                     // Held low on the right by its handle, the fuse up, ready to throw.
-                    HandPosition = new Vector3(0.3f, -0.34f, 0.5f),
+                    HandPosition = new Vector3(0.32f, -0.37f, 0.52f),
                     HandRotation = Quaternion.Euler(8f, 205f, -6f),
-                    HandScale = 1.5f,
+                    HandScale = 1.2f,
                     IconRotation = Tilt(-14f, 200f),
                     IconZoom = 1.25f,
                 },

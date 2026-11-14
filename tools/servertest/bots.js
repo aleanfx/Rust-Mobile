@@ -37,10 +37,11 @@ function foundation(cx, cz) {
   return b;
 }
 function move(x, y, z, yaw, teleport) {
-  const b = Buffer.alloc(1 + 16 + 1);
+  const b = Buffer.alloc(1 + 16 + 1 + 1);
   b.writeUInt8(T.Move, 0);
   b.writeFloatLE(x, 1); b.writeFloatLE(y, 5); b.writeFloatLE(z, 9); b.writeFloatLE(yaw, 13);
   b.writeUInt8(teleport ? 1 : 0, 17);
+  b.writeInt8(0, 18); // pitch, whole degrees
   return b;
 }
 

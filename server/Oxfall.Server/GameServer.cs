@@ -307,9 +307,9 @@ namespace Oxfall.Server
             {
                 case MessageType.Move:
                 {
-                    Messages.ReadMove(reader, out var pose, out bool teleport);
+                    Messages.ReadMove(reader, out var pose, out bool teleport, out float pitch);
                     if (session.Record.Survivor.Vitals.IsDead) break;
-                    if (_state.ApplyMove(id, pose, teleport, now) || now - session.LastCorrection < CorrectionInterval) break;
+                    if (_state.ApplyMove(id, pose, teleport, now, pitch) || now - session.LastCorrection < CorrectionInterval) break;
                     session.LastCorrection = now;
                     SendPose(session, writer);
                     break;
@@ -422,6 +422,15 @@ namespace Oxfall.Server
                 case MessageType.Reload:
                     _world.ReloadGun(id, Messages.ReadReload(reader), now);
                     break;
+                case MessageType.Hold:
+                {
+                    // What is in their hands, for everyone else to see.
+                    string held = _world.Hold(id, Messages.ReadHold(reader));
+                    if (held == null) break;
+                    Messages.Held(writer, id, held);
+                    Broadcast(writer.ToArray());
+                    break;
+                }
                 case MessageType.Throw:
                 {
                     Messages.ReadThrow(reader, out var target, out float x, out float y, out float z, out float nx, out float ny, out float nz);
@@ -556,10 +565,13 @@ namespace Oxfall.Server
                 }
                 Messages.Joined(writer, player.Id, player.Name, player.Pose);
                 Broadcast(writer.ToArray());
-                // What everyone already here is wearing.
+                // What everyone already here is wearing and holding.
                 foreach (var other in _sessions.Values)
                 {
                     Messages.Outfit(writer, other.Id, Messages.Worn(other.Record.Survivor.Inventory, _worn));
+                    connection.Send(writer.ToArray());
+                    if (other.Id == player.Id || !_state.TryGet(other.Id, out var them) || string.IsNullOrEmpty(them.Held)) continue;
+                    Messages.Held(writer, other.Id, them.Held);
                     connection.Send(writer.ToArray());
                 }
                 // Who sleeps where (this player no longer among them).

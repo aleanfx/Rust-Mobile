@@ -77,14 +77,6 @@ const stamp = () => ((Date.now() - t0) / 1000).toFixed(1).padStart(6);
   await cmd('stats', 600);
   await cmd('time-12', 1500);
 
-  // Sulfur on the map, and the charge in the crafting menu.
-  await cmd('nearest-sulfur', 3000);
-  await shot('01-sulfur-rock');
-  await cmd('craft-panel', 1200);
-  await cmd('craft-tab-2', 1500);
-  await shot('02-craft-weapons');
-  await cmd('craft-panel', 1000);
-
   // A stone hut with a wooden door, right ahead.
   await cmd('build-hut', 2500);
   await cmd('upgrade-all-2', 2000);
@@ -125,6 +117,14 @@ const stamp = () => ((Date.now() - t0) / 1000).toFixed(1).padStart(6);
   for (let i = 1; i <= 3; i++) { await throwAndWatch('11-fell' + i, false, true); await cmd('heal', 300); }
   await throwAndWatch('12-fall', true, true);
   await cmd('stats', 600);
+  // Sulfur on the map, and the charge in the crafting menu (last: the rocks stand on rough ground
+  // where a hut would stand on stilts).
+  await cmd('nearest-sulfur', 3000);
+  await shot('01-sulfur-rock');
+  await cmd('craft-panel', 1200);
+  await cmd('craft-tab-2', 1500);
+  await shot('02-craft-weapons');
+  await cmd('craft-panel', 1000);
   log.push(`${stamp()} [test] blasts=${count('[Oxfall] Blast ')} repaired=${count('[Oxfall] Repaired')}`);
 
   fs.writeFileSync(path.join(out, 'console.log'), log.join('\n'));

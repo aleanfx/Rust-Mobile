@@ -173,6 +173,26 @@ namespace Oxfall.Core.Net
                 Announcements.Add(BuildOp.Deploy(bag));
         }
 
+        /// <summary>
+        /// A player says what they now hold: bare hands, or something on their hotbar. Returns what
+        /// everyone else is to see in their hands, or null when it is refused or nothing changed.
+        /// </summary>
+        public string Hold(ushort playerId, string itemId)
+        {
+            if (!Players.TryGet(playerId, out var player) || !_online.TryGetValue(playerId, out var record)) return null;
+            itemId ??= "";
+            if (itemId.Length > 0)
+            {
+                bool carried = false;
+                var inventory = record.Survivor.Inventory;
+                for (int i = 0; i < Inventory.HotbarSize && !carried; i++) carried = inventory[i].ItemId == itemId;
+                if (!carried) return null;
+            }
+            if (itemId == player.Held) return null;
+            player.Held = itemId;
+            return itemId;
+        }
+
         /// <summary>A player goes away; their survivor stays where they stood, asleep (see <see cref="Sleepers"/>).</summary>
         public void Leave(ushort playerId)
         {

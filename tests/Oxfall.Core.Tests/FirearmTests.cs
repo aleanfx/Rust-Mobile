@@ -84,6 +84,24 @@ namespace Oxfall.Core.Tests
             Assert.AreEqual(6, state.Loaded(gun, now + 0.6f + gun.ReloadSeconds));
         }
 
+        [Test]
+        public void OthersSeeOnlyWhatIsOnTheHotbarInHand()
+        {
+            var world = new ServerWorld(Seed) { DevMode = true };
+            var ale = world.Join(Protocol.Version, "Ale", TokenA, 0f, out var pa, out _, out _);
+            Assert.AreEqual("", pa.Held, "bare hands to begin with");
+            Assert.AreEqual(ItemIds.Rock, world.Hold(pa.Id, ItemIds.Rock), "the rock he starts with");
+            Assert.IsNull(world.Hold(pa.Id, ItemIds.Rock), "no change, nothing to tell");
+            Assert.IsNull(world.Hold(pa.Id, ItemIds.SatchelCharge), "not carried");
+            ale.Survivor.Inventory.SetSlot(Inventory.HotbarSize, new ItemStack(ItemIds.Blunderbuss, 1));
+            Assert.IsNull(world.Hold(pa.Id, ItemIds.Blunderbuss), "in the backpack, not on the hotbar");
+            ale.Survivor.Inventory.SetSlot(2, new ItemStack(ItemIds.Revolver, 1));
+            Assert.AreEqual(ItemIds.Revolver, world.Hold(pa.Id, ItemIds.Revolver));
+            Assert.AreEqual(ItemIds.Revolver, pa.Held);
+            Assert.AreEqual("", world.Hold(pa.Id, null), "put away");
+            Assert.IsNull(world.Hold(999, ItemIds.Rock), "nobody");
+        }
+
         private static (ServerWorld world, SurvivorRecord ale, ServerState.Player pa, SurvivorRecord bea, ServerState.Player pb) Duel(float apart)
         {
             var world = new ServerWorld(Seed) { DevMode = true };

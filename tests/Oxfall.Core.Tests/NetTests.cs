@@ -1,5 +1,6 @@
 using System.Collections.Generic;
 using NUnit.Framework;
+using Oxfall.Core.Items;
 using Oxfall.Core.Net;
 
 namespace Oxfall.Core.Tests
@@ -80,10 +81,29 @@ namespace Oxfall.Core.Tests
             Assert.IsFalse(Protocol.IsValidToken("short"));
             Assert.IsFalse(Protocol.IsValidToken("0123456789abcdef0123456789abcde!"));
 
-            Messages.Move(w, new Pose(1f, 2f, 3f, 90f), true);
-            Messages.ReadMove(After(w, MessageType.Move), out var pose, out var teleport);
+            Messages.Move(w, new Pose(1f, 2f, 3f, 90f), true, 31.6f);
+            Messages.ReadMove(After(w, MessageType.Move), out var pose, out var teleport, out float pitch);
             Assert.AreEqual(new Pose(1f, 2f, 3f, 90f), pose);
             Assert.IsTrue(teleport);
+            Assert.AreEqual(32f, pitch, "whole degrees");
+            Messages.Move(w, new Pose(1f, 2f, 3f, 90f), false, -200f);
+            Messages.ReadMove(After(w, MessageType.Move), out _, out _, out pitch);
+            Assert.AreEqual(-89f, pitch, "kept to straight down");
+
+            Messages.Hold(w, ItemIds.Revolver);
+            Assert.AreEqual(ItemIds.Revolver, Messages.ReadHold(After(w, MessageType.Hold)));
+        }
+
+        [Test]
+        public void HeldRoundTrip()
+        {
+            var w = new NetWriter();
+            Messages.Held(w, 5, ItemIds.Blunderbuss);
+            Messages.ReadHeld(After(w, MessageType.Held), out ushort id, out string item);
+            Assert.AreEqual((5, ItemIds.Blunderbuss), (id, item));
+            Messages.Held(w, 6, "");
+            Messages.ReadHeld(After(w, MessageType.Held), out id, out item);
+            Assert.AreEqual((6, ""), (id, item));
         }
 
         [Test]
@@ -112,9 +132,9 @@ namespace Oxfall.Core.Tests
         public void SnapshotRoundTrip()
         {
             var w = new NetWriter();
-            var players = new List<(ushort, Pose, bool)> { (1, new Pose(1f, 0f, 0f, 0f), false), (2, new Pose(0f, 0f, 2f, 180f), true) };
+            var players = new List<(ushort, Pose, bool, float)> { (1, new Pose(1f, 0f, 0f, 0f), false, 12f), (2, new Pose(0f, 0f, 2f, 180f), true, -40f) };
             Messages.Snapshot(w, 12.5f, players);
-            var read = new List<(ushort Id, Pose Pose, bool Down)>();
+            var read = new List<(ushort Id, Pose Pose, bool Down, float Pitch)>();
             float time = Messages.ReadSnapshot(After(w, MessageType.Snapshot), read);
             Assert.AreEqual(12.5f, time);
             CollectionAssert.AreEqual(players, read);

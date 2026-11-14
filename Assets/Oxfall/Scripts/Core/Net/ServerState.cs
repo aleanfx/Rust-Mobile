@@ -33,10 +33,14 @@ namespace Oxfall.Core.Net
             public float Speed { get; internal set; }
             /// <summary>Dead, lying where they fell until they wake up somewhere.</summary>
             public bool Down { get; internal set; }
+            /// <summary>How far they look up (positive) or down, in degrees, as their phone last said.</summary>
+            public float Pitch { get; internal set; }
+            /// <summary>What they hold (an item id; empty for bare hands), as their phone last said.</summary>
+            public string Held { get; set; } = "";
         }
 
         private readonly Dictionary<ushort, Player> _players = new Dictionary<ushort, Player>();
-        private readonly List<(ushort, Pose, bool)> _snapshot = new List<(ushort, Pose, bool)>();
+        private readonly List<(ushort, Pose, bool, float)> _snapshot = new List<(ushort, Pose, bool, float)>();
         private ushort _nextId = 1;
 
         public ServerState(int seed) => Seed = seed;
@@ -82,9 +86,10 @@ namespace Oxfall.Core.Net
         /// Takes a player's reported position if it could have been reached since the last one;
         /// otherwise keeps the old one (the client will be pulled back). Returns whether it was taken.
         /// </summary>
-        public bool ApplyMove(ushort id, Pose pose, bool teleport, float now)
+        public bool ApplyMove(ushort id, Pose pose, bool teleport, float now, float pitch = 0f)
         {
             if (!_players.TryGetValue(id, out var player) || !pose.IsFinite) return false;
+            if (!float.IsNaN(pitch) && !float.IsInfinity(pitch)) player.Pitch = Math.Max(-89f, Math.Min(89f, pitch));
             // Capped: standing still a long time does not earn a long jump.
             float dt = Math.Min(1f, Math.Max(0f, now - player.LastMoveTime));
             bool believable = (teleport && AllowTeleports) || !player.Placed
@@ -118,12 +123,12 @@ namespace Oxfall.Core.Net
             player.Speed = 0f;
         }
 
-        /// <summary>Everyone's position (once known) and whether they are down, for the snapshot sent to all.</summary>
-        public IReadOnlyList<(ushort Id, Pose Pose, bool Down)> Snapshot()
+        /// <summary>Everyone's position (once known), whether they are down and where they look, for the snapshot sent to all.</summary>
+        public IReadOnlyList<(ushort Id, Pose Pose, bool Down, float Pitch)> Snapshot()
         {
             _snapshot.Clear();
             foreach (var p in _players.Values)
-                if (p.Placed) _snapshot.Add((p.Id, p.Pose, p.Down));
+                if (p.Placed) _snapshot.Add((p.Id, p.Pose, p.Down, p.Pitch));
             return _snapshot;
         }
 

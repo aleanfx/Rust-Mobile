@@ -12,7 +12,7 @@ namespace Oxfall.Core.Net
     public static class Protocol
     {
         /// <summary>Raised whenever a message changes shape; a client of another version is turned away.</summary>
-        public const ushort Version = 9;
+        public const ushort Version = 10;
 
         /// <summary>Snapshots per second the server sends.</summary>
         public const int TickRate = 20;
@@ -115,6 +115,8 @@ namespace Oxfall.Core.Net
         GunHit = 44,
         /// <summary>The player reloads the gun of this kind before it is empty.</summary>
         Reload = 45,
+        /// <summary>What the player now holds (an item id; empty for bare hands), whenever that changes.</summary>
+        Hold = 46,
 
         // Server to client
         Welcome = 10,
@@ -157,6 +159,8 @@ namespace Oxfall.Core.Net
         Blast = 36,
         /// <summary>Someone fired a gun: who, which kind, from where, which way and the seed of its spray (for everyone else).</summary>
         Gunshot = 37,
+        /// <summary>What a player holds (an item id; empty for bare hands), whenever that changes.</summary>
+        Held = 38,
     }
 
     /// <summary>What a player does to their own belongings (inside an <see cref="MessageType.Act"/> message).</summary>
@@ -262,18 +266,55 @@ namespace Oxfall.Core.Net
         }
 
         /// <param name="teleport">The client moved the player on purpose (woke up on the beach).</param>
-        public static void Move(NetWriter w, Pose pose, bool teleport)
+        /// <param name="pitch">How far the player looks up (positive) or down, in degrees: for others to see where they aim.</param>
+        public static void Move(NetWriter w, Pose pose, bool teleport, float pitch = 0f)
         {
             w.Reset();
             w.Byte((byte)MessageType.Move);
             pose.Write(w);
             w.Bool(teleport);
+            WritePitch(w, pitch);
         }
 
-        public static void ReadMove(NetReader r, out Pose pose, out bool teleport)
+        public static void ReadMove(NetReader r, out Pose pose, out bool teleport, out float pitch)
         {
             pose = Pose.Read(r);
             teleport = r.Bool();
+            pitch = ReadPitch(r);
+        }
+
+        /// <summary>A pitch in one byte: whole degrees, -89 to 89.</summary>
+        private static void WritePitch(NetWriter w, float pitch)
+        {
+            float clamped = float.IsNaN(pitch) ? 0f : Math.Max(-89f, Math.Min(89f, pitch));
+            w.Byte(unchecked((byte)(sbyte)Math.Round(clamped)));
+        }
+
+        private static float ReadPitch(NetReader r) => Math.Max(-89, Math.Min(89, (int)unchecked((sbyte)r.Byte())));
+
+        /// <summary>What the player now holds: an item id, or empty for bare hands.</summary>
+        public static void Hold(NetWriter w, string itemId)
+        {
+            w.Reset();
+            w.Byte((byte)MessageType.Hold);
+            w.String(itemId ?? "", 64);
+        }
+
+        public static string ReadHold(NetReader r) => r.String();
+
+        /// <summary>What a player holds: their id and an item id (empty for bare hands).</summary>
+        public static void Held(NetWriter w, ushort playerId, string itemId)
+        {
+            w.Reset();
+            w.Byte((byte)MessageType.Held);
+            w.UShort(playerId);
+            w.String(itemId ?? "", 64);
+        }
+
+        public static void ReadHeld(NetReader r, out ushort playerId, out string itemId)
+        {
+            playerId = r.UShort();
+            itemId = r.String();
         }
 
         /// <summary>The player swung at a tree, rock or plant with this tool.</summary>
@@ -672,27 +713,28 @@ namespace Oxfall.Core.Net
         public static Pose ReadCorrection(NetReader r) => Pose.Read(r);
 
         /// <summary>Where every player is at <paramref name="serverTime"/>, and who is down (dead).</summary>
-        public static void Snapshot(NetWriter w, float serverTime, IReadOnlyList<(ushort Id, Pose Pose, bool Down)> players)
+        public static void Snapshot(NetWriter w, float serverTime, IReadOnlyList<(ushort Id, Pose Pose, bool Down, float Pitch)> players)
         {
             w.Reset();
             w.Byte((byte)MessageType.Snapshot);
             w.Float(serverTime);
             w.UShort((ushort)players.Count);
-            foreach (var (id, pose, down) in players)
+            foreach (var (id, pose, down, pitch) in players)
             {
                 w.UShort(id);
                 pose.Write(w);
                 w.Bool(down);
+                WritePitch(w, pitch);
             }
         }
 
-        public static float ReadSnapshot(NetReader r, List<(ushort Id, Pose Pose, bool Down)> into)
+        public static float ReadSnapshot(NetReader r, List<(ushort Id, Pose Pose, bool Down, float Pitch)> into)
         {
             into.Clear();
             float time = r.Float();
             int n = r.UShort();
             if (n > Protocol.MaxPlayers) throw new ProtocolException("Too many players in a snapshot.");
-            for (int i = 0; i < n; i++) into.Add((r.UShort(), Pose.Read(r), r.Bool()));
+            for (int i = 0; i < n; i++) into.Add((r.UShort(), Pose.Read(r), r.Bool(), ReadPitch(r)));
             return time;
         }
 

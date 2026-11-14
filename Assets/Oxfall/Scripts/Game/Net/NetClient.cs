@@ -26,7 +26,7 @@ namespace Oxfall.Game.Net
         private Transform _others;
         private readonly NetWriter _writer = new NetWriter();
         private readonly Dictionary<ushort, RemotePlayer> _players = new Dictionary<ushort, RemotePlayer>();
-        private readonly List<(ushort Id, Pose Pose, bool Down)> _snapshot = new List<(ushort, Pose, bool)>();
+        private readonly List<(ushort Id, Pose Pose, bool Down, float Pitch)> _snapshot = new List<(ushort, Pose, bool, float)>();
         private readonly ServerClock _clock = new ServerClock();
         private float _sendTimer;
         private bool _teleportPending;
@@ -45,6 +45,16 @@ namespace Oxfall.Game.Net
         public string Url { get; private set; }
         public string FailReason { get; private set; }
         public IReadOnlyDictionary<ushort, RemotePlayer> Players => _players;
+
+        /// <summary>Where this player looks (degrees up), sent with each move so others see where they aim.</summary>
+        public float LocalPitch { get; set; }
+
+        /// <summary>What this player holds (an item id; empty for bare hands), told to the server when it changes.</summary>
+        public string LocalHeld { get; set; } = "";
+        private string _sentHeld;
+
+        /// <summary>The look of an item, to put it in other players' hands (null if it has none).</summary>
+        public Func<string, Oxfall.Game.Items.ItemModel> Models { get; set; }
 
         /// <summary>Everyone online, this player included.</summary>
         public int OnlineCount => State == Status.Online ? _players.Count + 1 : 0;
@@ -346,9 +356,15 @@ namespace Oxfall.Game.Net
                 _sendTimer += 1f / Protocol.SendRate;
                 if (_sendTimer < 0f) _sendTimer = 0f;
                 var p = _local.position;
-                Messages.Move(_writer, new Pose(p.x, p.y, p.z, _local.eulerAngles.y), _teleportPending);
+                Messages.Move(_writer, new Pose(p.x, p.y, p.z, _local.eulerAngles.y), _teleportPending, LocalPitch);
                 _socket.Send(_writer.Buffer, _writer.Length);
                 _teleportPending = false;
+                if (LocalHeld != _sentHeld)
+                {
+                    _sentHeld = LocalHeld;
+                    Messages.Hold(_writer, LocalHeld);
+                    _socket.Send(_writer.Buffer, _writer.Length);
+                }
             }
         }
 
@@ -367,6 +383,7 @@ namespace Oxfall.Game.Net
                     Owner = owner;
                     _clock.Observe(serverTime, Time.unscaledTime);
                     _teleportPending = false;
+                    _sentHeld = null;
                     SetState(Status.Online);
                     Debug.Log($"[Oxfall] Online as player {id} on {Url} (seed {seed}) at {pose}");
                     Welcomed?.Invoke(pose);
@@ -398,11 +415,12 @@ namespace Oxfall.Game.Net
                 {
                     float time = Messages.ReadSnapshot(reader, _snapshot);
                     _clock.Observe(time, Time.unscaledTime);
-                    foreach (var (id, pose, down) in _snapshot)
+                    foreach (var (id, pose, down, pitch) in _snapshot)
                     {
                         if (!_players.TryGetValue(id, out var player)) continue;
                         player.Poses.Add(time, pose);
                         player.SetDown(down);
+                        player.SetPitch(pitch);
                     }
                     break;
                 }
@@ -449,6 +467,12 @@ namespace Oxfall.Game.Net
                     Messages.ReadHurt(reader, out ushort target, out ushort attacker, out int damage, out bool killed);
                     if (_players.TryGetValue(target, out var victim)) victim.Flinch();
                     Hurt?.Invoke(target, attacker, damage, killed);
+                    break;
+                }
+                case MessageType.Held:
+                {
+                    Messages.ReadHeld(reader, out ushort who, out string item);
+                    if (_players.TryGetValue(who, out var holder)) holder.SetHeld(item, string.IsNullOrEmpty(item) ? null : Models?.Invoke(item));
                     break;
                 }
                 case MessageType.Outfit:

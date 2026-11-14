@@ -378,6 +378,7 @@ namespace Oxfall.Game
             // Multiplayer: with a server chosen (?server=wss://… in the web address), join it;
             // without one, the island is yours alone.
             _net.Init(materials, player.transform);
+            _net.Models = id => models.TryGetValue(id, out var model) ? model : null;
             _net.StatusChanged += OnNetStatus;
             _net.Corrected += pose => _player.Teleport(new Vector3(pose.X, pose.Y, pose.Z), pose.Yaw, 0f);
             _net.NodesChanged += nodes =>
@@ -807,7 +808,9 @@ namespace Oxfall.Game
             _firedAt[shooter] = Time.time;
             Debug.Log($"[Oxfall] Gunshot by {_net.NameOf(shooter) ?? "someone"} ({tool})");
             var forward = Quaternion.Euler(-pitch, yaw, 0f) * Vector3.forward;
-            var muzzle = origin + forward * 0.6f + Vector3.down * 0.15f;
+            // From the gun in their hands, when this phone shows it.
+            var muzzle = _net.Players.TryGetValue(shooter, out var them) && them.TryMuzzle(out var held)
+                ? held : origin + forward * 0.6f + Vector3.down * 0.15f;
             bool big = gun.Pellets > 1;
             _explosions.MuzzleFlash(muzzle, forward, big);
             Gatherer.Spray(gun, origin + forward * 0.5f, muzzle, yaw, pitch, seed, _explosions, null);
@@ -1365,7 +1368,7 @@ namespace Oxfall.Game
                               $"pos={_player.transform.position} quality={GraphicsQuality.Name(_quality.Tier)} " +
                               $"screen={Screen.width}x{Screen.height} grass={_grass.BladeCount} " +
                               $"net={_net.State} id={_net.PlayerId} online={_net.OnlineCount} " +
-                              $"others={string.Join(";", System.Linq.Enumerable.Select(_net.Players.Values, p => p.Name + "@" + p.Root.position))}");
+                              $"others={string.Join(";", System.Linq.Enumerable.Select(_net.Players.Values, p => p.Name + "@" + p.Root.position + (p.Held.Length > 0 ? "+" + p.Held : "")))}");
                     break;
                 case "disconnect": _net.Disconnect(); break;
                 case "reconnect": _net.Reconnect(); break;
@@ -1409,6 +1412,10 @@ namespace Oxfall.Game
                     else if (command.StartsWith("time-") && float.TryParse(command.Substring(5),
                                  System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out float hour))
                         _dayNight.SetHour(hour);
+                    // look-D looks D degrees up (negative: down).
+                    else if (command.StartsWith("look-") && float.TryParse(command.Substring(5),
+                                 System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out float up))
+                        _player.Teleport(_player.transform.position, _player.Yaw, -up);
                     else
                         Debug.LogWarning("[Oxfall] Unknown debug command: " + command);
                     break;
@@ -1619,6 +1626,13 @@ namespace Oxfall.Game
             if (_title == null) TickVitals(Time.deltaTime);
             _vitalsUi?.Tick();
             _keypad?.Tick(Time.unscaledDeltaTime);
+            // Where this player looks and what they hold, for the others to see.
+            if (_net != null && _player != null && _hotbar != null)
+            {
+                _net.LocalPitch = -_player.Pitch;
+                var held = _hotbar.Held;
+                _net.LocalHeld = held.IsEmpty || _vitals.IsDead ? "" : held.ItemId;
+            }
             TickNet();
             TickAnimals(Time.deltaTime);
             _chat?.Tick(Time.unscaledDeltaTime);

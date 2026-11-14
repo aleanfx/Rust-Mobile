@@ -1,6 +1,6 @@
 // Guns. Alone: the revolver in hand, a few shots at a boar (flash, smoke, the bullet striking), a
 // reload, the blunderbuss and its spray, and the ARMAS tab. With a server: Beto shoots Ana with the
-// revolver from 12 m until she falls, and both screens show it.
+// revolver from 12 m until she falls, and both screens show it; first, what each holds, seen by the other.
 // Usage: node guns.js [outDir] [server]   (the build on :8080; a test server for the second half)
 const { chromium } = require('playwright');
 const fs = require('fs');
@@ -95,7 +95,21 @@ const wait = ms => new Promise(r => setTimeout(r, ms));
     await cmd(beto, 'Beto', 'back-12', 800);
     await cmd(beto, 'Beto', 'face-player', 1000);
     await cmd(ana, 'Ana', 'face-player', 1000);
+    await cmd(ana, 'Ana', 'give', 1500);
+    await cmd(ana, 'Ana', 'hatchet', 1500);
     await shot(beto, '10-beto-aims');
+    // What each sees in the other's hands: the revolver held out at her, raised, then the blunderbuss.
+    await shot(ana, '10a-ana-sees-revolver');
+    await cmd(beto, 'Beto', 'look-25', 1200);
+    await shot(ana, '10b-ana-sees-revolver-raised');
+    await cmd(beto, 'Beto', 'blunderbuss', 1500);
+    await cmd(beto, 'Beto', 'face-player', 1200);
+    await shot(ana, '10c-ana-sees-blunderbuss');
+    await cmd(ana, 'Ana', 'stats', 600);
+    await cmd(beto, 'Beto', 'stats', 600);
+    await shot(beto, '10d-beto-sees-hatchet');
+    await cmd(beto, 'Beto', 'revolver', 1500);
+    await cmd(beto, 'Beto', 'face-player', 600);
     const killed = () => log.some(l => l.includes('Beto [log] [Oxfall] Hurt: Ana') && l.includes('killed'));
     for (let i = 0; i < 8 && !killed(); i++) {
       await cmd(beto, 'Beto', 'face-player', 250);

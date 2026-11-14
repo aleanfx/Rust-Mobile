@@ -1,5 +1,6 @@
 using Oxfall.Core.Items;
 using Oxfall.Core.Net;
+using Oxfall.Game.Items;
 using Oxfall.Game.Rendering;
 using Oxfall.Game.World;
 using UnityEngine;
@@ -14,7 +15,9 @@ namespace Oxfall.Game.Net
 
     /// <summary>
     /// Another player as this phone sees them: a survivor figure drawn a moment in the past, moving
-    /// smoothly between the positions the server sent, legs and arms swinging with their speed.
+    /// smoothly between the positions the server sent, legs and arms swinging with their speed, with
+    /// what they hold in their hands where their own screen shows it: a gun shouldered and raised
+    /// where they look, a bow held out, a hatchet or a torch low on the right.
     /// </summary>
     public sealed class RemotePlayer
     {
@@ -40,6 +43,18 @@ namespace Oxfall.Game.Net
         private Vector3 _last;
         private float _speed;
         private float _phase;
+
+        // What they hold: shown where it sits on their own screen, from their eyes, turned up or down
+        // with where they look; the arms reach for it.
+        private static readonly Vector3 Eye = new Vector3(0f, 1.6f, 0.05f);
+        private static readonly Vector3 ShoulderL = new Vector3(-0.23f, 1.4f, 0f), ShoulderR = new Vector3(0.23f, 1.4f, 0f);
+        private const float ArmLength = 0.56f;
+        private enum Hands { Free, One, Rifle, Pistol, Bow }
+        private Transform _held;
+        private ItemModel _heldModel;
+        private string _heldId = "";
+        private Hands _hands;
+        private float _pitch, _pitchTarget;
 
         public RemotePlayer(ushort id, string name, MaterialLibrary materials, Transform parent)
         {
@@ -128,6 +143,57 @@ namespace Oxfall.Game.Net
         /// <summary>A blow landed: a quick jolt backwards.</summary>
         public void Flinch() => _flinch = 1f;
 
+        /// <summary>Where they look, degrees up (from the snapshots): their gun follows it.</summary>
+        public void SetPitch(float pitch) => _pitchTarget = Mathf.Clamp(pitch, -89f, 89f);
+
+        /// <summary>The item id they hold (empty for bare hands)</summary>
+        public string Held => _heldId;
+
+        /// <summary>
+        /// Puts what they now hold in their hands (<paramref name="model"/> null or not held in the
+        /// hand: nothing shows). A torch burns.
+        /// </summary>
+        public void SetHeld(string itemId, ItemModel model)
+        {
+            itemId ??= "";
+            if (itemId == _heldId) return;
+            _heldId = itemId;
+            if (_held != null) Object.Destroy(_held.gameObject);
+            _held = null;
+            _heldModel = null;
+            _hands = Hands.Free;
+            _armL.localScale = _armR.localScale = Vector3.one;
+            if (model == null || !model.ShowInHand || model.Mesh == null) return;
+            _heldModel = model;
+            _held = Part("Held " + itemId, _figure, Vector3.zero, model.Mesh, model.Materials);
+            _held.localScale = Vector3.one * model.HandScale;
+            _hands = model.Fires ? (itemId == ItemIds.Revolver ? Hands.Pistol : Hands.Rifle) : model.Shoots ? Hands.Bow : Hands.One;
+            if (model.Burns)
+                Fire.Create(_held, model.FirePosition, 0.7f, 2, 9f, 2.4f, _flame ??= MeshFactory.Flame(), _materials.Flame);
+            Draw(_lastTime, 0f);
+        }
+
+        private static Mesh _flame;
+        private float _lastTime;
+
+        /// <summary>Where the muzzle of the gun in their hands is now, if they hold one.</summary>
+        public bool TryMuzzle(out Vector3 world)
+        {
+            world = default;
+            if (_held == null || _heldModel == null || !_heldModel.Fires || Down || !Visible) return false;
+            world = _held.TransformPoint(_heldModel.Muzzle);
+            return true;
+        }
+
+        /// <summary>Turns an arm to reach from its shoulder towards a point (figure space), a little longer or shorter to get there.</summary>
+        private static void Reach(Transform arm, Vector3 shoulder, Vector3 target)
+        {
+            var d = target - shoulder;
+            if (d.sqrMagnitude < 1e-4f) return;
+            arm.localRotation = Quaternion.FromToRotation(Vector3.down, d);
+            arm.localScale = new Vector3(1f, Mathf.Clamp(d.magnitude / ArmLength, 0.7f, 1.3f), 1f);
+        }
+
         private static Transform Part(string name, Transform parent, Vector3 at, Mesh mesh, params Material[] materials)
         {
             var go = new GameObject(name);
@@ -141,6 +207,7 @@ namespace Oxfall.Game.Net
         /// <summary>Puts the figure where the player was at <paramref name="time"/> (server clock).</summary>
         public void Draw(float time, float dt)
         {
+            _lastTime = time;
             if (Poses.Count == 0) return;
             var pose = Poses.Sample(time);
             var position = new Vector3(pose.X, pose.Y, pose.Z);
@@ -173,6 +240,43 @@ namespace Oxfall.Game.Net
             _legR.localRotation = Quaternion.Euler(-s, 0f, 0f);
             _armL.localRotation = Quaternion.Euler(-s * 0.8f, 0f, -6f);
             _armR.localRotation = Quaternion.Euler(s * 0.8f, 0f, 6f);
+            _armL.localScale = _armR.localScale = Vector3.one;
+            if (_held == null) return;
+
+            // What they hold, where it sits on their screen: aimed weapons follow where they look,
+            // anything else only a little; a bob as they walk.
+            _held.gameObject.SetActive(!Down);
+            if (Down) return;
+            _pitch = dt > 0f ? Mathf.Lerp(_pitch, _pitchTarget, 1f - Mathf.Exp(-dt * 12f)) : _pitchTarget;
+            float p = _hands == Hands.One ? _pitch * 0.35f : _pitch;
+            var look = Quaternion.Euler(-p, 0f, 0f);
+            float bob = Mathf.Sin(_phase * 2f) * 0.012f * Mathf.Clamp01(_speed / 4f);
+            var at = Eye + look * _heldModel.HandPosition + new Vector3(0f, bob, 0f);
+            var turn = look * _heldModel.HandRotation;
+            _held.localPosition = at;
+            _held.localRotation = turn;
+            float scale = _heldModel.HandScale;
+            switch (_hands)
+            {
+                case Hands.Rifle:
+                    // Shouldered: the right hand on the grip, the left under the fore-end.
+                    Reach(_armR, ShoulderR, at);
+                    Reach(_armL, ShoulderL, at + turn * new Vector3(0.24f * scale, -0.03f * scale, 0f));
+                    break;
+                case Hands.Pistol:
+                    // Held out in both hands.
+                    Reach(_armR, ShoulderR, at);
+                    Reach(_armL, ShoulderL, at + look * new Vector3(-0.03f, -0.03f, -0.02f));
+                    break;
+                case Hands.Bow:
+                    // The bow out in the left hand, the right at the string by the chin.
+                    Reach(_armL, ShoulderL, at);
+                    Reach(_armR, ShoulderR, Eye + look * new Vector3(0.06f, -0.14f, 0.18f));
+                    break;
+                default:
+                    Reach(_armR, ShoulderR, at);
+                    break;
+            }
         }
 
         public void Destroy() => Object.Destroy(Root.gameObject);
