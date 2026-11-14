@@ -117,6 +117,24 @@ namespace Oxfall.Core.Rules
             }
         }
 
+        /// <summary>
+        /// How much a blast must take off it before it is destroyed: a sleeping bag goes with the first
+        /// charge next to it, a box or a cupboard with two, a furnace with four. A dead player's bag
+        /// does not burn (what it holds would be lost).
+        /// </summary>
+        public static float MaxHealth(DeployableKind kind)
+        {
+            switch (kind)
+            {
+                case DeployableKind.Campfire: return 100f;
+                case DeployableKind.StorageBox: return 150f;
+                case DeployableKind.Furnace: return 300f;
+                case DeployableKind.SleepingBag: return 50f;
+                case DeployableKind.ToolCupboard: return 150f;
+                default: return 0f;
+            }
+        }
+
         public static string Name(DeployableKind kind)
         {
             switch (kind)

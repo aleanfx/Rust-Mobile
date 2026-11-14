@@ -156,6 +156,7 @@ namespace Oxfall.Game.Net
                 _charges.RemoveAt(i);
                 ChargeBlast?.Invoke(c);
                 Explosives.Blast(_settlement.Grid, c.Target, null);
+                Explosives.Splash(_settlement, c.X, c.Y, c.Z, null);
             }
         }
 

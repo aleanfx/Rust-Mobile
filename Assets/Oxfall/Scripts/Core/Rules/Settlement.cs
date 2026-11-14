@@ -43,6 +43,9 @@ namespace Oxfall.Core.Rules
         private int _nextId = 1;
         private readonly Dictionary<PieceRef, float> _hurtAt = new Dictionary<PieceRef, float>();
         private readonly Dictionary<Edge, float> _doorHurtAt = new Dictionary<Edge, float>();
+        private readonly Dictionary<int, float> _deployableHealth = new Dictionary<int, float>();
+        private readonly List<Deployable> _falling = new List<Deployable>();
+        private bool _clearing;
 
         public Settlement(IslandGround ground, ItemCatalog catalog)
         {
@@ -67,6 +70,88 @@ namespace Oxfall.Core.Rules
             Grid.PieceRemoved += (piece, tier) => _hurtAt.Remove(piece);
             Grid.PieceUpgraded += (piece, tier) => _hurtAt.Remove(piece);
             Grid.DoorRemoved += edge => _doorHurtAt.Remove(edge);
+            // What stood on a foundation that came down comes down with it (where this copy decides;
+            // a player's copy online hears it from the server).
+            Grid.FoundationRemoved += (cell, top) =>
+            {
+                if (_clearing || !DropsLoot) return;
+                _falling.Clear();
+                foreach (var d in _deployables.Values)
+                    if (BuildingGrid.CellAt(d.X, d.Z).Equals(cell) && d.Y > top - OnFloorSlack) _falling.Add(d);
+                foreach (var d in _falling)
+                {
+                    DeployableFell?.Invoke(d.Id);
+                    Destroy(d.Id);
+                }
+            };
+        }
+
+        /// <summary>How far below a floor's top something can stand and still be on it (one put on the ground is well below).</summary>
+        private const float OnFloorSlack = 0.12f;
+
+        /// <summary>
+        /// Whether this copy is the one that decides (the server's, or a game played alone): only then
+        /// does what stood on a fallen floor come down with it, and what a destroyed box held spill
+        /// into a bag. A player's copy online leaves that to the server, which tells it what went.
+        /// </summary>
+        public bool DropsLoot { get; set; }
+
+        /// <summary>A bag of what a destroyed box, furnace or fire held, just dropped where it stood (only where <see cref="DropsLoot"/>).</summary>
+        public event Action<Deployable> LootDropped;
+
+        /// <summary>A deployable is about to be destroyed because the floor under it came down (only where <see cref="DropsLoot"/>).</summary>
+        public event Action<int> DeployableFell;
+
+        /// <summary>A deployable was hurt (by a blast) and still stands: the health it has now.</summary>
+        public event Action<int, float> DeployableHealthChanged;
+
+        /// <summary>How much health a deployable has left.</summary>
+        public float DeployableHealth(int id) =>
+            _deployableHealth.TryGetValue(id, out float h) ? h
+            : _deployables.TryGetValue(id, out var d) ? Rules.Deployables.MaxHealth(d.Kind) : 0f;
+
+        /// <summary>Deployables below full health, and how much each has.</summary>
+        public IEnumerable<KeyValuePair<int, float>> DamagedDeployables => _deployableHealth;
+
+        /// <summary>
+        /// Sets how much health a deployable has; at 0 it is destroyed (see <see cref="Destroy"/>).
+        /// False if there is no such deployable.
+        /// </summary>
+        public bool SetDeployableHealth(int id, float health)
+        {
+            if (!_deployables.TryGetValue(id, out var d)) return false;
+            if (health <= 0f)
+            {
+                Destroy(id);
+                return true;
+            }
+            float max = Rules.Deployables.MaxHealth(d.Kind);
+            if (health >= max) _deployableHealth.Remove(id);
+            else _deployableHealth[id] = health;
+            DeployableHealthChanged?.Invoke(id, Math.Min(health, max));
+            return true;
+        }
+
+        /// <summary>
+        /// Destroys a deployable (blown up, or its floor gone): what it held spills into a bag on the
+        /// floor or ground below, where this copy decides that (<see cref="DropsLoot"/>), and it goes.
+        /// </summary>
+        public bool Destroy(int id)
+        {
+            if (!_deployables.TryGetValue(id, out var d)) return false;
+            var held = Container(id);
+            if (!DropsLoot || held == null || held.IsEmpty) return Remove(id);
+            float ground = Ground.Height(d.X, d.Z);
+            float floor = Grid.TryGetFoundationTop(BuildingGrid.CellAt(d.X, d.Z), out float top) && Math.Abs(top - d.Y) < 1.5f ? top : ground;
+            var stacks = new List<(int, ItemStack)>();
+            for (int i = 0; i < held.SlotCount; i++)
+                if (!held[i].IsEmpty) stacks.Add((stacks.Count, held[i]));
+            Remove(id);
+            // A dead player's bag stays theirs as it falls.
+            var bag = Add(new Deployable(0, DeployableKind.Bag, d.X, floor, d.Z, d.Yaw, d.Kind == DeployableKind.Bag ? d.Owner : 0));
+            Container(bag.Id).SetSlots(stacks);
+            LootDropped?.Invoke(bag);
+            return true;
         }
 
         /// <summary>Seconds this settlement has been ticked (the clock for mending after a blast).</summary>
@@ -119,6 +204,7 @@ namespace Oxfall.Core.Rules
             _bagReady.Remove(id);
             _rotting.Remove(id);
             _cooking.Remove(id);
+            _deployableHealth.Remove(id);
             RemoveLock(LockTarget.On(id));
             DeployableRemoved?.Invoke(id);
             return true;
@@ -415,6 +501,7 @@ namespace Oxfall.Core.Rules
         /// <summary>Takes everything down (each removal is announced, so views follow).</summary>
         public void Clear()
         {
+            _clearing = true;
             var foundations = new List<Cell>();
             foreach (var f in Grid.Foundations) foundations.Add(f.Key);
             foreach (var cell in foundations) Grid.RemoveFoundation(cell);
@@ -428,7 +515,9 @@ namespace Oxfall.Core.Rules
             var locks = new List<LockTarget>(_locks.Keys);
             foreach (var target in locks) RemoveLock(target);
             _owners.Clear();
+            _deployableHealth.Clear();
             _nextId = 1;
+            _clearing = false;
         }
     }
 }

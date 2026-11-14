@@ -210,6 +210,8 @@ namespace Oxfall.Core.Building
         public event Action<PieceRef, BuildingTier> PieceUpgraded;
         /// <summary>Any piece came down (demolished, destroyed, or left with nothing under it), with the tier it had.</summary>
         public event Action<PieceRef, BuildingTier> PieceRemoved;
+        /// <summary>A foundation came down, with the height its top had (for what stood on it).</summary>
+        public event Action<Cell, float> FoundationRemoved;
         public event Action<Edge> DoorPlaced;
         public event Action<Edge> DoorRemoved;
         /// <summary>A door opened (true) or closed (false).</summary>
@@ -353,7 +355,8 @@ namespace Oxfall.Core.Building
         /// <summary>Removes a foundation and everything that stood only on it.</summary>
         public bool RemoveFoundation(Cell cell)
         {
-            if (!_foundations.Remove(cell)) return false;
+            if (!_foundations.TryGetValue(cell, out float top)) return false;
+            _foundations.Remove(cell);
             Forget(PieceRef.Foundation(cell));
             CellPieceRemoved?.Invoke(PieceType.Foundation, cell);
             RemoveRoof(cell);
@@ -364,6 +367,7 @@ namespace Oxfall.Core.Building
                 TakeEdge(e);
             }
             RemoveUnsupportedRoofsAround(cell);
+            FoundationRemoved?.Invoke(cell, top);
             return true;
         }
 

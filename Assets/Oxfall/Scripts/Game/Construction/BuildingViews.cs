@@ -102,10 +102,11 @@ namespace Oxfall.Game.Construction
         /// <summary>A piece or door is coming down: where it stood (its bounds) and what it was made of, just before it goes.</summary>
         public event System.Action<Bounds, Material> Fell;
 
-        private MaterialPropertyBlock _scorch;
+        private static MaterialPropertyBlock _scorch;
         private static readonly int BaseColorId = Shader.PropertyToID("_BaseColor");
 
-        private void Scorch(MeshRenderer renderer, float health01)
+        /// <summary>Blackens what a blast hurt, the more the less health it has left (full health: as made).</summary>
+        public static void Scorch(MeshRenderer renderer, float health01)
         {
             if (renderer == null) return;
             var materials = renderer.sharedMaterials;

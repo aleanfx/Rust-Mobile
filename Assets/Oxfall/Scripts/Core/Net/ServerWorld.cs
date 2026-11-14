@@ -65,7 +65,11 @@ namespace Oxfall.Core.Net
             Ground = new IslandGround(seed);
             Catalog = ItemCatalog.CreateDefault();
             Recipes = RecipeBook.CreateDefault(Catalog);
-            Settlement = new Settlement(Ground, Catalog);
+            Settlement = new Settlement(Ground, Catalog) { DropsLoot = true };
+            // What a destroyed box held, spilled into a bag: everyone is told about the bag.
+            Settlement.LootDropped += bag => Announcements.Add(BuildOp.Deploy(bag));
+            // And about what came down with the floor under it.
+            Settlement.DeployableFell += id => Announcements.Add(BuildOp.DeployableHealth(id, 0f));
             // A box that goes is closed for whoever had it open.
             Settlement.DeployableRemoved += id =>
             {

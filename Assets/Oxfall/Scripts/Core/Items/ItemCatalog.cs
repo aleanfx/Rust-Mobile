@@ -90,7 +90,7 @@ namespace Oxfall.Core.Items
                 description: "Tira flechas: para cazar lo que corre más que tú y pelear de lejos. Apunta un poco por encima: la flecha cae."),
             new ItemDefinition(ItemIds.SatchelCharge, "Carga explosiva", ItemCategory.Tool, 10, ToolKind.Explosive,
                 description: "Lánzala a una pared o una puerta: explota a los 5 segundos. Madera: 2 cargas; piedra: 4; metal: 8. "
-                    + "Puerta de madera: 1; de chapa: 2. Aléjate."),
+                    + "Puerta de madera: 1; de chapa: 2. Rompe también cajas y armarios cercanos si no hay pared en medio. Aléjate."),
             new ItemDefinition(ItemIds.Arrow, "Flecha", ItemCategory.Ammo, 64,
                 description: "Madera con punta de piedra. El arco las gasta una a una."),
 

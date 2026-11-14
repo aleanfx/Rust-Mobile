@@ -139,6 +139,18 @@ namespace Oxfall.Core.Rules
         /// <summary>How far from a piece's middle a charge can say it stuck to it (a wall is 3 m across and 3 m high).</summary>
         public const float StickReach = 2.6f;
 
+        /// <summary>How far a blast reaches what is set down (boxes, cupboards...), and how much it takes off one right next to it.</summary>
+        public const float DeployableReach = 2.5f;
+        public const float DeployableDamage = 75f;
+
+        /// <summary>Health taken from a deployable this far from the blast (its middle).</summary>
+        public static float DamageToDeployable(float distance)
+        {
+            if (distance >= DeployableReach) return 0f;
+            float t = Math.Max(0f, distance - 0.6f) / (DeployableReach - 0.6f);
+            return DeployableDamage * (1f - t);
+        }
+
         /// <summary>Health taken from someone this far from the blast (their middle), before what they wear.</summary>
         public static float DamageToPlayer(float distance)
         {
@@ -204,6 +216,71 @@ namespace Oxfall.Core.Rules
                 default:
                     return false;
             }
+        }
+
+        /// <summary>
+        /// The blast on what is set down near it, where no wall stands between: each thing loses health
+        /// by how close it is and goes when it has none left (a box spilling what it held into a bag,
+        /// where the settlement decides that). A dead player's bag is not hurt. What changed goes into
+        /// <paramref name="changes"/> as health ops.
+        /// </summary>
+        public static void Splash(Settlement settlement, float x, float y, float z, List<BuildOp> changes)
+        {
+            var near = new List<(int Id, float Amount)>();
+            foreach (var d in settlement.Deployables)
+            {
+                if (Deployables.MaxHealth(d.Kind) <= 0f) continue;
+                float dy = d.Y + 0.4f;
+                float amount = DamageToDeployable(Distance(x, y, z, d.X, dy, d.Z));
+                if (amount > 0f && !Shielded(settlement.Grid, x, y, z, d.X, dy, d.Z)) near.Add((d.Id, amount));
+            }
+            foreach (var (id, amount) in near)
+            {
+                float left = settlement.DeployableHealth(id) - amount;
+                if (!settlement.SetDeployableHealth(id, left)) continue;
+                changes?.Add(BuildOp.DeployableHealth(id, Math.Max(0f, left)));
+            }
+        }
+
+        /// <summary>
+        /// Whether a wall, a doorway's frame or a shut door stands between a blast at (x0, y0, z0) and
+        /// (x1, y1, z1): what is inside a base is safe from a charge on its outside until that wall falls.
+        /// </summary>
+        public static bool Shielded(BuildingGrid grid, float x0, float y0, float z0, float x1, float y1, float z1)
+        {
+            const float S = BuildingGrid.CellSize;
+            // Walls along X stand on the lines z = k * S; walls along Z on x = k * S.
+            for (int pass = 0; pass < 2; pass++)
+            {
+                bool alongX = pass == 0;
+                float a0 = alongX ? z0 : x0, a1 = alongX ? z1 : x1;
+                if (Math.Abs(a1 - a0) < 1e-5f) continue;
+                int from = (int)Math.Floor(Math.Min(a0, a1) / S) + 1, to = (int)Math.Ceiling(Math.Max(a0, a1) / S) - 1;
+                for (int k = from; k <= to; k++)
+                {
+                    float t = (k * S - a0) / (a1 - a0);
+                    if (t <= 0f || t >= 1f) continue;
+                    float px = x0 + (x1 - x0) * t, py = y0 + (y1 - y0) * t, pz = z0 + (z1 - z0) * t;
+                    float along = alongX ? px : pz;
+                    int cellAlong = (int)Math.Floor(along / S);
+                    var edge = alongX ? new Edge(cellAlong, k, EdgeAxis.AlongX) : new Edge(k, cellAlong, EdgeAxis.AlongZ);
+                    if (!grid.TryGetEdgePiece(edge, out var piece)) continue;
+                    float h = py - grid.EdgeBaseHeight(edge);
+                    if (h < -0.05f || h > BuildingGrid.WallHeight + 0.05f) continue;
+                    if (piece.Type == PieceType.Wall) return true;
+                    // A doorway: its frame shields, and its opening does while a door is shut in it.
+                    float offset = along - (cellAlong + 0.5f) * S;
+                    bool inOpening = Math.Abs(offset) < 0.6f && h < 2.2f;
+                    if (!inOpening || (grid.HasDoor(edge) && !grid.IsDoorOpen(edge))) return true;
+                }
+            }
+            return false;
+        }
+
+        private static float Distance(float x0, float y0, float z0, float x1, float y1, float z1)
+        {
+            float dx = x1 - x0, dy = y1 - y0, dz = z1 - z0;
+            return (float)Math.Sqrt(dx * dx + dy * dy + dz * dz);
         }
 
         private static ChargeTarget OnFrame(BuildingGrid grid, Edge edge) =>

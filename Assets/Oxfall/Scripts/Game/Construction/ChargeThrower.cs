@@ -24,10 +24,14 @@ namespace Oxfall.Game.Construction
         private Explosions _explosions;
         private string _info;
         private float _cooldown;
+        private DeployableTag _aimedAt;
 
         public bool Active { get; private set; }
 
         public GameActions Actions { get; set; }
+
+        /// <summary>For what is set down (a box in the crosshair shows how many charges it takes too).</summary>
+        public Settlement Settlement { get; set; }
 
         /// <summary>A charge left the hand (for the swing of the arm and its sound).</summary>
         public event System.Action Thrown;
@@ -91,11 +95,13 @@ namespace Oxfall.Game.Construction
             target = ChargeTarget.Ground;
             point = default;
             normal = Vector3.up;
+            _aimedAt = null;
             var ray = new Ray(_head.position, _head.forward);
             if (!Physics.Raycast(ray, out var hit, Explosives.ThrowReach, Physics.DefaultRaycastLayers, QueryTriggerInteraction.Ignore))
                 return false;
             point = hit.point;
             normal = hit.normal;
+            _aimedAt = hit.collider.GetComponent<DeployableTag>();
             var tag = hit.collider.GetComponent<PieceTag>();
             if (tag != null)
             {
@@ -121,6 +127,11 @@ namespace Oxfall.Game.Construction
                 {
                     string name = $"{BuildSystem.Name(target.Piece.Type)} de {BuildingTiers.Name(tier).ToLowerInvariant()}";
                     info = $"{name}  ·  {Charges(_grid.Health(target.Piece))}";
+                }
+                else if (_aimedAt != null && Settlement != null && Deployables.MaxHealth(_aimedAt.Kind) > 0f && Settlement.TryGet(_aimedAt.Id, out _))
+                {
+                    int n = Mathf.CeilToInt(Settlement.DeployableHealth(_aimedAt.Id) / Explosives.DeployableDamage - 1e-4f);
+                    info = $"{Deployables.Name(_aimedAt.Kind)}  ·  {(n == 1 ? "cae con 1 carga" : $"cae con {n} cargas")}";
                 }
             }
             if (info == _info) return;

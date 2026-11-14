@@ -33,6 +33,9 @@ namespace Oxfall.Game.Construction
         /// <summary>A fire started (a campfire set down, a furnace lit), for its crackle.</summary>
         public event Action<GameObject> FireStarted;
 
+        /// <summary>Something set down is going (picked up, or destroyed): where it stood and what it was made of.</summary>
+        public event Action<Bounds, Material> Fell;
+
         public int Count => _views.Count;
 
         public DeployableViews(Settlement settlement, IReadOnlyDictionary<string, ItemModel> models, MaterialLibrary materials)
@@ -51,6 +54,12 @@ namespace Oxfall.Game.Construction
             settlement.DeployableAdded += Show;
             settlement.DeployableRemoved += Hide;
             settlement.DeployableChanged += Changed;
+            // Blackened by blasts, the more the closer it is to going.
+            settlement.DeployableHealthChanged += (id, health) =>
+            {
+                if (!_views.TryGetValue(id, out var go) || !_settlement.TryGet(id, out var d)) return;
+                BuildingViews.Scorch(go.GetComponent<MeshRenderer>(), health / Mathf.Max(1f, Deployables.MaxHealth(d.Kind)));
+            };
         }
 
         public ItemModel ModelOf(DeployableKind kind) => _models.TryGetValue(kind, out var m) ? m : null;
@@ -74,6 +83,9 @@ namespace Oxfall.Game.Construction
             tag.Id = d.Id;
             tag.Kind = d.Kind;
             _views.Add(d.Id, go);
+            float max = Deployables.MaxHealth(d.Kind);
+            if (max > 0f && _settlement.DeployableHealth(d.Id) < max)
+                BuildingViews.Scorch(go.GetComponent<MeshRenderer>(), _settlement.DeployableHealth(d.Id) / max);
             if (d.Kind == DeployableKind.Campfire)
                 Light(d.Id, go, new Vector3(0f, 0.04f, 0f), 1.7f, 5, 14f, 3.4f);
             else if (d.Kind == DeployableKind.Furnace && _settlement.IsLit(d.Id))
@@ -85,6 +97,8 @@ namespace Oxfall.Game.Construction
             if (!_views.TryGetValue(id, out var go)) return;
             _views.Remove(id);
             _fires.Remove(id);
+            var renderer = go.GetComponent<MeshRenderer>();
+            if (renderer != null) Fell?.Invoke(renderer.bounds, renderer.sharedMaterial);
             UnityEngine.Object.Destroy(go);
         }
 

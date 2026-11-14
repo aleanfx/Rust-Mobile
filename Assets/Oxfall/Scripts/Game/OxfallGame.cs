@@ -139,7 +139,8 @@ namespace Oxfall.Game
             _survivor = new Survivor(_catalog);
             _inventory = _survivor.Inventory;
             _vitals = _survivor.Vitals;
-            _settlement = new Settlement(_world.Shape.Ground, _catalog);
+            // Alone, this copy decides what a blast destroys; online the server does.
+            _settlement = new Settlement(_world.Shape.Ground, _catalog) { DropsLoot = true };
             _hotbar = new Hotbar(_inventory);
             var models = ItemModels.Create(materials);
 
@@ -318,9 +319,11 @@ namespace Oxfall.Game
             // to a blast goes in rubble.
             _explosions = Explosions.Create(materials, audio.Bank, camera.transform, (x, z) => _world.Shape.Height(x, z));
             _buildings.Fell += _explosions.Fell;
+            _deployables.Fell += _explosions.Fell;
             _thrower = playerObject.AddComponent<ChargeThrower>();
             _thrower.Init(grid, input, player.Head, _hud, _inventory, _explosions);
             _thrower.Actions = _actions;
+            _thrower.Settlement = _settlement;
             _thrower.Thrown += () =>
             {
                 _gatherer.PlaySwing();
@@ -391,6 +394,7 @@ namespace Oxfall.Game
                 _inventory.Clear();
                 _crafting.Clear();
                 _crafting.Mirror = true;
+                _settlement.DropsLoot = false;
                 _settlement.Clear();
                 _player.Teleport(new Vector3(pose.X, pose.Y, pose.Z), pose.Yaw, 0f);
             };
@@ -712,6 +716,7 @@ namespace Oxfall.Game
                     _gatherer.StrikeSleeper = null;
                     _sleeperViews.Clear();
                     _crafting.Mirror = false;
+                    _settlement.DropsLoot = true;
                     _hud.SetOnline("SIN CONEXIÓN", false);
                     _hud.ShowToast(_net.FailReason);
                     break;
@@ -722,6 +727,7 @@ namespace Oxfall.Game
                     _gatherer.StrikeSleeper = null;
                     _sleeperViews.Clear();
                     _crafting.Mirror = false;
+                    _settlement.DropsLoot = true;
                     _hud.SetOnline(null, false);
                     break;
             }
@@ -784,8 +790,9 @@ namespace Oxfall.Game
             _explosions.Blast(charge.Id, at);
             Debug.Log($"[Oxfall] Blast {charge.Id} at ({at.x:0.0}, {at.y:0.0}, {at.z:0.0}) on {charge.Target}");
             if (_vitals.IsDead) return;
-            float amount = Explosives.DamageToPlayer(Vector3.Distance(at, _player.transform.position + Vector3.up * 0.9f));
-            if (amount <= 0f) return;
+            var middle = _player.transform.position + Vector3.up * 0.9f;
+            float amount = Explosives.DamageToPlayer(Vector3.Distance(at, middle));
+            if (amount <= 0f || Explosives.Shielded(_settlement.Grid, at.x, at.y, at.z, middle.x, middle.y, middle.z)) return;
             // Named before the blow lands, in case it is the last.
             _killer = "tu propia carga explosiva";
             int damage = Mathf.RoundToInt(_survivor.TakeHit(amount));

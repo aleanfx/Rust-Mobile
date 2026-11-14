@@ -80,22 +80,25 @@ namespace Oxfall.Core.Net
         private void Detonate(LiveCharge c)
         {
             Blasts.Add(c);
-            // The building first: what falls is announced with the rest of this tick's changes.
+            // The building first: what falls is announced with the rest of this tick's changes. Then
+            // what is set down near it, unless a wall still stands between.
             Explosives.Blast(Settlement.Grid, c.Target, Announcements);
+            Explosives.Splash(Settlement, c.X, c.Y, c.Z, Announcements);
 
             string byName = _online.TryGetValue(c.Thrower, out var thrower) ? thrower.Name : null;
             foreach (var record in _online.Values)
             {
                 if (record.Survivor.Vitals.IsDead || !Players.TryGet(record.PlayerId, out var p) || !p.Placed) continue;
                 float amount = Explosives.DamageToPlayer(Distance3(c, p.Pose.X, p.Pose.Y + 0.9f, p.Pose.Z));
-                if (amount <= 0f) continue;
+                if (amount <= 0f || Explosives.Shielded(Settlement.Grid, c.X, c.Y, c.Z, p.Pose.X, p.Pose.Y + 0.9f, p.Pose.Z)) continue;
                 float done = record.Survivor.TakeHit(amount);
                 BlastHurts.Add((record.PlayerId, c.Thrower, done, record.Survivor.Vitals.IsDead));
             }
             // Sleepers lie on the ground; hurting one may change the list, so it is copied first.
             _near.Clear();
             foreach (var sleeper in Sleepers)
-                if (Explosives.DamageToPlayer(Distance3(c, sleeper.Pose.X, sleeper.Pose.Y + 0.3f, sleeper.Pose.Z)) > 0f) _near.Add(sleeper);
+                if (Explosives.DamageToPlayer(Distance3(c, sleeper.Pose.X, sleeper.Pose.Y + 0.3f, sleeper.Pose.Z)) > 0f
+                    && !Explosives.Shielded(Settlement.Grid, c.X, c.Y, c.Z, sleeper.Pose.X, sleeper.Pose.Y + 0.3f, sleeper.Pose.Z)) _near.Add(sleeper);
             foreach (var sleeper in _near)
             {
                 float amount = Explosives.DamageToPlayer(Distance3(c, sleeper.Pose.X, sleeper.Pose.Y + 0.3f, sleeper.Pose.Z));

@@ -4,7 +4,9 @@
 const url = process.argv[2] || 'ws://localhost:7777/ws';
 const count = +(process.argv[3] || 5);
 const seconds = +(process.argv[4] || 6);
-const VERSION = 7;
+// The protocol version, read from the game's own code so the bots never fall behind it.
+const VERSION = Number(require('fs').readFileSync(require('path').join(__dirname, '../../Assets/Oxfall/Scripts/Core/Net/Protocol.cs'), 'utf8')
+  .match(/const ushort Version = (\d+);/)[1]);
 const T = {
   Hello: 1, Move: 2, Act: 4, Build: 5, Chat: 40, ChatLine: 31,
   Welcome: 10, Rejected: 11, Joined: 12, Left: 13, Snapshot: 14, Correction: 15,

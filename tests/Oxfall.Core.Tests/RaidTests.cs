@@ -293,8 +293,8 @@ namespace Oxfall.Core.Tests
         {
             var (world, ale, pa, bea, pb, cell) = Base();
             var (x, y, z) = WallFace(world, cell);
-            // Bea right behind her wall, Ale 3 m in front of it.
-            world.Players.Place(pb.Id, new Pose(x, y - 1.5f, z + 1.2f, 0f), 0f);
+            // Bea beside her wall, Ale 3 m in front of it.
+            world.Players.Place(pb.Id, new Pose(x + 1f, y - 1.5f, z - 0.8f, 0f), 0f);
             world.Players.Place(pa.Id, new Pose(x, y - 1.5f, z - 2.9f, 0f), 0f);
             Assert.IsTrue(world.Throw(pa.Id, ChargeTarget.OnPiece(PieceRef.OnEdge(cell.South, PieceType.Wall)), x, y, z, 0f, 0f, -1f, 1f, out _));
             Burn(world, Explosives.FuseSeconds + 0.2f);
@@ -303,6 +303,15 @@ namespace Oxfall.Core.Tests
             Assert.Greater(hurts[pb.Id].Damage, hurts[pa.Id].Damage, "the nearer takes more");
             Assert.AreEqual(pa.Id, hurts[pb.Id].By, "whose charge it was");
             Assert.AreEqual(0f, Explosives.DamageToPlayer(Explosives.BlastRadius), "nothing past the radius");
+
+            // Inside, behind the wall that still stands, she is safe.
+            world.BlastHurts.Clear();
+            world.Players.Place(pb.Id, new Pose(x, y - 1.5f, z + 1.2f, 0f), 0f);
+            Assert.IsTrue(world.Throw(pa.Id, ChargeTarget.OnPiece(PieceRef.OnEdge(cell.South, PieceType.Wall)), x, y, z, 0f, 0f, -1f, 3f, out _));
+            Burn(world, Explosives.FuseSeconds + 0.2f);
+            Assert.IsTrue(world.Settlement.Grid.HasEdgePiece(cell.South));
+            Assert.IsFalse(world.BlastHurts.Any(h => h.Target == pb.Id), "the wall shields her");
+            world.Players.Place(pb.Id, new Pose(x + 1f, y - 1.5f, z - 0.8f, 0f), 0f);
 
             // Bea goes to sleep right there; the next charge reaches her body too.
             world.BlastHurts.Clear();
@@ -333,6 +342,144 @@ namespace Oxfall.Core.Tests
             Assert.AreEqual(500f, done.HealthLeft, "everyone is told");
             int paid = stone - bea.Survivor.Inventory.Count(ItemIds.Stone);
             Assert.AreEqual((int)System.Math.Ceiling(BuildCosts.StoneUpgrade * Repairs.CostShare * 0.25f), paid, "a share of what the stone cost");
+        }
+
+        // ---- What is set down
+
+        [Test]
+        public void AChargeBesideABoxBreaksItAtTwo_AndWhatItHeldSpillsIntoABag()
+        {
+            var w = new Settlement(new IslandGround(Seed), Catalog) { DropsLoot = true };
+            var box = w.Add(new Deployable(0, DeployableKind.StorageBox, 10f, 5f, 10f, 0f, 1));
+            w.Container(box.Id).Add(ItemIds.Stone, 500);
+            w.Container(box.Id).Add(ItemIds.Wood, 300);
+            var body = w.Add(new Deployable(0, DeployableKind.Bag, 10.5f, 5f, 10.5f, 0f, 2));
+            w.Container(body.Id).Add(ItemIds.Cloth, 5);
+            Deployable dropped = default;
+            w.LootDropped += b => dropped = b;
+            var changes = new List<BuildOp>();
+
+            Explosives.Splash(w, 10.3f, 5.4f, 10f, changes);
+            Assert.AreEqual(1, changes.Count, "the box, not the dead player's bag");
+            Assert.AreEqual(BuildOpKind.DeployableHealth, changes[0].Kind);
+            Assert.AreEqual(box.Id, changes[0].Id);
+            Assert.AreEqual(150f - Explosives.DeployableDamage, w.DeployableHealth(box.Id), 1e-3f);
+
+            Explosives.Splash(w, 10.3f, 5.4f, 10f, changes);
+            Assert.IsFalse(w.TryGet(box.Id, out _), "the box is gone");
+            Assert.AreEqual(0f, changes[1].HealthLeft);
+            Assert.AreEqual(DeployableKind.Bag, dropped.Kind, "what it held lies in a bag");
+            Assert.AreEqual(500, w.Container(dropped.Id).Count(ItemIds.Stone));
+            Assert.AreEqual(300, w.Container(dropped.Id).Count(ItemIds.Wood));
+            Assert.IsTrue(w.TryGet(body.Id, out _), "a dead player's bag does not burn");
+            Assert.AreEqual(0f, Explosives.DamageToDeployable(Explosives.DeployableReach), "nothing past its reach");
+        }
+
+        [Test]
+        public void AWallShieldsWhatIsInsideUntilItFalls()
+        {
+            var w = new Settlement(new IslandGround(Seed), Catalog) { DropsLoot = true };
+            var grid = w.Grid;
+            var cell = new Cell(0, 0);
+            grid.PlaceFoundation(cell, 1f);
+            grid.PlaceEdge(cell.South, PieceType.Wall);
+            var wall = PieceRef.OnEdge(cell.South, PieceType.Wall);
+            grid.Upgrade(wall, BuildingTier.Wood);
+            var box = w.Add(new Deployable(0, DeployableKind.StorageBox, 1.5f, 1f, 0.6f, 0f));
+
+            // A charge on the outside of the wall, the box just inside.
+            Assert.IsTrue(Explosives.Shielded(grid, 1.5f, 2f, -0.1f, 1.5f, 1.4f, 0.6f));
+            Explosives.Blast(grid, ChargeTarget.OnPiece(wall), null);
+            Explosives.Splash(w, 1.5f, 2f, -0.1f, null);
+            Assert.AreEqual(150f, w.DeployableHealth(box.Id), "behind a standing wall");
+            Explosives.Blast(grid, ChargeTarget.OnPiece(wall), null);
+            Assert.IsFalse(grid.HasEdgePiece(cell.South), "the wood wall fell at two");
+            Explosives.Splash(w, 1.5f, 2f, -0.1f, null);
+            Assert.Less(w.DeployableHealth(box.Id), 150f, "with the wall gone, the blast reaches it");
+
+            // A doorway: its frame shields, its opening only while a door is shut in it.
+            grid.PlaceEdge(cell.North, PieceType.Doorway);
+            Assert.IsFalse(Explosives.Shielded(grid, 1.5f, 2f, 3.5f, 1.5f, 1.4f, 2.4f), "through an empty doorway");
+            Assert.IsTrue(Explosives.Shielded(grid, 0.3f, 2f, 3.5f, 0.3f, 1.4f, 2.4f), "the frame beside the opening");
+            grid.PlaceDoor(cell.North, DoorKind.Wood);
+            Assert.IsTrue(Explosives.Shielded(grid, 1.5f, 2f, 3.5f, 1.5f, 1.4f, 2.4f), "a shut door");
+            grid.ToggleDoor(cell.North);
+            Assert.IsFalse(Explosives.Shielded(grid, 1.5f, 2f, 3.5f, 1.5f, 1.4f, 2.4f), "an open one");
+            Assert.IsFalse(Explosives.Shielded(grid, 1.5f, 2f, 5f, 1.5f, 1.4f, 4f), "nothing in between");
+        }
+
+        [Test]
+        public void WhatStandsOnAFloorFallsWithIt_AndEveryPhoneSeesTheSame()
+        {
+            var (world, ale, pa, bea, pb, cell) = Base();
+            var w = world.Settlement;
+            w.Grid.TryGetFoundationTop(cell, out float top);
+            float cx = (cell.X + 0.5f) * S, cz = (cell.Z + 0.5f) * S;
+            var box = w.Add(new Deployable(0, DeployableKind.StorageBox, cx - 0.8f, top, cz + 0.5f, 0f, bea.Owner));
+            w.Container(box.Id).Add(ItemIds.MetalFragments, 250);
+            var sleepingBag = w.Add(new Deployable(0, DeployableKind.SleepingBag, cx + 0.8f, top, cz + 0.5f, 0f, bea.Owner));
+            float gx = cx + 9f, gz = cz;
+            var outside = w.Add(new Deployable(0, DeployableKind.StorageBox, gx, world.Ground.Height(gx, gz), gz, 0f, bea.Owner));
+            w.Container(outside.Id).Add(ItemIds.Wood, 10);
+
+            // A phone that joined before the raid, and only applies what it is told.
+            var phone = new Settlement(world.Ground, Catalog);
+            foreach (var op in BuildOps.Describe(w)) Assert.IsTrue(BuildOps.Apply(phone, op), op.ToString());
+            Assert.AreEqual(w.DeployableCount, phone.DeployableCount);
+
+            // Ale, 2 m south of the wall, blows up the twig floor.
+            world.Players.Place(pa.Id, new Pose(cx, top, cell.Z * S - 2f, 0f), 0f);
+            var floor = PieceRef.Foundation(cell);
+            var at = PlayerActions.PiecePoint(w.Grid, floor);
+            Assert.IsTrue(world.Throw(pa.Id, ChargeTarget.OnPiece(floor), at.X, at.Y, at.Z, 0f, 1f, 0f, 1f, out _));
+            Burn(world, Explosives.FuseSeconds + 0.2f);
+            Assert.IsFalse(w.Grid.HasFoundation(cell), "the floor is gone");
+            Assert.IsFalse(w.TryGet(box.Id, out _), "the box on it went with it");
+            Assert.IsFalse(w.TryGet(sleepingBag.Id, out _), "and the sleeping bag");
+            Assert.IsTrue(w.TryGet(outside.Id, out _), "the box on the ground over there stands");
+            var spilled = w.Deployables.Single(d => d.Kind == DeployableKind.Bag);
+            Assert.AreEqual(250, w.Container(spilled.Id).Count(ItemIds.MetalFragments), "what the box held lies in a bag");
+            Assert.AreEqual(world.Ground.Height(spilled.X, spilled.Z), spilled.Y, 1e-3f, "on the ground below");
+            Assert.IsTrue(world.Announcements.Any(op => op.Kind == BuildOpKind.DeployableHealth && op.Id == box.Id && op.HealthLeft == 0f));
+            Assert.IsTrue(world.Announcements.Any(op => op.Kind == BuildOpKind.Deploy && op.Id == spilled.Id));
+
+            // Everything the server said, over the wire, to the phone.
+            foreach (var op in world.Announcements)
+            {
+                var writer = new NetWriter();
+                op.Write(writer);
+                BuildOps.Apply(phone, BuildOp.Read(new NetReader(writer.ToArray())));
+            }
+            CollectionAssert.AreEquivalent(w.Deployables.Select(d => (d.Id, d.Kind)), phone.Deployables.Select(d => (d.Id, d.Kind)),
+                "the phone sees the same things standing");
+            Assert.IsFalse(phone.Grid.HasFoundation(cell));
+        }
+
+        [Test]
+        public void AHurtBoxIsDescribedHurt_ClearingDropsNothing_AndItsHealthCrossesTheWire()
+        {
+            var ground = new IslandGround(Seed);
+            var a = new Settlement(ground, Catalog) { DropsLoot = true };
+            var cell = new Cell(3, 3);
+            a.Grid.PlaceFoundation(cell, 2f);
+            var box = a.Add(new Deployable(0, DeployableKind.StorageBox, 10.5f, 2f, 10.5f, 0f));
+            a.Container(box.Id).Add(ItemIds.Stone, 10);
+            Assert.IsTrue(a.SetDeployableHealth(box.Id, 40f));
+
+            var b = new Settlement(ground, Catalog);
+            foreach (var op in BuildOps.Describe(a)) Assert.IsTrue(BuildOps.Apply(b, op), op.ToString());
+            Assert.AreEqual(40f, b.DeployableHealth(box.Id), 1e-3f);
+
+            var writer = new NetWriter();
+            BuildOp.DeployableHealth(box.Id, 12.5f).Write(writer);
+            var back = BuildOp.Read(new NetReader(writer.ToArray()));
+            Assert.AreEqual(BuildOpKind.DeployableHealth, back.Kind);
+            Assert.AreEqual(box.Id, back.Id);
+            Assert.AreEqual(12.5f, back.HealthLeft);
+
+            // A fresh copy from the server wipes this one: no bags come of it.
+            a.Clear();
+            Assert.AreEqual(0, a.DeployableCount);
         }
 
         [Test]

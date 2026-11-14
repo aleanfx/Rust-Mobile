@@ -30,6 +30,8 @@ namespace Oxfall.Core.Rules
         Health = 19,
         /// <summary>Mend a piece or a door with the hammer (asked for; the server answers with <see cref="Health"/>).</summary>
         Repair = 20,
+        /// <summary>A deployable's health is now this (after a blast); at 0 it is destroyed, what it held spilling into a bag.</summary>
+        DeployableHealth = 21,
     }
 
     /// <summary>
@@ -91,6 +93,9 @@ namespace Oxfall.Core.Rules
         /// <summary>The door in a doorway has <paramref name="health"/> left (0 or less: it broke).</summary>
         public static BuildOp DoorHealth(Edge edge, float health) =>
             new BuildOp(BuildOpKind.Health, PieceType.Doorway, edge.X, edge.Z, edge.Axis, open: true, top: health);
+
+        /// <summary>A deployable's health is now this; at 0 it is destroyed.</summary>
+        public static BuildOp DeployableHealth(int id, float health) => OnDeployable(BuildOpKind.DeployableHealth, id).WithTop(health);
 
         /// <summary>Mends a piece to full health, for some of what it is made of.</summary>
         public static BuildOp Repair(PieceRef piece) => piece.IsEdge
@@ -206,6 +211,7 @@ namespace Oxfall.Core.Rules
                 case BuildOpKind.RemoveLock: return $"RemoveLock {Lock}";
                 case BuildOpKind.Health: return $"Health {(OnDoor ? "door " + EdgeAt : Piece.ToString())} {Top:0.#}";
                 case BuildOpKind.Repair: return $"Repair {(OnDoor ? "door " + EdgeAt : Piece.ToString())}";
+                case BuildOpKind.DeployableHealth: return $"DeployableHealth {Id} {Top:0.#}";
                 default: return $"{Kind} {Type} ({X},{Z}{(PieceRef.IsEdgeType(Type) ? "," + Axis : "")})";
             }
         }
@@ -298,6 +304,10 @@ namespace Oxfall.Core.Rules
                     w.Byte((byte)Axis);
                     w.Bool(Open);
                     if (Kind == BuildOpKind.Health) w.Float(Top);
+                    break;
+                case BuildOpKind.DeployableHealth:
+                    w.Int(Id);
+                    w.Float(Top);
                     break;
                 default:
                     throw new InvalidOperationException("Unknown build op " + Kind);
@@ -409,6 +419,11 @@ namespace Oxfall.Core.Rules
                     if (kind == BuildOpKind.Repair) return door ? RepairDoor(piece.Edge) : Repair(piece);
                     float health = Finite(r.Float());
                     return door ? DoorHealth(piece.Edge, health) : Health(piece, health);
+                }
+                case BuildOpKind.DeployableHealth:
+                {
+                    int id = r.Int();
+                    return DeployableHealth(id, Finite(r.Float()));
                 }
                 default:
                     throw new ProtocolException("Unknown build op " + (byte)kind + ".");
@@ -527,6 +542,8 @@ namespace Oxfall.Core.Rules
                         grid.SetHealth(piece, op.HealthLeft);
                         return true;
                     }
+                case BuildOpKind.DeployableHealth:
+                    return settlement.SetDeployableHealth(op.Id, op.HealthLeft);
                 default:
                     return false;
             }
@@ -576,6 +593,7 @@ namespace Oxfall.Core.Rules
                 ops.Add(BuildOp.ClearAuthorized(d.Id));
                 foreach (int owner in settlement.AuthorizedOn(d.Id)) ops.Add(BuildOp.Authorize(d.Id, owner));
             }
+            foreach (var hurt in settlement.DamagedDeployables) ops.Add(BuildOp.DeployableHealth(hurt.Key, hurt.Value));
             // Locks, with their codes hidden: who put each on, who knows its code, and whether it is locked.
             foreach (var pair in settlement.Locks)
             {
