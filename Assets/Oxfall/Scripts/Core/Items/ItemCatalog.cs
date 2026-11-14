@@ -135,6 +135,13 @@ namespace Oxfall.Core.Items
                 description: "Cuero en las piernas, cosido con tela.", wear: WearSlot.Legs, protection: 0.11f),
             new ItemDefinition(ItemIds.HideBoots, "Botas de cuero", ItemCategory.Attire, 1, skinnable: true,
                 description: "Para no ir descalzo por las rocas.", wear: WearSlot.Feet, protection: 0.05f),
+            // Metal armour, learned at the workbench: what a raid or a gunfight is dressed in.
+            new ItemDefinition(ItemIds.MetalFacemask, "Máscara de metal", ItemCategory.Attire, 1, skinnable: true,
+                description: "Chapa soldada con rendijas para los ojos y correas de cuero: la cabeza más protegida.", wear: WearSlot.Head, protection: 0.2f),
+            new ItemDefinition(ItemIds.MetalChestPlate, "Peto de metal", ItemCategory.Attire, 1, skinnable: true,
+                description: "Placas de metal delante y detrás, atadas con cuero: para los tiroteos.", wear: WearSlot.Chest, protection: 0.25f),
+            new ItemDefinition(ItemIds.RoadsignKilt, "Faldón de señales", ItemCategory.Attire, 1, skinnable: true,
+                description: "Señales de tráfico cortadas, colgadas de un cinturón: cubren las piernas.", wear: WearSlot.Legs, protection: 0.15f),
 
             new ItemDefinition(ItemIds.BuildingPlan, "Plano de construcción", ItemCategory.Placeable, 1,
                 description: "Llévalo en la mano para construir."),

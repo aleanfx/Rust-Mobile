@@ -34,8 +34,8 @@ namespace Oxfall.Game.Net
 
         private readonly Transform _figure, _legL, _legR, _armL, _armR;
         private readonly MaterialLibrary _materials;
-        private static Mesh _hood, _wrap;
-        private Transform _headwear;
+        private static Mesh _hood, _wrap, _facemask, _chestPlate, _kilt;
+        private Transform _headwear, _armour, _skirt;
         private string _outfit = "";
         private readonly CapsuleCollider _capsule;
         private float _fall;
@@ -99,7 +99,8 @@ namespace Oxfall.Game.Net
 
         /// <summary>
         /// Dresses the figure in what the player wears (item ids, head to feet; empty for nothing): burlap
-        /// or hide on the chest and legs, hide boots, a headwrap or a hood.
+        /// or hide on the chest and legs, hide boots, a headwrap or a hood; metal armour over the top
+        /// (a facemask, a chest plate, a kilt of road signs).
         /// </summary>
         public void SetOutfit(string[] worn)
         {
@@ -128,6 +129,17 @@ namespace Oxfall.Game.Net
                 var mesh = hood ? (_hood ??= MeshFactory.Headwear(true)) : (_wrap ??= MeshFactory.Headwear(false));
                 _headwear = Part("Headwear", _figure, Vector3.zero, mesh, hood ? m.Leather : m.Cloth, m.Rope);
             }
+            else if (head == ItemIds.MetalFacemask)
+                _headwear = Part("Headwear", _figure, Vector3.zero, _facemask ??= MeshFactory.MetalFacemask(), m.Metal, m.Leather, m.Char);
+
+            if (_armour != null) Object.Destroy(_armour.gameObject);
+            _armour = chest == ItemIds.MetalChestPlate
+                ? Part("Chest plate", _figure, Vector3.zero, _chestPlate ??= MeshFactory.MetalChestPlate(), m.Metal, m.Leather)
+                : null;
+            if (_skirt != null) Object.Destroy(_skirt.gameObject);
+            _skirt = legs == ItemIds.RoadsignKilt
+                ? Part("Kilt", _figure, Vector3.zero, _kilt ??= MeshFactory.RoadsignKilt(), m.Metal, m.Leather, m.WarnYellow)
+                : null;
         }
 
         private static void Dress(Transform part, Material main, Material second)

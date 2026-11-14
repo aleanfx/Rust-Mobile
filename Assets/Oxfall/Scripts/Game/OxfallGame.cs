@@ -1501,6 +1501,12 @@ namespace Oxfall.Game
                 case "give-metal":
                     ServerWorld.GiveTestKit(_inventory, 3);
                     break;
+                case "give-armour" when _actions.Online:
+                    _net.SendAct(ActKind.DevGive, 4);
+                    break;
+                case "give-armour":
+                    ServerWorld.GiveTestKit(_inventory, 4);
+                    break;
                 case "give":
                     _inventory.Add(ItemIds.Wood, 1000);
                     _inventory.Add(ItemIds.Stone, 1000);
@@ -1513,6 +1519,11 @@ namespace Oxfall.Game
                 // Puts on whatever hide clothing is carried; undress takes everything off.
                 case "wear-hide":
                     foreach (var id in new[] { ItemIds.HideHood, ItemIds.HideVest, ItemIds.HidePants, ItemIds.HideBoots })
+                        for (int i = 0; i < _inventory.CarrySlots; i++)
+                            if (_inventory[i].ItemId == id) { _actions.Wear(i); break; }
+                    break;
+                case "wear-armour":
+                    foreach (var id in new[] { ItemIds.MetalFacemask, ItemIds.MetalChestPlate, ItemIds.RoadsignKilt, ItemIds.HideBoots })
                         for (int i = 0; i < _inventory.CarrySlots; i++)
                             if (_inventory[i].ItemId == id) { _actions.Wear(i); break; }
                     break;

@@ -398,6 +398,15 @@ namespace Oxfall.Core.Net
         /// </summary>
         public static void GiveTestKit(Inventory inventory, int kit = 0)
         {
+            if (kit == 4)
+            {
+                // Metal armour, head to feet.
+                inventory.Add(ItemIds.MetalFacemask, 1);
+                inventory.Add(ItemIds.MetalChestPlate, 1);
+                inventory.Add(ItemIds.RoadsignKilt, 1);
+                inventory.Add(ItemIds.HideBoots, 1);
+                return;
+            }
             if (kit == 3)
             {
                 // The metal age: a workbench and what its recipes need.

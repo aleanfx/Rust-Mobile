@@ -891,6 +891,75 @@ namespace Oxfall.Game.World
             return b.Build(hood ? "Hood" : "Headwrap", 40f);
         }
 
+        /// <summary>
+        /// A metal facemask worn on the head (its centre about 1.64 m up), as the PC game's: a welded
+        /// plate over the face with a brow bar, eye slits and breathing holes, cheek plates, and a
+        /// leather strap round the head. Submeshes: metal, leather, dark (the slits).
+        /// </summary>
+        public static Mesh MetalFacemask()
+        {
+            var b = new FlatMeshBuilder(3) { UvScale = 0.3f };
+            b.AddPrism(0, 0.112f, 0.134f, Ccw(new Vector2(-0.112f, 1.775f), new Vector2(0.112f, 1.775f), new Vector2(0.124f, 1.63f),
+                new Vector2(0.075f, 1.515f), new Vector2(-0.075f, 1.515f), new Vector2(-0.124f, 1.63f)));
+            b.AddBox(0, new Vector3(-0.118f, 1.735f, 0.13f), new Vector3(0.118f, 1.765f, 0.15f));
+            foreach (float side in new[] { -1f, 1f })
+            {
+                b.AddBox(0, new Vector3(side < 0f ? -0.13f : 0.11f, 1.55f, -0.01f), new Vector3(side < 0f ? -0.11f : 0.13f, 1.73f, 0.12f));
+                b.AddBox(2, new Vector3(side < 0f ? -0.088f : 0.022f, 1.668f, 0.133f), new Vector3(side < 0f ? -0.022f : 0.088f, 1.69f, 0.137f));
+                // Rivets at the plate's corners.
+                b.AddBox(0, new Vector3(side * 0.095f - 0.008f, 1.6f, 0.132f), new Vector3(side * 0.095f + 0.008f, 1.616f, 0.142f));
+                b.AddBox(0, new Vector3(side * 0.06f - 0.008f, 1.535f, 0.132f), new Vector3(side * 0.06f + 0.008f, 1.551f, 0.142f));
+            }
+            for (int k = -1; k <= 1; k++)
+                b.AddBox(2, new Vector3(k * 0.03f - 0.009f, 1.565f, 0.133f), new Vector3(k * 0.03f + 0.009f, 1.583f, 0.137f));
+            b.AddTube(1, new Vector3(0f, 1.69f, 0f), new Vector3(0f, 1.725f, -0.005f), 0.128f, 0.126f, 12);
+            return b.Build("Metal facemask", 30f);
+        }
+
+        /// <summary>
+        /// A metal chest plate worn on a survivor (feet at the origin): plates front and back with a
+        /// welded seam, leather straps over the shoulders and round the sides. Submeshes: metal, leather.
+        /// </summary>
+        public static Mesh MetalChestPlate()
+        {
+            var b = new FlatMeshBuilder(2) { UvScale = 0.3f };
+            var plate = Ccw(new Vector2(-0.17f, 0.98f), new Vector2(0.17f, 0.98f), new Vector2(0.195f, 1.3f), new Vector2(0.125f, 1.41f),
+                new Vector2(0.05f, 1.37f), new Vector2(-0.05f, 1.37f), new Vector2(-0.125f, 1.41f), new Vector2(-0.195f, 1.3f));
+            b.AddPrism(0, 0.19f, 0.215f, plate);
+            b.AddPrism(0, -0.215f, -0.19f, plate);
+            b.AddBox(0, new Vector3(-0.18f, 1.17f, 0.213f), new Vector3(0.18f, 1.19f, 0.224f));
+            b.AddBox(0, new Vector3(-0.18f, 1.17f, -0.224f), new Vector3(0.18f, 1.19f, -0.213f));
+            foreach (float x in new[] { -0.11f, 0.11f })
+                b.AddBox(1, new Vector3(x - 0.03f, 1.41f, -0.205f), new Vector3(x + 0.03f, 1.455f, 0.205f));
+            foreach (float x in new[] { -0.197f, 0.197f })
+                b.AddBox(1, new Vector3(x - 0.012f, 1.06f, -0.2f), new Vector3(x + 0.012f, 1.1f, 0.2f));
+            return b.Build("Metal chest plate", 30f);
+        }
+
+        /// <summary>
+        /// A kilt of road signs worn on the hips (feet at the origin): cut plates hung front, back and
+        /// at the sides from a leather belt, each with a band of its old paint. Submeshes: metal,
+        /// leather, paint.
+        /// </summary>
+        public static Mesh RoadsignKilt()
+        {
+            var b = new FlatMeshBuilder(3) { UvScale = 0.3f };
+            b.AddTube(1, new Vector3(0f, 0.9f, 0f), new Vector3(0f, 0.95f, 0f), 0.19f, 0.188f, 12);
+            var plate = Ccw(new Vector2(-0.15f, 0.935f), new Vector2(0.15f, 0.935f), new Vector2(0.17f, 0.6f), new Vector2(-0.17f, 0.6f));
+            b.AddPrism(0, 0.19f, 0.204f, plate);
+            b.AddPrism(0, -0.204f, -0.19f, plate);
+            b.AddBox(2, new Vector3(-0.162f, 0.7f, 0.203f), new Vector3(0.162f, 0.75f, 0.208f));
+            b.AddBox(2, new Vector3(-0.162f, 0.7f, -0.208f), new Vector3(0.162f, 0.75f, -0.203f));
+            foreach (float side in new[] { -1f, 1f })
+            {
+                float x0 = side < 0f ? -0.204f : 0.19f, x1 = side < 0f ? -0.19f : 0.204f;
+                b.AddBox(0, new Vector3(x0, 0.63f, -0.13f), new Vector3(x1, 0.935f, 0.13f));
+                float p0 = side < 0f ? -0.208f : 0.203f, p1 = side < 0f ? -0.203f : 0.208f;
+                b.AddBox(2, new Vector3(p0, 0.7f, -0.122f), new Vector3(p1, 0.75f, 0.122f));
+            }
+            return b.Build("Roadsign kilt", 30f);
+        }
+
         /// <summary>One leg hanging from the hip at the origin. Submeshes: trousers, boot.</summary>
         public static Mesh SurvivorLeg()
         {

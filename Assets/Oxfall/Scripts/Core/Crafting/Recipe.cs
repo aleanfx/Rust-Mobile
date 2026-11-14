@@ -136,6 +136,13 @@ namespace Oxfall.Core.Crafting
                 new Ingredient(ItemIds.Leather, 15), new Ingredient(ItemIds.Cloth, 10)),
             new Recipe("hide_boots", ItemIds.HideBoots, 1, 10f,
                 new Ingredient(ItemIds.Leather, 10)),
+            // Metal armour: learned, and made at a workbench from fragments held on with hide.
+            new Recipe("metal_facemask", ItemIds.MetalFacemask, 1, 20f,
+                new Ingredient(ItemIds.MetalFragments, 150), new Ingredient(ItemIds.Leather, 10), new Ingredient(ItemIds.Cloth, 10)).AtWorkbench().Blueprint(80),
+            new Recipe("metal_chest_plate", ItemIds.MetalChestPlate, 1, 25f,
+                new Ingredient(ItemIds.MetalFragments, 250), new Ingredient(ItemIds.Leather, 20), new Ingredient(ItemIds.Cloth, 20)).AtWorkbench().Blueprint(120),
+            new Recipe("roadsign_kilt", ItemIds.RoadsignKilt, 1, 15f,
+                new Ingredient(ItemIds.MetalFragments, 120), new Ingredient(ItemIds.Leather, 10)).AtWorkbench().Blueprint(60),
             new Recipe("arrows", ItemIds.Arrow, 2, 5f,
                 new Ingredient(ItemIds.Wood, 25), new Ingredient(ItemIds.Stone, 10)),
             new Recipe("wooden_door", ItemIds.WoodenDoor, 1, 10f,

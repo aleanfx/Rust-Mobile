@@ -83,6 +83,9 @@ namespace Oxfall.Game.UI
                 case ItemIds.HideVest:
                 case ItemIds.HidePants:
                 case ItemIds.HideBoots:
+                case ItemIds.MetalFacemask:
+                case ItemIds.MetalChestPlate:
+                case ItemIds.RoadsignKilt:
                     return 2;
                 case ItemIds.BuildingPlan:
                 case ItemIds.Hammer:

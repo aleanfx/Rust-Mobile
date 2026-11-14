@@ -383,6 +383,20 @@ namespace Oxfall.Game.Items
                 [ItemIds.HidePants] = Clothing(MeshFactory.Trousers(), m.Leather, m.Rope),
                 [ItemIds.HideHood] = Clothing(MeshFactory.Headwear(true), m.Leather, m.Rope, Tilt(-15f, 30f)),
                 [ItemIds.HideBoots] = Clothing(MeshFactory.Boots(), m.Leather, m.Char, Tilt(-12f, 20f)),
+                // Metal armour: shown as worn, turned a little to read its depth.
+                [ItemIds.MetalFacemask] = new ItemModel
+                {
+                    Mesh = MeshFactory.MetalFacemask(),
+                    Materials = new[] { m.Metal, m.Leather, m.Char },
+                    IconRotation = Tilt(-10f, 28f),
+                },
+                [ItemIds.MetalChestPlate] = Clothing(MeshFactory.MetalChestPlate(), m.Metal, m.Leather, Tilt(-10f, 24f)),
+                [ItemIds.RoadsignKilt] = new ItemModel
+                {
+                    Mesh = MeshFactory.RoadsignKilt(),
+                    Materials = new[] { m.Metal, m.Leather, m.WarnYellow },
+                    IconRotation = Tilt(-14f, 24f),
+                },
                 [ItemIds.RawMeat] = Meat(MeshFactory.MeatCut(), new[] { m.RawMeat, m.Bone }),
                 [ItemIds.CookedMeat] = Meat(MeshFactory.MeatCut(), new[] { m.CookedMeat, m.Bone }),
             };
