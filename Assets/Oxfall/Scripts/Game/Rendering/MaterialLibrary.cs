@@ -262,7 +262,7 @@ namespace Oxfall.Game.Rendering
             RecyclerPaint.SetFloat(Metallic, 0.25f);
             PlanePaint = Make("Plane paint", new Color(0.36f, 0.39f, 0.35f), 0.35f);
             PlanePaint.SetFloat(Metallic, 0.3f);
-            DropPaint = Make("Supply crate paint", new Color(0.09f, 0.22f, 0.36f), 0.3f);
+            DropPaint = Make("Supply crate paint", new Color(0.16f, 0.36f, 0.56f), 0.35f);
             DropPaint.SetFloat(Metallic, 0.2f);
             ChuteOrange = Make("Parachute orange", new Color(0.93f, 0.38f, 0.1f), 0.15f);
             ChuteWhite = Make("Parachute white", new Color(0.86f, 0.85f, 0.8f), 0.15f);

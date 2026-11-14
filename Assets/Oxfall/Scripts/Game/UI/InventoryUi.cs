@@ -58,6 +58,12 @@ namespace Oxfall.Game.UI
         private Text _lootTitle;
         private Text _lootStatus;
         private RectTransform _lightButton;
+        // Where the box's slots start, and how many rows of them a bag or crate shows (only as many
+        // as it is filled to: nothing goes into one, so its line and TOMAR TODO sit right under them).
+        private float _gridTop;
+        private float _barTop;
+        private int _lootRows;
+        private float _lootX;
         private Image _lightFill;
         private Text _lightLabel;
         private RectTransform _lootQuick;
@@ -145,7 +151,13 @@ namespace Oxfall.Game.UI
             bool furnace = d.Kind == DeployableKind.Furnace, bag = Deployables.IsLoot(d.Kind), fire = d.Kind == DeployableKind.Campfire;
             bool recycler = d.Kind == DeployableKind.Recycler;
             _lootTitle.text = furnace ? "HORNO" : d.Kind == DeployableKind.SupplyDrop ? "SUMINISTROS" : bag ? "BOLSA" : fire ? "FOGATA" : recycler ? "RECICLADORA" : "CAJA";
+            _lootRows = 0;
             for (int i = 0; i < _boxSlots.Length; i++) _boxSlots[i].Rect.gameObject.SetActive(i < box.SlotCount);
+            // A furnace's two rows leave room under them for how it burns and its switch (a bag or a
+            // crate sets its own when it is drawn).
+            float under = _gridTop - 2 * Pitch - 6f;
+            _lootStatus.rectTransform.anchoredPosition = new Vector2(_lootX, under);
+            _lightButton.anchoredPosition = new Vector2(_lootX, under - 78f);
             // A furnace's or a recycler's switch; on a dead player's bag the same button takes everything.
             _lightButton.gameObject.SetActive(furnace || bag || recycler);
             _lootStatus.gameObject.SetActive(furnace || bag || fire || recycler);
@@ -278,9 +290,14 @@ namespace Oxfall.Game.UI
             bool furnace = _boxKind == DeployableKind.Furnace;
             if (Deployables.IsLoot(_boxKind))
             {
-                int stacks = 0;
+                int stacks = 0, last = -1;
                 for (int i = 0; i < _boxInventory.SlotCount; i++)
-                    if (!_boxInventory[i].IsEmpty) stacks++;
+                    if (!_boxInventory[i].IsEmpty)
+                    {
+                        stacks++;
+                        last = i;
+                    }
+                LayoutLoot(Mathf.Clamp(last / BoxColumns + 1, 1, MaxBoxSlots / BoxColumns));
                 _lightLabel.text = "TOMAR TODO";
                 _lightFill.color = UiTheme.Accent;
                 bool crate = _boxKind == DeployableKind.SupplyDrop;
@@ -310,9 +327,28 @@ namespace Oxfall.Game.UI
             // Nothing goes into a bag: it only empties.
             bool any = _picked >= 0 && (_pickedInBox || !Deployables.IsLoot(_boxKind));
             _lootQuick.gameObject.SetActive(any);
+            // A full crate's TOMAR TODO shares the bottom spot with the button that moves one stack.
+            if (Deployables.IsLoot(_boxKind) && _lootRows > 3) _lightButton.gameObject.SetActive(!any);
             if (any)
                 _lootQuickLabel.text = _pickedInBox ? "AL INVENTARIO" : furnace ? "AL HORNO" : _boxKind == DeployableKind.Campfire ? "AL FUEGO"
                     : _boxKind == DeployableKind.Recycler ? "A RECICLAR" : "A LA CAJA";
+        }
+
+        /// <summary>
+        /// Shows a bag's or crate's slots down to its last filled row (the rows never shrink while it
+        /// is open, so nothing jumps under a finger), its line and TOMAR TODO right under them; with
+        /// three rows there is room only for the button, with four it takes the bottom spot.
+        /// </summary>
+        private void LayoutLoot(int rows)
+        {
+            if (rows <= _lootRows) return;
+            _lootRows = rows;
+            for (int i = 0; i < _boxSlots.Length; i++)
+                _boxSlots[i].Rect.gameObject.SetActive(i < _boxInventory.SlotCount && i < rows * BoxColumns);
+            float under = _gridTop - rows * Pitch - 6f;
+            _lootStatus.gameObject.SetActive(rows <= 2);
+            _lootStatus.rectTransform.anchoredPosition = new Vector2(_lootX, under);
+            _lightButton.anchoredPosition = new Vector2(_lootX, rows <= 2 ? under - 78f : rows == 3 ? under : _barTop - 14f);
         }
 
         /// <summary>
@@ -558,6 +594,9 @@ namespace Oxfall.Game.UI
             var title = UiFactory.NewRect("Title", _loot, topLeft, topLeft, new Vector2(x, top + 2f), new Vector2(width, 44f));
             _lootTitle = UiFactory.AddText(title, "CAJA", 34, TextAnchor.MiddleLeft, UiTheme.Accent, true);
             float gridTop = top - 52f;
+            _gridTop = gridTop;
+            _lootX = x;
+            _barTop = barTop;
             for (int i = 0; i < MaxBoxSlots; i++)
             {
                 int slot = i;

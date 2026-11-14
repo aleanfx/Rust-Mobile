@@ -1719,7 +1719,7 @@ namespace Oxfall.Game.World
         /// </summary>
         public static Mesh AirdropCrate()
         {
-            var b = new FlatMeshBuilder(3) { UvScale = 0.8f };
+            var b = new FlatMeshBuilder(4) { UvScale = 0.8f };
             b.AddBox(1, new Vector3(-0.72f, 0f, -0.62f), new Vector3(0.72f, 0.1f, 0.62f));
             b.AddBox(0, new Vector3(-0.68f, 0.1f, -0.58f), new Vector3(0.68f, 1.02f, 0.58f));
             b.AddBox(2, new Vector3(-0.69f, 0.48f, -0.59f), new Vector3(0.69f, 0.64f, 0.59f));
@@ -1735,6 +1735,21 @@ namespace Oxfall.Game.World
             // Handles at each end.
             foreach (float sx in new[] { -1f, 1f })
                 b.AddTube(1, new Vector3(sx * 0.7f, 0.82f, -0.2f), new Vector3(sx * 0.7f, 0.82f, 0.2f), 0.03f, 0.03f, 6);
+            // Stencilled white labels on the long sides (a few dark lines of print on them), a white
+            // cross on the lid, so it reads as supplies from far off.
+            foreach (float sz in new[] { -1f, 1f })
+            {
+                float face = sz * 0.58f, out1 = sz * 0.592f;
+                b.AddBox(3, new Vector3(-0.3f, 0.7f, Mathf.Min(face, out1)), new Vector3(0.3f, 0.92f, Mathf.Max(face, out1)));
+                float print = sz * 0.597f;
+                for (int line = 0; line < 3; line++)
+                {
+                    float y = 0.86f - line * 0.05f, width = line == 0 ? 0.22f : 0.15f - line * 0.02f;
+                    b.AddBox(1, new Vector3(-width, y - 0.012f, Mathf.Min(out1, print)), new Vector3(width, y + 0.012f, Mathf.Max(out1, print)));
+                }
+            }
+            b.AddBox(3, new Vector3(-0.07f, 1.12f, -0.3f), new Vector3(0.07f, 1.13f, 0.3f));
+            b.AddBox(3, new Vector3(-0.3f, 1.12f, -0.07f), new Vector3(0.3f, 1.13f, 0.07f));
             return b.Build("Supply crate");
         }
 

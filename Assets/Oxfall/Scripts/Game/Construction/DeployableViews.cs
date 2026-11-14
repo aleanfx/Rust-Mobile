@@ -81,7 +81,7 @@ namespace Oxfall.Game.Construction
             _models[DeployableKind.SupplyDrop] = new ItemModel
             {
                 Mesh = MeshFactory.AirdropCrate(),
-                Materials = new[] { materials.DropPaint, materials.Steel, materials.ChuteOrange },
+                Materials = new[] { materials.DropPaint, materials.Steel, materials.ChuteOrange, materials.WhitePaint },
             };
             _wheel = MeshFactory.RecyclerWheel();
             _wheelMaterials = new[] { materials.Steel, materials.BarrelRust };

@@ -79,7 +79,7 @@ namespace Oxfall.Game.World
             {
                 var falling = new GameObject("Supply crate falling " + drop.Id).transform;
                 falling.SetParent(_parent, false);
-                Part(falling, "Crate", _crate, _materials.DropPaint, _materials.Steel, _materials.ChuteOrange);
+                Part(falling, "Crate", _crate, _materials.DropPaint, _materials.Steel, _materials.ChuteOrange, _materials.WhitePaint);
                 view.Chute = Part(falling, "Parachute", _chute, _materials.ChuteOrange, _materials.ChuteWhite, _materials.Rope);
                 // Its lines meet on the crate's lid.
                 view.Chute.localPosition = new Vector3(0f, 1.12f, 0f);
