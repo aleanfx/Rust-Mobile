@@ -62,7 +62,7 @@ const stamp = () => ((Date.now() - t0) / 1000).toFixed(1).padStart(6);
   log.push(`${stamp()} [test] hits on him: ${count('Animal hit: Bandit')}, down: ${down}`);
   await wait(1500);
   await shot('04-bandit-down');
-  await cmd('face-bag', 2000);
+  await cmd('go-bag', 2500);
   await shot('05-his-bag');
   await cmd('open-bag', 2500);
   await shot('06-bag-open');

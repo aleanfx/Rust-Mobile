@@ -165,6 +165,11 @@ namespace Oxfall.Core.Net
         Held = 38,
         /// <summary>The player's team (who is in it, where they are) and who asked them in, whenever that changes and once a second.</summary>
         TeamState = 39,
+
+        // More of the server's own ids carry on from 60.
+
+        /// <summary>A supply plane set off: its line across the island, where the crate comes down, and how long ago.</summary>
+        Airdrop = 60,
     }
 
     /// <summary>What a player does to their own belongings (inside an <see cref="MessageType.Act"/> message).</summary>
@@ -195,6 +200,8 @@ namespace Oxfall.Core.Net
         DevSpawnAnimal = 16,
         /// <summary>Puts on the clothing in slot a, or takes off what is worn in slot a.</summary>
         Wear = 17,
+        /// <summary>Test servers only: a supply plane now, dropping ahead of the player.</summary>
+        DevAirdrop = 18,
     }
 
     /// <summary>Where a player stands and which way the body faces (degrees about up).</summary>
@@ -1145,6 +1152,33 @@ namespace Oxfall.Core.Net
             name = r.String();
             text = r.String();
             team = r.Remaining > 0 && r.Byte() != 0;
+        }
+
+        // ---- Supply drops
+
+        /// <summary>A supply plane, as everyone is told of it: <paramref name="ago"/> is how long since it set off.</summary>
+        public static void Airdrop(NetWriter w, World.Airdrop a, float ago)
+        {
+            w.Reset();
+            w.Byte((byte)MessageType.Airdrop);
+            w.Int(a.Id);
+            w.Float(a.FromX);
+            w.Float(a.FromZ);
+            w.Float(a.ToX);
+            w.Float(a.ToZ);
+            w.Float(a.DropX);
+            w.Float(a.DropZ);
+            w.Float(a.GroundY);
+            w.Float(ago);
+        }
+
+        /// <summary>Reads a supply plane onto this machine's clock (<paramref name="now"/>).</summary>
+        public static World.Airdrop ReadAirdrop(NetReader r, float now)
+        {
+            int id = r.Int();
+            float fx = r.Float(), fz = r.Float(), tx = r.Float(), tz = r.Float(), dx = r.Float(), dz = r.Float(), gy = r.Float();
+            float ago = r.Float();
+            return new World.Airdrop(id, fx, fz, tx, tz, dx, dz, gy, now - ago);
         }
 
         // ---- Teams

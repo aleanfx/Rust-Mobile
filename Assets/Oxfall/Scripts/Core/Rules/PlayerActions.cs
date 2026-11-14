@@ -305,7 +305,7 @@ namespace Oxfall.Core.Rules
         /// </summary>
         private static void AfterTaking(Settlement settlement, Survivor s, Inventory box)
         {
-            if (!settlement.TryGet(s.Looting, out var d) || d.Kind != DeployableKind.Bag) return;
+            if (!settlement.TryGet(s.Looting, out var d) || !Deployables.IsLoot(d.Kind)) return;
             if (box.IsEmpty)
             {
                 settlement.Remove(d.Id);
@@ -334,8 +334,8 @@ namespace Oxfall.Core.Rules
             if (r != ActionResult.Ok) return r;
             if (!IsSlot(s.Inventory, from) || (to != -1 && !IsSlot(box, to))) return ActionResult.Invalid;
             if (s.Inventory[from].IsEmpty) return ActionResult.Invalid;
-            // A dead player's bag only empties.
-            if (settlement.TryGet(s.Looting, out var bag) && bag.Kind == DeployableKind.Bag) return ActionResult.Invalid;
+            // A dead player's bag, or a supply crate, only empties.
+            if (settlement.TryGet(s.Looting, out var bag) && Deployables.IsLoot(bag.Kind)) return ActionResult.Invalid;
             // A recycler takes only what it can make something of.
             if (bag.Kind == DeployableKind.Recycler && !settlement.Recycling.Takes(s.Inventory[from].ItemId)) return ActionResult.NothingToRecycle;
             bool moved = to == -1 ? Inventory.TransferAll(s.Inventory, from, box) : Inventory.Transfer(s.Inventory, from, box, to);

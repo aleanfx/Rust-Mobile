@@ -89,6 +89,7 @@ namespace Oxfall.Core.Net
             };
             Fauna.Populate();
             Fauna.Guard(Fauna.Posts(Ground));
+            CreateAirdrops(seed, obstacles);
             // A fallen bandit drops what he had (everyone sees the bag through LootDropped).
             Fauna.Died += a =>
             {
@@ -362,6 +363,16 @@ namespace Oxfall.Core.Net
                     Fauna.Add((AnimalKind)a, x, z, player.Pose.Yaw + 180f);
                     return ActionResult.Ok;
                 }
+                case ActKind.DevAirdrop:
+                {
+                    // A plane now, dropping a little ahead of the player.
+                    if (!DevMode) return ActionResult.Invalid;
+                    float yaw = player.Pose.Yaw * (float)(Math.PI / 180.0);
+                    float x = player.Pose.X + (float)Math.Sin(yaw) * 25f, z = player.Pose.Z + (float)Math.Cos(yaw) * 25f;
+                    var drop = Airdrops.Launch(Time, x, z);
+                    if (drop.HasValue) AirdropsStarted.Add(drop.Value);
+                    return ActionResult.Ok;
+                }
                 default: return ActionResult.Invalid;
             }
         }
@@ -458,6 +469,7 @@ namespace Oxfall.Core.Net
             foreach (int id in _wentOut) Announcements.Add(BuildOp.Light(id, false));
             foreach (int id in _rotted) Announcements.Add(BuildOp.Pickup(id));
             TickFauna(deltaSeconds);
+            TickAirdrops();
             foreach (var record in _online.Values)
             {
                 var s = record.Survivor;

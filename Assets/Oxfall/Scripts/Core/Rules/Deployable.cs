@@ -23,6 +23,12 @@ namespace Oxfall.Core.Rules
         /// into its first slots comes out of its last ones as scrap and what it was made of.
         /// </summary>
         Recycler = 8,
+
+        /// <summary>
+        /// A crate of supplies dropped from a plane (no item makes one, nobody owns it, nothing breaks
+        /// it): it only empties, and rots away a while after landing.
+        /// </summary>
+        SupplyDrop = 9,
     }
 
     /// <summary>One thing set down: what it is, where it stands, which way it faces, and who put it there.</summary>
@@ -70,6 +76,12 @@ namespace Oxfall.Core.Rules
         /// <summary>A recycler's slots: this many take things in, as many again give out what they are made into.</summary>
         public const int RecyclerInputSlots = 3;
 
+        /// <summary>How long a supply crate lies there before it rots away (sooner once emptied).</summary>
+        public const float SupplyDropSeconds = 1200f;
+
+        /// <summary>Whether it only empties and goes once empty (a dead player's bag, a supply crate).</summary>
+        public static bool IsLoot(DeployableKind kind) => kind == DeployableKind.Bag || kind == DeployableKind.SupplyDrop;
+
         public static bool IsKnown(DeployableKind kind) => Enum.IsDefined(typeof(DeployableKind), kind);
 
         /// <summary>The item that becomes this deployable when set down (and comes back when it is picked up).</summary>
@@ -83,9 +95,10 @@ namespace Oxfall.Core.Rules
                 case DeployableKind.SleepingBag: return ItemIds.SleepingBag;
                 case DeployableKind.ToolCupboard: return ItemIds.ToolCupboard;
                 case DeployableKind.Workbench: return ItemIds.Workbench;
-                // Nothing is made into a bag or a recycler, and neither is picked up.
+                // Nothing is made into a bag, a recycler or a supply crate, and none is picked up.
                 case DeployableKind.Bag:
                 case DeployableKind.Recycler:
+                case DeployableKind.SupplyDrop:
                     return null;
                 default: throw new ArgumentOutOfRangeException(nameof(kind));
             }
@@ -118,6 +131,7 @@ namespace Oxfall.Core.Rules
                 // Everything a player can carry.
                 case DeployableKind.Bag: return Inventory.PlayerSlotCount;
                 case DeployableKind.Recycler: return RecyclerInputSlots * 2;
+                case DeployableKind.SupplyDrop: return 12;
                 default: return 0;
             }
         }
@@ -135,6 +149,7 @@ namespace Oxfall.Core.Rules
                 case DeployableKind.Bag: return 0.35f;
                 case DeployableKind.Workbench: return 0.8f;
                 case DeployableKind.Recycler: return 1.1f;
+                case DeployableKind.SupplyDrop: return 0.8f;
                 default: return 0.5f;
             }
         }
@@ -169,6 +184,7 @@ namespace Oxfall.Core.Rules
                 case DeployableKind.ToolCupboard: return "Armario";
                 case DeployableKind.Workbench: return "Mesa de trabajo";
                 case DeployableKind.Recycler: return "Recicladora";
+                case DeployableKind.SupplyDrop: return "Suministros";
                 default: return "Objeto";
             }
         }

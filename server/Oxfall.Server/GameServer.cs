@@ -149,6 +149,14 @@ namespace Oxfall.Server
                         Broadcast(writer.ToArray());
                     }
                     _world.Bites.Clear();
+                    // A supply plane set off: everyone sees it cross and the crate come down.
+                    foreach (var drop in _world.AirdropsStarted)
+                    {
+                        Messages.Airdrop(writer, drop, _world.Time - drop.Start);
+                        Broadcast(writer.ToArray());
+                        _log.LogInformation("Supply plane {Id}: the crate comes down at ({X:0}, {Z:0})", drop.Id, drop.DropX, drop.DropZ);
+                    }
+                    _world.AirdropsStarted.Clear();
                     // Charges that went off: the bang, who it hurt; what fell follows with the announcements.
                     foreach (var blast in _world.Blasts)
                     {
@@ -626,6 +634,13 @@ namespace Oxfall.Server
                 if (killedBy != null)
                 {
                     Messages.SleeperHit(writer, record.Owner, 0, killedBy, 0f, true);
+                    connection.Send(writer.ToArray());
+                }
+
+                // Supply planes in the air (or crates still coming down) as they join.
+                foreach (var drop in _world.Airdrops.Flying)
+                {
+                    Messages.Airdrop(writer, drop, _world.Time - drop.Start);
                     connection.Send(writer.ToArray());
                 }
 

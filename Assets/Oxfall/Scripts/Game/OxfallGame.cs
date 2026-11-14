@@ -118,6 +118,11 @@ namespace Oxfall.Game
         private Fauna _fauna;
         private AnimalViews _animalViews;
         private SleeperViews _sleeperViews;
+        // Supply drops: alone the game sends the planes, online the server does and says so.
+        private Airdrops _airdrops;
+        private AirdropViews _airdropViews;
+        private readonly System.Collections.Generic.List<Airdrop> _airdropsStarted = new System.Collections.Generic.List<Airdrop>();
+        private readonly System.Collections.Generic.List<Airdrop> _airdropsLanded = new System.Collections.Generic.List<Airdrop>();
         private readonly System.Collections.Generic.List<AnimalSnap> _animalSnaps = new System.Collections.Generic.List<AnimalSnap>();
         private readonly System.Collections.Generic.List<Fauna.Prey> _prey = new System.Collections.Generic.List<Fauna.Prey>();
         private readonly System.Collections.Generic.List<Fauna.Bite> _bites = new System.Collections.Generic.List<Fauna.Bite>();
@@ -189,6 +194,11 @@ namespace Oxfall.Game
                 if (a.Kind == AnimalKind.Bandit) _settlement.DropBag(a.X, a.Y, a.Z, a.Yaw, LootTable.Bandit(new System.Random()));
             };
             _actions.Fauna = _fauna;
+            // Now and then a plane drops a crate of good things somewhere open (never onto a trunk, a rock or a base).
+            _airdrops = new Airdrops(ground, s_seed, Time.time)
+            {
+                Blocked = (x, z) => obstacles.Blocks(x, z, 2f) || _settlement.Grid.FoundationNear(x, z, 4.5f),
+            };
             // On a ruin's pad they stand on the concrete, not the ground under it.
             _animalViews = new AnimalViews(materials, (x, z) => Monuments.SurfaceHeight(ground, x, z),
                 id => models.TryGetValue(id, out var model) ? model : null);
@@ -390,6 +400,14 @@ namespace Oxfall.Game
                 audio.Play(SoundCue.Swing);
             };
             _actions.ChargeArmed += (charge, left) => _explosions.Arm(charge, left, true);
+            // Planes, parachutes and the red smoke where a crate came down.
+            _airdropViews = new AirdropViews(materials, audio.Bank, _explosions);
+            _airdropViews.Started += drop =>
+            {
+                if (_title != null) return;
+                _hud.ShowToast("Un avión de suministros cruza la isla: sigue el humo rojo");
+                audio.Play(SoundCue.Accepted);
+            };
             _actions.ChargeBlast += OnSoloBlast;
 
             // The use button: doors, boxes, furnaces, cupboards.
@@ -555,6 +573,7 @@ namespace Oxfall.Game
             };
             _net.AnimalHit += _actions.OnServerAnimalHit;
             _net.AnimalsSeen += animals => _animalViews.Apply(animals);
+            _net.AirdropSeen += drop => _airdropViews.Add(drop);
             _net.SleepersSeen += sleepers => _sleeperViews.Apply(sleepers, _net.Owner);
             _net.SleeperHit += OnSleeperHit;
             _net.ChargeArmed += (charge, left) => _explosions.Arm(charge, left, charge.Thrower == _net.PlayerId);
@@ -802,6 +821,8 @@ namespace Oxfall.Game
                     _gatherer.StrikeSleeper = _net.SendStrikeSleeper;
                     // And where the animals are.
                     _animalViews.Clear();
+                    // And when planes fly.
+                    _airdropViews.Clear();
                     _onlineSince = Time.time;
                     _chat.SetOnline(true);
                     _team.SetOnline(true);
@@ -1294,6 +1315,21 @@ namespace Oxfall.Game
         }
 
         /// <summary>For tests: turns the player, where they stand, to look at something set down.</summary>
+        /// <summary>Test: walks up to a deployable (stands a step from it, on its near side) and looks at it.</summary>
+        private void GoTo(int id)
+        {
+            if (!_settlement.TryGet(id, out var d)) return;
+            var at = new Vector3(d.X, d.Y, d.Z);
+            var away = _player.transform.position - at;
+            away.y = 0f;
+            away = away.sqrMagnitude > 0.01f ? away.normalized : Vector3.back;
+            float x = d.X + away.x * 1.8f, z = d.Z + away.z * 1.8f;
+            float y = Monuments.SurfaceHeight(_world.Shape.Ground, x, z);
+            _player.Teleport(new Vector3(x, Mathf.Max(y, d.Y) + 0.05f, z), _player.transform.eulerAngles.y, 0f);
+            FaceDeployable(id);
+            Debug.Log($"[Oxfall] Went up to {d.Kind} {id}");
+        }
+
         private void FaceDeployable(int id)
         {
             if (!_settlement.TryGet(id, out var d)) return;
@@ -1434,6 +1470,11 @@ namespace Oxfall.Game
                 case "face-workbench": FaceDeployable(Nearest(DeployableKind.Workbench)); break;
                 case "to-recycler": ToRecycler(); break;
                 case "to-bandit": ToBandit(); break;
+                case "airdrop": DevAirdrop(); break;
+                case "face-airdrop": FaceAirdrop(); break;
+                case "open-airdrop": OpenBox(Nearest(DeployableKind.SupplyDrop)); break;
+                case "go-airdrop": GoTo(Nearest(DeployableKind.SupplyDrop)); break;
+                case "go-bag": GoTo(Nearest(DeployableKind.Bag)); break;
                 case "guide-reset": _guide.Restart(); break;
                 case "open-recycler": OpenBox(Nearest(DeployableKind.Recycler)); break;
                 case "put-parts":
@@ -1850,6 +1891,45 @@ namespace Oxfall.Game
         }
 
         /// <summary>Test view: in the open some way from the nearest bandit, where he can see this player, facing him.</summary>
+        /// <summary>Alone: planes set off and crates land here (online the server does it). Either way they are drawn.</summary>
+        private void TickAirdrops(float dt)
+        {
+            if (_airdropViews == null) return;
+            if (!_actions.Online && _airdrops != null && _title == null)
+            {
+                _airdropsStarted.Clear();
+                _airdropsLanded.Clear();
+                _airdrops.Tick(Time.time, _airdropsStarted, _airdropsLanded);
+                foreach (var drop in _airdropsStarted) _airdropViews.Add(drop);
+                foreach (var drop in _airdropsLanded)
+                    _settlement.LandSupplyDrop(drop.DropX, drop.GroundY, drop.DropZ, drop.Yaw, LootTable.SupplyDrop(new System.Random()));
+            }
+            _airdropViews.Tick(dt);
+        }
+
+        /// <summary>Test: a plane now, dropping a crate a little ahead of the player.</summary>
+        private void DevAirdrop()
+        {
+            if (_actions.Online)
+            {
+                _net.SendAct(ActKind.DevAirdrop);
+                return;
+            }
+            var p = _player.transform.position + _player.transform.forward * 25f;
+            var drop = _airdrops.Launch(Time.time, p.x, p.z);
+            if (drop.HasValue) _airdropViews.Add(drop.Value);
+        }
+
+        /// <summary>Test view: looks at the nearest crate coming down (or down), from where the player stands.</summary>
+        private void FaceAirdrop()
+        {
+            if (!_airdropViews.TryNearest(_player.transform.position, out var at)) return;
+            var to = at + Vector3.up * 0.6f - _player.Head.position;
+            float yaw = Mathf.Atan2(to.x, to.z) * Mathf.Rad2Deg;
+            float pitch = -Mathf.Atan2(to.y, new Vector2(to.x, to.z).magnitude) * Mathf.Rad2Deg;
+            _player.Teleport(_player.transform.position, yaw, pitch);
+        }
+
         private void ToBandit()
         {
             var here = _player.transform.position;
@@ -1961,6 +2041,7 @@ namespace Oxfall.Game
             }
             TickNet();
             TickAnimals(Time.deltaTime);
+            TickAirdrops(Time.deltaTime);
             if (_map != null && _map.IsOpen) RefreshMap();
             _chat?.Tick(Time.unscaledDeltaTime);
             _chat?.SetDrop(_guide != null && _guide.Showing ? 128f : 0f);

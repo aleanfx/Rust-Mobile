@@ -188,6 +188,16 @@ namespace Oxfall.Game.UI
             _group.alpha = Mathf.MoveTowards(_group.alpha, 1f, dt * 4f);
 
             if (_shown != step.Text) Show(step);
+            // The item icons are drawn a moment after start: the card's picture comes when they are.
+            if (!_icon.enabled && step.Icon != null)
+            {
+                var sprite = ItemIcons.Get(step.Icon);
+                if (sprite != null)
+                {
+                    _icon.sprite = sprite;
+                    _icon.enabled = true;
+                }
+            }
             int have = step.Item != null ? _inventory.Count(step.Item) : 0;
             if (step.Item != null)
             {

@@ -145,6 +145,9 @@ namespace Oxfall.Game.Net
         /// <summary>Someone else fired a gun: who, which kind, from where, which way (yaw, pitch) and the seed of its spray.</summary>
         public event Action<ushort, ToolKind, Vector3, float, float, ushort> Gunshot;
 
+        /// <summary>A supply plane on its way (its times put on this machine's clock).</summary>
+        public event Action<Oxfall.Core.World.Airdrop> AirdropSeen;
+
         private readonly List<(int, ItemStack)> _loot = new List<(int, ItemStack)>();
 
         private readonly List<(int Id, int Remaining)> _nodeStates = new List<(int, int)>();
@@ -555,6 +558,11 @@ namespace Oxfall.Game.Net
                     Messages.ReadBitten(reader, out ushort target, out var kind, out int damage, out bool killed);
                     if (_players.TryGetValue(target, out var victim)) victim.Flinch();
                     Bitten?.Invoke(target, kind, damage, killed);
+                    break;
+                }
+                case MessageType.Airdrop:
+                {
+                    AirdropSeen?.Invoke(Messages.ReadAirdrop(reader, Time.time));
                     break;
                 }
                 case MessageType.Loot:

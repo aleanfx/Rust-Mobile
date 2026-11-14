@@ -73,6 +73,9 @@ const stamp = () => ((Date.now() - t0) / 1000).toFixed(1).padStart(6);
   await cmd('craft-tab-2', 2000);
   await shot('07-craft-no-bench');
   await cmd('craft-panel', 800);
+  // Nobody builds in the ruins: out past their edge first.
+  await cmd('to-ruins', 1500);
+  await cmd('back-30', 2000);
   await cmd('workbench', 1500);
   await cmd('look--20', 1200);
   await shot('08-placing-bench');

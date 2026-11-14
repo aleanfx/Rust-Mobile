@@ -142,9 +142,9 @@ namespace Oxfall.Game.UI
             _picked = -1;
             _settlement.TryGet(id, out var d);
             _boxKind = d.Kind;
-            bool furnace = d.Kind == DeployableKind.Furnace, bag = d.Kind == DeployableKind.Bag, fire = d.Kind == DeployableKind.Campfire;
+            bool furnace = d.Kind == DeployableKind.Furnace, bag = Deployables.IsLoot(d.Kind), fire = d.Kind == DeployableKind.Campfire;
             bool recycler = d.Kind == DeployableKind.Recycler;
-            _lootTitle.text = furnace ? "HORNO" : bag ? "BOLSA" : fire ? "FOGATA" : recycler ? "RECICLADORA" : "CAJA";
+            _lootTitle.text = furnace ? "HORNO" : d.Kind == DeployableKind.SupplyDrop ? "SUMINISTROS" : bag ? "BOLSA" : fire ? "FOGATA" : recycler ? "RECICLADORA" : "CAJA";
             for (int i = 0; i < _boxSlots.Length; i++) _boxSlots[i].Rect.gameObject.SetActive(i < box.SlotCount);
             // A furnace's or a recycler's switch; on a dead player's bag the same button takes everything.
             _lightButton.gameObject.SetActive(furnace || bag || recycler);
@@ -232,7 +232,7 @@ namespace Oxfall.Game.UI
         public void ToggleFurnace()
         {
             if (_box == 0) return;
-            if (_boxKind == DeployableKind.Bag)
+            if (Deployables.IsLoot(_boxKind))
             {
                 Report(_actions.TakeAll());
                 _picked = -1;
@@ -276,15 +276,17 @@ namespace Oxfall.Game.UI
             for (int i = 0; i < _boxInventory.SlotCount && i < _boxSlots.Length; i++)
                 Draw(_boxSlots[i], _boxInventory[i], i == _picked && _pickedInBox ? Picked : Color.clear);
             bool furnace = _boxKind == DeployableKind.Furnace;
-            if (_boxKind == DeployableKind.Bag)
+            if (Deployables.IsLoot(_boxKind))
             {
                 int stacks = 0;
                 for (int i = 0; i < _boxInventory.SlotCount; i++)
                     if (!_boxInventory[i].IsEmpty) stacks++;
                 _lightLabel.text = "TOMAR TODO";
                 _lightFill.color = UiTheme.Accent;
+                bool crate = _boxKind == DeployableKind.SupplyDrop;
                 _lootStatus.text = stacks > _boxSlots.Length
-                    ? $"Y {stacks - _boxSlots.Length} más debajo · la bolsa se pudre en unos minutos"
+                    ? $"Y {stacks - _boxSlots.Length} más debajo · {(crate ? "la caja desaparece en unos minutos" : "la bolsa se pudre en unos minutos")}"
+                    : crate ? "Lanzado desde el avión · para el primero que llegue"
                     : "Lo que llevaba al morir · la bolsa se pudre en unos minutos";
                 _lootStatus.color = UiTheme.TextMuted;
             }
@@ -306,7 +308,7 @@ namespace Oxfall.Game.UI
                 _lootStatus.color = raw > 0 ? UiTheme.Accent : UiTheme.TextMuted;
             }
             // Nothing goes into a bag: it only empties.
-            bool any = _picked >= 0 && (_pickedInBox || _boxKind != DeployableKind.Bag);
+            bool any = _picked >= 0 && (_pickedInBox || !Deployables.IsLoot(_boxKind));
             _lootQuick.gameObject.SetActive(any);
             if (any)
                 _lootQuickLabel.text = _pickedInBox ? "AL INVENTARIO" : furnace ? "AL HORNO" : _boxKind == DeployableKind.Campfire ? "AL FUEGO"

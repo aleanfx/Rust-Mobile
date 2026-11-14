@@ -80,6 +80,11 @@ namespace Oxfall.Game.Rendering
         public Material CratePaint { get; }
         /// <summary>The ruins' recycler: chipped machine yellow.</summary>
         public Material RecyclerPaint { get; }
+        /// <summary>Supply drops: the cargo plane's grey-olive paint, the crate's deep blue, and the parachute's orange and white.</summary>
+        public Material PlanePaint { get; }
+        public Material DropPaint { get; }
+        public Material ChuteOrange { get; }
+        public Material ChuteWhite { get; }
         public Material BarrelRust { get; }
         /// <summary>A code lock: its dark casing, its keys, and its light (red locked, green open).</summary>
         public Material LockBody { get; }
@@ -237,6 +242,13 @@ namespace Oxfall.Game.Rendering
             CratePaint.SetFloat(Metallic, 0.2f);
             RecyclerPaint = Make("Recycler paint", new Color(0.62f, 0.47f, 0.12f), 0.3f);
             RecyclerPaint.SetFloat(Metallic, 0.25f);
+            PlanePaint = Make("Plane paint", new Color(0.36f, 0.39f, 0.35f), 0.35f);
+            PlanePaint.SetFloat(Metallic, 0.3f);
+            DropPaint = Make("Supply crate paint", new Color(0.09f, 0.22f, 0.36f), 0.3f);
+            DropPaint.SetFloat(Metallic, 0.2f);
+            ChuteOrange = Make("Parachute orange", new Color(0.93f, 0.38f, 0.1f), 0.15f);
+            ChuteWhite = Make("Parachute white", new Color(0.86f, 0.85f, 0.8f), 0.15f);
+            foreach (var chute in new[] { ChuteOrange, ChuteWhite }) chute.SetFloat(Cull, 0f);
             LockBody = Make("Lock body", new Color(0.15f, 0.16f, 0.17f), 0.55f);
             LockKeys = Make("Lock keys", new Color(0.58f, 0.59f, 0.57f), 0.4f);
             LedRed = Make("Lock red", new Color(1f, 0.16f, 0.1f), 0.9f);

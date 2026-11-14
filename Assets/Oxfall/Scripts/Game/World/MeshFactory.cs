@@ -1620,6 +1620,125 @@ namespace Oxfall.Game.World
         }
 
         /// <summary>
+        /// A four-engined cargo plane, nose along +Z, about 25 m long and 30 m across the wings (high
+        /// wings, a tail fin, a tail ramp). Submeshes: 0 paint, 1 dark (windows, engines, propellers).
+        /// </summary>
+        public static Mesh CargoPlane()
+        {
+            var b = new FlatMeshBuilder(2) { UvScale = 0.25f };
+            // The body: a long tube, the nose rounding in, the tail rising and narrowing.
+            b.AddTube(0, new Vector3(0f, 0f, -9f), new Vector3(0f, 0f, 8f), 1.7f, 1.7f, 14);
+            b.AddTube(0, new Vector3(0f, 0f, 8f), new Vector3(0f, -0.25f, 11.2f), 1.7f, 0.9f, 14);
+            b.AddTube(0, new Vector3(0f, -0.25f, 11.2f), new Vector3(0f, -0.35f, 12.2f), 0.9f, 0.05f, 14);
+            b.AddTube(0, new Vector3(0f, 0f, -9f), new Vector3(0f, 1.1f, -14f), 1.7f, 0.4f, 14, 0);
+            // The cockpit's windows, and the ramp's dark seam under the tail.
+            b.AddHex(1, (ix, iy, iz) => new Vector3(ix == 0 ? -0.95f : 0.95f, iy == 0 ? 0.55f : 0.95f + (iz == 0 ? 0.25f : -0.2f), iz == 0 ? 8.6f : 10.3f));
+            b.AddBox(1, new Vector3(-1.2f, -1.6f, -12f), new Vector3(1.2f, -1.2f, -9.2f));
+            // High, tapered wings over the body.
+            foreach (float side in new[] { -1f, 1f })
+                b.AddHex(0, (ix, iy, iz) =>
+                {
+                    bool tip = (ix == 1) == (side > 0f);
+                    float x = tip ? side * 15.5f : 0f;
+                    float front = tip ? 1.6f : 2.6f, back = tip ? -0.5f : -1.6f;
+                    return new Vector3(x, 1.45f + (iy == 0 ? 0f : 0.32f) + (tip ? 0.35f : 0f), iz == 0 ? back : front);
+                });
+            // Four engines under the wings, each with three blades in front.
+            foreach (float x in new[] { -10.2f, -5.2f, 5.2f, 10.2f })
+            {
+                b.AddTube(1, new Vector3(x, 1.2f, -1.4f), new Vector3(x, 1.2f, 3.2f), 0.55f, 0.5f, 10, 1);
+                b.AddTube(0, new Vector3(x, 1.2f, 3.2f), new Vector3(x, 1.2f, 3.8f), 0.3f, 0.05f, 8);
+                for (int blade = 0; blade < 3; blade++)
+                {
+                    float a = blade * 120f * Mathf.Deg2Rad;
+                    var tip = new Vector3(x + Mathf.Sin(a) * 1.9f, 1.2f + Mathf.Cos(a) * 1.9f, 3.5f);
+                    b.AddTube(1, new Vector3(x, 1.2f, 3.5f), tip, 0.16f, 0.08f, 4);
+                }
+            }
+            // The tail: a tall fin and the tailplane across it.
+            b.AddHex(0, (ix, iy, iz) =>
+            {
+                float y = iy == 0 ? 1.2f : 6.4f;
+                float back = iy == 0 ? -14.2f : -15.2f, front = iy == 0 ? -9.8f : -13.2f;
+                return new Vector3(ix == 0 ? -0.18f : 0.18f, y, iz == 0 ? back : front);
+            });
+            b.AddHex(0, (ix, iy, iz) =>
+            {
+                float x = ix == 0 ? -6f : 6f;
+                float back = -15.3f, front = Mathf.Abs(x) > 1f ? -13.4f : -12f;
+                return new Vector3(x, 1.5f + (iy == 0 ? 0f : 0.2f), iz == 0 ? back : front);
+            });
+            return b.Build("Cargo plane", 40f);
+        }
+
+        /// <summary>
+        /// A parachute over a crate's top (its lines meet at the origin): a dome of twelve gores,
+        /// orange and white in turn, and the lines down to the crate's corners. Submeshes: 0 orange,
+        /// 1 white, 2 lines.
+        /// </summary>
+        public static Mesh Parachute()
+        {
+            var b = new FlatMeshBuilder(3) { UvScale = 0.5f };
+            const int gores = 12, rings = 4;
+            const float radius = 3.4f, rise = 2.2f, baseY = 6.2f;
+            Vector3 Dome(int gore, int ring)
+            {
+                float a = gore * Mathf.PI * 2f / gores;
+                float t = ring / (float)rings;
+                // A shallow dome: wide at the rim, flattening at the top.
+                float r = radius * Mathf.Cos(t * Mathf.PI * 0.5f);
+                float y = baseY + rise * Mathf.Sin(t * Mathf.PI * 0.5f);
+                return new Vector3(Mathf.Sin(a) * r, y, Mathf.Cos(a) * r);
+            }
+            for (int g = 0; g < gores; g++)
+            for (int ring = 0; ring < rings; ring++)
+            {
+                int sub = g % 2;
+                var a0 = Dome(g, ring);
+                var a1 = Dome(g + 1, ring);
+                var b0 = Dome(g, ring + 1);
+                var b1 = Dome(g + 1, ring + 1);
+                var up = (a0 + a1 + b0 + b1) * 0.25f - new Vector3(0f, baseY - 1f, 0f);
+                b.Facing(sub, a0, b0, b1, up);
+                if (ring < rings - 1) b.Facing(sub, a0, b1, a1, up);
+            }
+            // The lines, from every other gore's edge down to the crate's corners.
+            for (int g = 0; g < gores; g += 2)
+            {
+                float a = (g + 0.5f) * Mathf.PI * 2f / gores;
+                var corner = new Vector3(Mathf.Sin(a) > 0f ? 0.55f : -0.55f, 0f, Mathf.Cos(a) > 0f ? 0.5f : -0.5f);
+                b.AddTube(2, corner, Dome(g, 0), 0.025f, 0.025f, 3);
+            }
+            return b.Build("Parachute");
+        }
+
+        /// <summary>
+        /// A supply crate, as it lands: a deep blue steel box on a skid, banded, its lid's handles and a
+        /// broad orange stripe round it to be seen from afar. Base at y = 0. Submeshes: 0 paint, 1
+        /// steel, 2 orange.
+        /// </summary>
+        public static Mesh AirdropCrate()
+        {
+            var b = new FlatMeshBuilder(3) { UvScale = 0.8f };
+            b.AddBox(1, new Vector3(-0.72f, 0f, -0.62f), new Vector3(0.72f, 0.1f, 0.62f));
+            b.AddBox(0, new Vector3(-0.68f, 0.1f, -0.58f), new Vector3(0.68f, 1.02f, 0.58f));
+            b.AddBox(2, new Vector3(-0.69f, 0.48f, -0.59f), new Vector3(0.69f, 0.64f, 0.59f));
+            // The lid, a little proud, and its seam.
+            b.AddBox(0, new Vector3(-0.7f, 1.02f, -0.6f), new Vector3(0.7f, 1.12f, 0.6f));
+            b.AddBox(1, new Vector3(-0.71f, 0.99f, -0.61f), new Vector3(0.71f, 1.02f, 0.61f));
+            // Steel bands over the top and down the sides, corner guards.
+            foreach (float x in new[] { -0.42f, 0.42f })
+                b.AddBox(1, new Vector3(x - 0.05f, 0.1f, -0.615f), new Vector3(x + 0.05f, 1.14f, 0.615f));
+            foreach (float sx in new[] { -1f, 1f })
+            foreach (float sz in new[] { -1f, 1f })
+                b.AddBox(1, new Vector3(sx * 0.7f - 0.04f, 0.1f, sz * 0.6f - 0.04f), new Vector3(sx * 0.7f + 0.04f, 1.12f, sz * 0.6f + 0.04f));
+            // Handles at each end.
+            foreach (float sx in new[] { -1f, 1f })
+                b.AddTube(1, new Vector3(sx * 0.7f, 0.82f, -0.2f), new Vector3(sx * 0.7f, 0.82f, 0.2f), 0.03f, 0.03f, 6);
+            return b.Build("Supply crate");
+        }
+
+        /// <summary>
         /// The recycler's flywheel: a disc with four spokes and a hub, facing -X from its middle
         /// (it turns about X while the machine runs). Submeshes: 0 steel, 1 rust.
         /// </summary>

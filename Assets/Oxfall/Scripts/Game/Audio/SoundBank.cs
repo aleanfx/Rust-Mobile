@@ -58,6 +58,8 @@ namespace Oxfall.Game.Audio
 
         /// <summary>A recycler running: a motor's hum, the drum's grinding rasp and a clank each turn (a loop).</summary>
         public AudioClip MachineLoop { get; }
+        /// <summary>A cargo plane's four engines droning, heard from far off (loops).</summary>
+        public AudioClip PlaneLoop { get; }
 
         private readonly System.Random _random = new System.Random(5);
 
@@ -183,6 +185,7 @@ namespace Oxfall.Game.Audio
             WindLoop = MakeLoop("wind", 6f, WindSample);
             WavesLoop = MakeLoop("waves", 8f, WavesSample);
             MachineLoop = MakeLoop("machine", 2f, MachineSample);
+            PlaneLoop = MakeLoop("plane", 4f, PlaneSample);
         }
 
         // ---- building blocks ----
@@ -274,6 +277,17 @@ namespace Oxfall.Game.Audio
             float turn = t % 0.5f;
             float clank = Tone(turn, 410f) * Env(turn, 0.0005f, 0.03f) * 0.45f + Noise() * Env(turn, 0.0005f, 0.012f) * 0.3f;
             return hum + grind + clank;
+        }
+
+        private float _drone;
+        private float PlaneSample(float t, int i)
+        {
+            // Four propellers a little out of step (whole cycles in the loop's four seconds, so it joins
+            // up), beating against each other, over a rumble.
+            float props = Tone(t, 62f) * 0.22f + Tone(t, 63.5f) * 0.2f + Tone(t, 124f) * 0.12f + Tone(t, 126.5f) * 0.1f + Tone(t, 31f) * 0.18f;
+            _drone += (Noise() - _drone) * 0.05f;
+            float beat = 0.8f + 0.2f * Mathf.Sin(t * Mathf.PI * 2f * 1.5f);
+            return (props + _drone * 0.9f) * beat;
         }
 
         private float _wind;

@@ -77,6 +77,12 @@ namespace Oxfall.Game.Construction
                 Mesh = MeshFactory.Recycler(),
                 Materials = new[] { materials.RecyclerPaint, materials.Steel, materials.BarrelRust, materials.LedRed },
             };
+            // And a supply crate, come down from a plane.
+            _models[DeployableKind.SupplyDrop] = new ItemModel
+            {
+                Mesh = MeshFactory.AirdropCrate(),
+                Materials = new[] { materials.DropPaint, materials.Steel, materials.ChuteOrange },
+            };
             _wheel = MeshFactory.RecyclerWheel();
             _wheelMaterials = new[] { materials.Steel, materials.BarrelRust };
             _lampOn = materials.LedGreen;

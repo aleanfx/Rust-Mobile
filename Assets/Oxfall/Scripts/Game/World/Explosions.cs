@@ -369,6 +369,18 @@ namespace Oxfall.Game.World
                     new Color(0.62f, 0.6f, 0.57f, big ? 0.45f : 0.32f), new Color(0.75f, 0.74f, 0.72f, 0f), 2.4f, 0.35f, 0f, 0f);
         }
 
+        /// <summary>
+        /// One puff of a supply crate's signal smoke at <paramref name="at"/>: thick red, climbing high
+        /// and spreading as the wind takes it, paling as it goes (call a few times a second).
+        /// </summary>
+        public void SignalSmoke(Vector3 at, Vector3 wind)
+        {
+            if (!_puffsReal) return;
+            Spawn(false, at + Random.insideUnitSphere * 0.15f, Vector3.up * Random.Range(2.5f, 3.5f) + wind + Random.insideUnitSphere * 0.4f,
+                Random.Range(7f, 9f), 0.5f, Random.Range(4.5f, 6f),
+                new Color(0.86f, 0.13f, 0.08f, 0.85f), new Color(0.78f, 0.52f, 0.48f, 0f), 0.35f, 0.9f, 0f, 0f);
+        }
+
         /// <summary>A bullet or a pellet streaking from <paramref name="from"/> to <paramref name="to"/>: a hot spark that flies there.</summary>
         public void Bullet(Vector3 from, Vector3 to)
         {

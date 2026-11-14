@@ -285,6 +285,24 @@ namespace Oxfall.Core.Building
         public event Action<Edge, float> DoorHealthChanged;
 
         public int FoundationCount => _foundations.Count;
+
+        /// <summary>Whether any foundation's square comes within <paramref name="distance"/> of (x, z) across the ground.</summary>
+        public bool FoundationNear(float x, float z, float distance)
+        {
+            if (_foundations.Count == 0) return false;
+            int reach = (int)Math.Ceiling(distance / CellSize) + 1;
+            var centre = CellAt(x, z);
+            for (int cx = centre.X - reach; cx <= centre.X + reach; cx++)
+            for (int cz = centre.Z - reach; cz <= centre.Z + reach; cz++)
+            {
+                if (!_foundations.ContainsKey(new Cell(cx, cz))) continue;
+                // The nearest point of that square.
+                float nx = Math.Max(cx * CellSize, Math.Min(x, (cx + 1) * CellSize));
+                float nz = Math.Max(cz * CellSize, Math.Min(z, (cz + 1) * CellSize));
+                if ((nx - x) * (nx - x) + (nz - z) * (nz - z) <= distance * distance) return true;
+            }
+            return false;
+        }
         public IEnumerable<KeyValuePair<Cell, float>> Foundations => _foundations;
         public IEnumerable<KeyValuePair<Edge, PieceType>> EdgePieces => _edges;
         public IEnumerable<Cell> Roofs => _roofs;

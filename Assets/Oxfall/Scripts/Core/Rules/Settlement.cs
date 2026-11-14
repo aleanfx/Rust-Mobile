@@ -171,6 +171,17 @@ namespace Oxfall.Core.Rules
             return bag;
         }
 
+        /// <summary>A supply crate came down here, full of <paramref name="items"/> (everyone sees it through LootDropped).</summary>
+        public Deployable LandSupplyDrop(float x, float y, float z, float yaw, IEnumerable<Gathering.Yield> items)
+        {
+            var crate = Add(new Deployable(0, DeployableKind.SupplyDrop, x, y, z, yaw, 0));
+            var into = Container(crate.Id);
+            foreach (var item in items)
+                if (item.Amount > 0) into.Add(item.ItemId, item.Amount);
+            LootDropped?.Invoke(crate);
+            return crate;
+        }
+
         /// <summary>Seconds this settlement has been ticked (the clock for mending after a blast).</summary>
         public float Clock { get; private set; }
 
@@ -268,6 +279,7 @@ namespace Oxfall.Core.Rules
             if (slots > 0) _containers.Add(deployable.Id, new Inventory(Catalog, slots, hasHotbar: false, outputSlots: output));
             if (deployable.Kind == DeployableKind.ToolCupboard) _authorized[deployable.Id] = new HashSet<int> { deployable.Owner };
             if (deployable.Kind == DeployableKind.Bag) _rotting[deployable.Id] = Rules.Deployables.DeathBagSeconds;
+            if (deployable.Kind == DeployableKind.SupplyDrop) _rotting[deployable.Id] = Rules.Deployables.SupplyDropSeconds;
             DeployableAdded?.Invoke(deployable);
             return deployable;
         }

@@ -55,6 +55,42 @@ namespace Oxfall.Core.Gathering
             return loot;
         }
 
+        /// <summary>What a supply drop holds, one of each (some always, some rolled).</summary>
+        private static readonly (string Id, int Min, int Max)[] DropFinds =
+        {
+            (ItemIds.Revolver, 1, 1), (ItemIds.Blunderbuss, 1, 1), (ItemIds.MedicalSyringe, 2, 3), (ItemIds.SatchelCharge, 1, 2),
+            (ItemIds.HideVest, 1, 1), (ItemIds.MetalHatchet, 1, 1), (ItemIds.MetalPickaxe, 1, 1), (ItemIds.SheetMetalDoor, 1, 1),
+        };
+
+        /// <summary>
+        /// What a supply drop holds: rounds, medicine, gunpowder, metal and scrap always, and three of the
+        /// finds (guns, charges, armour, metal tools) — worth a run across the island and a fight.
+        /// </summary>
+        public static List<Yield> SupplyDrop(Random random)
+        {
+            var loot = new List<Yield>(9)
+            {
+                new Yield(ItemIds.PistolBullet, 20 + random.Next(21)),
+                new Yield(ItemIds.Shell, 10 + random.Next(11)),
+                new Yield(ItemIds.Bandage, 3 + random.Next(3)),
+                new Yield(ItemIds.Gunpowder, 60 + random.Next(61)),
+                new Yield(ItemIds.MetalFragments, 150 + random.Next(151)),
+                new Yield(ItemIds.Scrap, 40 + random.Next(31)),
+            };
+            var picks = new List<int>();
+            while (picks.Count < 3)
+            {
+                int i = random.Next(DropFinds.Length);
+                if (!picks.Contains(i)) picks.Add(i);
+            }
+            foreach (int i in picks)
+            {
+                var find = DropFinds[i];
+                loot.Add(new Yield(find.Id, find.Min + random.Next(find.Max - find.Min + 1)));
+            }
+            return loot;
+        }
+
         /// <summary>
         /// What a bandit had on him: rounds for his revolver, scrap and cloth, sometimes a bandage or a
         /// part, and now and then the revolver itself.

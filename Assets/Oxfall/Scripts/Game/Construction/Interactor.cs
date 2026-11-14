@@ -137,6 +137,7 @@ namespace Oxfall.Game.Construction
                 case Target.Box:
                     _settlement.TryGet(_deployable, out var d);
                     if (d.Kind == DeployableKind.Bag) _hud.SetUseButton("BOLSA", Icons.Bag);
+                    else if (d.Kind == DeployableKind.SupplyDrop) _hud.SetUseButton("SUMINISTROS", Icons.Box);
                     else if (d.Kind == DeployableKind.Furnace) _hud.SetUseButton("HORNO", Icons.Flame);
                     else if (d.Kind == DeployableKind.Campfire) _hud.SetUseButton("FOGATA", Icons.Flame);
                     else if (d.Kind == DeployableKind.Recycler) _hud.SetUseButton("RECICLAR", Icons.Recycle);
