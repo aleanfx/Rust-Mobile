@@ -52,6 +52,7 @@ namespace Oxfall.Core.Wildlife
         private readonly Random _random;
         private readonly Dictionary<int, Animal> _animals = new Dictionary<int, Animal>();
         private readonly List<(AnimalKind Kind, float Timer)> _waiting = new List<(AnimalKind, float)>();
+        private readonly List<(float X, float Z, float Yaw, float Timer)> _posts = new List<(float, float, float, float)>();
         private readonly List<int> _gone = new List<int>();
         private int _nextId = 1;
 
@@ -64,6 +65,12 @@ namespace Oxfall.Core.Wildlife
         /// <summary>Spots animals will not walk onto (a building's floor): set by whoever owns the buildings.</summary>
         public Func<float, float, bool> Blocked { get; set; }
 
+        /// <summary>Whether a building's wall or floor stands between two points (none known: nothing does).</summary>
+        public Func<float, float, float, float, float, float, bool> WallBetween { get; set; }
+
+        /// <summary>One has just died (a bandit drops what he carried).</summary>
+        public event Action<Animal> Died;
+
         public IEnumerable<Animal> All => _animals.Values;
         public int Count => _animals.Count;
 
@@ -74,6 +81,7 @@ namespace Oxfall.Core.Wildlife
         {
             _animals.Clear();
             _waiting.Clear();
+            _posts.Clear();
         }
 
         /// <summary>How many of each roam the island (it is about 350 m across).</summary>
@@ -86,15 +94,69 @@ namespace Oxfall.Core.Wildlife
         /// What animals walk round: trunks and boulders, and any building's floor (with a little room
         /// so a wolf does not push its head through a wall).
         /// </summary>
-        public static Func<float, float, bool> Barriers(BuildingGrid grid, Obstacles obstacles) => (x, z) =>
+        public static Func<float, float, bool> Barriers(BuildingGrid grid, Obstacles obstacles, IslandGround ground = null) => (x, z) =>
         {
             if (obstacles != null && obstacles.Blocks(x, z, 0.3f)) return true;
+            if (ground != null && Monuments.Solid(ground, x, z, 0.3f)) return true;
             if (grid == null || grid.FoundationCount == 0) return false;
             const float m = 0.7f;
             return grid.HasFoundation(BuildingGrid.CellAt(x, z))
                 || grid.HasFoundation(BuildingGrid.CellAt(x + m, z)) || grid.HasFoundation(BuildingGrid.CellAt(x - m, z))
                 || grid.HasFoundation(BuildingGrid.CellAt(x, z + m)) || grid.HasFoundation(BuildingGrid.CellAt(x, z - m));
         };
+
+        /// <summary>
+        /// What a building puts in the way of a line of sight: its foundations, and its walls storey by
+        /// storey (an opening in one is not counted). Sampled every 40 cm along the line.
+        /// </summary>
+        public static Func<float, float, float, float, float, float, bool> Walls(BuildingGrid grid) => (x0, y0, z0, x1, y1, z1) =>
+        {
+            if (grid == null || grid.FoundationCount == 0) return false;
+            float dx = x1 - x0, dy = y1 - y0, dz = z1 - z0;
+            int steps = Math.Max(1, (int)(Math.Sqrt(dx * dx + dz * dz) / 0.4f));
+            const float s = BuildingGrid.CellSize, near = 0.12f;
+            for (int i = 1; i < steps; i++)
+            {
+                float t = i / (float)steps, x = x0 + dx * t, y = y0 + dy * t, z = z0 + dz * t;
+                var cell = BuildingGrid.CellAt(x, z);
+                if (grid.TryGetFoundationTop(cell, out float top) && y < top) return true;
+                float fx = x / s - cell.X, fz = z / s - cell.Z;
+                if ((fx < near || fx > 1f - near) && WallAt(grid, (int)Math.Round(x / s), cell.Z, EdgeAxis.AlongZ, y)) return true;
+                if ((fz < near || fz > 1f - near) && WallAt(grid, cell.X, (int)Math.Round(z / s), EdgeAxis.AlongX, y)) return true;
+            }
+            return false;
+        };
+
+        private static bool WallAt(BuildingGrid grid, int x, int z, EdgeAxis axis, float y)
+        {
+            var b = new Cell(x, z);
+            var a = axis == EdgeAxis.AlongX ? new Cell(x, z - 1) : new Cell(x - 1, z);
+            if (!grid.TryGetFoundationTop(b, out float top) && !grid.TryGetFoundationTop(a, out top)) return false;
+            int level = (int)Math.Floor((y - top) / BuildingGrid.WallHeight);
+            return level >= 0 && level <= BuildingGrid.MaxLevel && grid.HasEdgePiece(new Edge(x, z, axis, level));
+        }
+
+        /// <summary>Bandits at their posts (see <see cref="Posts"/>): one at each, keeping to it.</summary>
+        public void Guard(IEnumerable<(float X, float Z, float Yaw)> posts)
+        {
+            foreach (var (x, z, yaw) in posts) AddGuard(x, z, yaw);
+        }
+
+        /// <summary>Where the island's ruins are guarded.</summary>
+        public static List<(float X, float Z, float Yaw)> Posts(IslandGround ground)
+        {
+            var posts = new List<(float, float, float)>();
+            foreach (var m in Monuments.Find(ground)) posts.AddRange(Monuments.GuardPosts(m));
+            return posts;
+        }
+
+        private Animal AddGuard(float x, float z, float yaw)
+        {
+            var a = Add(AnimalKind.Bandit, x, z, yaw);
+            a.Guard = true;
+            a.PostYaw = yaw;
+            return a;
+        }
 
         /// <summary>The herds a fresh island starts with.</summary>
         public void Populate(int boars, int wolves, int deer)
@@ -133,7 +195,7 @@ namespace Oxfall.Core.Wildlife
                 Kind = kind,
                 X = x,
                 Z = z,
-                Y = _ground.Height(x, z),
+                Y = Monuments.SurfaceHeight(_ground, x, z),
                 Yaw = yaw,
                 Health = Animals.MaxHealth(kind),
                 State = AnimalState.Idle,
@@ -160,11 +222,23 @@ namespace Oxfall.Core.Wildlife
                 a.Health = 0f;
                 a.State = AnimalState.Dead;
                 a.Speed = 0f;
-                a.Carcass = Animals.CarcassHits(a.Kind);
-                a.Timer = Animals.CarcassSeconds;
+                // A bandit leaves no carcass: his body lies a moment, and what he carried drops (see Died).
+                bool bandit = a.Kind == AnimalKind.Bandit;
+                a.Carcass = bandit ? 0 : Animals.CarcassHits(a.Kind);
+                a.Timer = bandit ? Bandits.BodySeconds : Animals.CarcassSeconds;
+                Died?.Invoke(a);
                 return true;
             }
             if (a.Kind == AnimalKind.Deer) Flee(a, fromX, fromZ, 6f);
+            else if (a.Kind == AnimalKind.Bandit)
+            {
+                // Shot at: turns on whoever did it, wherever they are.
+                a.Angry = true;
+                a.Quarry = attacker;
+                a.State = AnimalState.Chase;
+                a.Lost = 0f;
+                a.AttackTimer = Math.Max(a.AttackTimer, 0.4f);
+            }
             else
             {
                 a.Angry = true;
@@ -209,8 +283,23 @@ namespace Oxfall.Core.Wildlife
             }
             foreach (int id in _gone)
             {
-                _waiting.Add((_animals[id].Kind, Animals.RespawnSeconds));
+                var a = _animals[id];
+                // A bandit's post is held again later; an animal turns up anywhere.
+                if (a.Guard) _posts.Add((a.HomeX, a.HomeZ, a.PostYaw, Bandits.RespawnSeconds));
+                else _waiting.Add((a.Kind, Animals.RespawnSeconds));
                 _animals.Remove(id);
+            }
+            for (int i = _posts.Count - 1; i >= 0; i--)
+            {
+                var (x, z, yaw, timer) = _posts[i];
+                timer -= dt;
+                if (timer > 0f || (players != null && Near(players, x, z, Bandits.RespawnClearance)))
+                {
+                    _posts[i] = (x, z, yaw, Math.Max(timer, 0f) + (timer > 0f ? 0f : 10f));
+                    continue;
+                }
+                AddGuard(x, z, yaw);
+                _posts.RemoveAt(i);
             }
             for (int i = _waiting.Count - 1; i >= 0; i--)
             {
@@ -229,6 +318,11 @@ namespace Oxfall.Core.Wildlife
 
         private void Think(Animal a, float dt, IReadOnlyList<Prey> players, List<Bite> bites)
         {
+            if (a.Kind == AnimalKind.Bandit)
+            {
+                ThinkBandit(a, dt, players, bites);
+                return;
+            }
             a.Timer -= dt;
             a.AttackTimer -= dt;
             int nearest = NearestPrey(players, a.X, a.Z, out float distance);
@@ -333,8 +427,112 @@ namespace Oxfall.Core.Wildlife
             }
             a.X = nx;
             a.Z = nz;
-            a.Y = _ground.Height(nx, nz);
+            a.Y = Monuments.SurfaceHeight(_ground, nx, nz);
             a.Speed = step / dt;
+        }
+
+        /// <summary>
+        /// A bandit: watches from his post; whoever comes in sight is shot at from where he stands, or
+        /// followed (never far from his post) when out of range or round a corner; given up when gone
+        /// a while, and then back to his post.
+        /// </summary>
+        private void ThinkBandit(Animal a, float dt, IReadOnlyList<Prey> players, List<Bite> bites)
+        {
+            a.Timer -= dt;
+            a.AttackTimer -= dt;
+            int q = a.State == AnimalState.Chase ? IndexOf(players, a.Quarry) : -1;
+            if (q >= 0)
+            {
+                var p = players[q];
+                a.Lost = Sees(a, p) ? 0f : a.Lost + dt;
+                if (a.Lost > Bandits.LoseSeconds || Distance(a.X, a.Z, p.X, p.Z) > Bandits.LoseRange) q = -1;
+            }
+            if (q < 0 && players != null)
+            {
+                // On the lookout: the nearest player in sight.
+                float best = Bandits.Sight;
+                for (int i = 0; i < players.Count; i++)
+                {
+                    var p = players[i];
+                    float d = Distance(a.X, a.Z, p.X, p.Z);
+                    if (d < best && Math.Abs(p.Y - a.Y) < 10f && Sees(a, p))
+                    {
+                        best = d;
+                        q = i;
+                    }
+                }
+                if (q >= 0)
+                {
+                    a.Quarry = players[q].Key;
+                    a.State = AnimalState.Chase;
+                    a.Lost = 0f;
+                    a.AttackTimer = Math.Max(a.AttackTimer, Bandits.FirstShotSeconds);
+                }
+            }
+            if (q < 0)
+            {
+                if (a.State == AnimalState.Chase)
+                {
+                    // Back to his post.
+                    a.Angry = false;
+                    a.GoalX = a.HomeX;
+                    a.GoalZ = a.HomeZ;
+                    a.State = AnimalState.Wander;
+                    a.Timer = 25f;
+                    return;
+                }
+                if (a.Timer > 0f) return;
+                if (a.State == AnimalState.Idle) Wander(a);
+                else Rest(a);
+                return;
+            }
+
+            var prey = players[q];
+            float dx = prey.X - a.X, dz = prey.Z - a.Z;
+            float dist = (float)Math.Sqrt(dx * dx + dz * dz);
+            if (a.Lost <= 0f && dist <= Bandits.Range)
+            {
+                // Stands and shoots once he faces them.
+                a.GoalX = a.X;
+                a.GoalZ = a.Z;
+                Turn(a, dx, dz, dt);
+                float want = (float)(Math.Atan2(dx, dz) * 180.0 / Math.PI);
+                float off = Math.Abs(((want - a.Yaw) % 360f + 540f) % 360f - 180f);
+                if (a.AttackTimer <= 0f && off < 15f)
+                {
+                    a.AttackTimer = Bandits.FireSeconds + (float)_random.NextDouble() * 0.4f;
+                    a.Shots++;
+                    float dy = prey.Y - a.Y;
+                    bool hit = _random.NextDouble() < Bandits.HitChance((float)Math.Sqrt(dist * dist + dy * dy));
+                    bites?.Add(new Bite(a.Id, prey.Key, hit ? Bandits.Damage : 0f));
+                }
+                return;
+            }
+            // Closes in (round what is in the way), but not past his leash.
+            float px = prey.X, pz = prey.Z;
+            float hx = px - a.HomeX, hz = pz - a.HomeZ;
+            float fromHome = (float)Math.Sqrt(hx * hx + hz * hz);
+            if (fromHome > Bandits.Leash)
+            {
+                px = a.HomeX + hx / fromHome * Bandits.Leash;
+                pz = a.HomeZ + hz / fromHome * Bandits.Leash;
+            }
+            a.GoalX = px;
+            a.GoalZ = pz;
+        }
+
+        /// <summary>Whether a bandit can see a player: no monument wall, hill or building between his eyes and their chest.</summary>
+        private bool Sees(Animal a, Prey p)
+        {
+            float ex = a.X, ey = a.Y + 1.55f, ez = a.Z;
+            float tx = p.X, ty = p.Y + 1.2f, tz = p.Z;
+            for (int i = 1; i < 8; i++)
+            {
+                float t = i / 8f;
+                if (_ground.Height(ex + (tx - ex) * t, ez + (tz - ez) * t) > ey + (ty - ey) * t) return false;
+            }
+            if (Monuments.LineBlocked(_ground, ex, ey, ez, tx, ty, tz)) return false;
+            return WallBetween == null || !WallBetween(ex, ey, ez, tx, ty, tz);
         }
 
         private static readonly float[] Detours = { 45f, -45f, 90f, -90f };
@@ -352,7 +550,8 @@ namespace Oxfall.Core.Wildlife
             for (int i = 0; i < 8; i++)
             {
                 double angle = _random.NextDouble() * Math.PI * 2.0;
-                float r = 4f + (float)_random.NextDouble() * 14f;
+                // A guard paces about his post; an animal roams.
+                float r = a.Guard ? 1f + (float)_random.NextDouble() * 5f : 4f + (float)_random.NextDouble() * 14f;
                 float x = a.HomeX + (float)Math.Cos(angle) * r, z = a.HomeZ + (float)Math.Sin(angle) * r;
                 if (!Walkable(x, z)) continue;
                 a.GoalX = x;
@@ -369,7 +568,8 @@ namespace Oxfall.Core.Wildlife
             a.State = AnimalState.Idle;
             a.Timer = 2f + (float)_random.NextDouble() * 6f;
             a.Speed = 0f;
-            // Wherever it ends up is home now.
+            // Wherever it ends up is home now (a guard's post stays where it is).
+            if (a.Guard) return;
             a.HomeX = a.X;
             a.HomeZ = a.Z;
         }

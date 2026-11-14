@@ -32,6 +32,8 @@ namespace Oxfall.Core.Net
             Fauna.Tick(deltaSeconds, _prey, _bites);
             foreach (var bite in _bites)
             {
+                // A bandit's shot that missed: only the shot is seen (his count of shots).
+                if (bite.Damage <= 0f) continue;
                 if (!_online.TryGetValue((ushort)bite.Target, out var record) || record.Survivor.Vitals.IsDead) continue;
                 if (!Fauna.TryGet(bite.Animal, out var animal)) continue;
                 float damage = record.Survivor.TakeHit(bite.Damage);

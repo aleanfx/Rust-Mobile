@@ -175,10 +175,22 @@ namespace Oxfall.Game
             var obstacles = new Obstacles(ResourceLayout.Generate(ground));
             // Nobody builds over a trunk or a boulder (the preview shows it red).
             _settlement.Obstacles = obstacles;
-            _fauna = new Fauna(ground, s_seed) { Blocked = Fauna.Barriers(_settlement.Grid, obstacles) };
+            _fauna = new Fauna(ground, s_seed)
+            {
+                Blocked = Fauna.Barriers(_settlement.Grid, obstacles, ground),
+                WallBetween = Fauna.Walls(_settlement.Grid),
+            };
             _fauna.Populate();
+            // Bandits keep the ruins; a fallen one drops what he had.
+            _fauna.Guard(Fauna.Posts(ground));
+            _fauna.Died += a =>
+            {
+                if (a.Kind == AnimalKind.Bandit) _settlement.DropBag(a.X, a.Y, a.Z, a.Yaw, LootTable.Bandit(new System.Random()));
+            };
             _actions.Fauna = _fauna;
-            _animalViews = new AnimalViews(materials, (x, z) => _world.Shape.Height(x, z));
+            // On a ruin's pad they stand on the concrete, not the ground under it.
+            _animalViews = new AnimalViews(materials, (x, z) => Monuments.SurfaceHeight(ground, x, z),
+                id => models.TryGetValue(id, out var model) ? model : null);
             _sleeperViews = new SleeperViews(materials);
             gatherer.StrikeAnimal = _actions.StrikeAnimal;
 
@@ -215,6 +227,11 @@ namespace Oxfall.Game
             _audio = audio;
             gatherer.Sound += audio.Play;
             _animalViews.Called += audio.PlayAnimal;
+            _animalViews.BanditFired += (muzzle, forward) =>
+            {
+                _explosions?.MuzzleFlash(muzzle, forward, false);
+                GameAudio.PlayAt(audio.Bank.RevolverShot, muzzle, 1f, 6f, 200f, 0.05f);
+            };
             gatherer.FireSound = audio.Bank.FireLoop;
             controls.Tapped += () => audio.Play(SoundCue.Tap);
 
@@ -938,6 +955,7 @@ namespace Oxfall.Game
             _hud.ShowHurt(damage);
             _audio.Play(SoundCue.Hurt);
             if (killed) _killer = AnimalName(kind);
+            else if (kind == AnimalKind.Bandit) _hud.ShowToast($"Un bandido te ha dado  −{damage}");
             else _hud.ShowToast(kind == AnimalKind.Boar ? $"Un jabalí te embiste  −{damage}" : $"{char.ToUpperInvariant(AnimalName(kind)[0])}{AnimalName(kind).Substring(1)} te muerde  −{damage}");
         }
 
@@ -954,7 +972,9 @@ namespace Oxfall.Game
                     _audio.Play(SoundCue.HitBody);
                     _animalViews.Flinch(id);
                     if (blow == AnimalBlow.Killed)
-                        _hud.ShowToast($"Has abatido {AnimalName(kind)}: golpea el cuerpo para sacar carne y cuero");
+                        _hud.ShowToast(kind == AnimalKind.Bandit
+                            ? "Has abatido a un bandido: lo que llevaba queda en una bolsa"
+                            : $"Has abatido {AnimalName(kind)}: golpea el cuerpo para sacar carne y cuero");
                     break;
                 case AnimalBlow.Cut:
                     _audio.Play(SoundCue.HitBody);
@@ -989,6 +1009,8 @@ namespace Oxfall.Game
                 _fauna.Tick(dt, _prey, _bites);
                 foreach (var bite in _bites)
                 {
+                    // A bandit's miss: only the shot is seen and heard.
+                    if (bite.Damage <= 0f) continue;
                     if (_vitals.IsDead || !_fauna.TryGet(bite.Animal, out var animal)) continue;
                     // Named before the blow lands, in case it is the last; what they wear takes its share.
                     _killer = AnimalName(animal.Kind);
@@ -1357,6 +1379,7 @@ namespace Oxfall.Game
                 case "face-cupboard": FaceDeployable(Nearest(DeployableKind.ToolCupboard)); break;
                 case "face-workbench": FaceDeployable(Nearest(DeployableKind.Workbench)); break;
                 case "to-recycler": ToRecycler(); break;
+                case "to-bandit": ToBandit(); break;
                 case "guide-reset": _guide.Restart(); break;
                 case "open-recycler": OpenBox(Nearest(DeployableKind.Recycler)); break;
                 case "put-parts":
@@ -1768,6 +1791,36 @@ namespace Oxfall.Game
             _player.Teleport(at, 0f, 0f);
             FaceDeployable(d.Id);
             Debug.Log($"[Oxfall] At the recycler {d}");
+        }
+
+        /// <summary>Test view: in the open some way from the nearest bandit, where he can see this player, facing him.</summary>
+        private void ToBandit()
+        {
+            var here = _player.transform.position;
+            int best = -1;
+            Vector3 at = default;
+            foreach (int id in _animalViews.Ids)
+                if (_animalViews.TryGet(id, out var kind, out var position, out var state) && kind == AnimalKind.Bandit && state != AnimalState.Dead
+                    && (best < 0 || (position - here).sqrMagnitude < (at - here).sqrMagnitude))
+                {
+                    best = id;
+                    at = position;
+                }
+            if (best < 0) return;
+            var ground = _world.Shape.Ground;
+            for (int i = 0; i < 24; i++)
+            {
+                float angle = i * 15f * Mathf.Deg2Rad, r = 13f;
+                float x = at.x + Mathf.Sin(angle) * r, z = at.z + Mathf.Cos(angle) * r;
+                float y = Monuments.SurfaceHeight(ground, x, z);
+                if (Monuments.Solid(ground, x, z, 0.5f) || Mathf.Abs(y - at.y) > 3f) continue;
+                if (Monuments.LineBlocked(ground, x, y + 1.5f, z, at.x, at.y + 1.5f, at.z)) continue;
+                var to = at - new Vector3(x, y, z);
+                _player.Teleport(new Vector3(x, y + 0.05f, z), Mathf.Atan2(to.x, to.z) * Mathf.Rad2Deg, 0f);
+                Debug.Log($"[Oxfall] Near bandit {best} at ({at.x:0.0}, {at.y:0.0}, {at.z:0.0}) from ({x:0.0}, {z:0.0})");
+                return;
+            }
+            Debug.Log("[Oxfall] No clear spot near a bandit");
         }
 
         private void FaceNearest(ResourceNodeType type)

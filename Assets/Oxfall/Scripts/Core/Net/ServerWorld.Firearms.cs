@@ -101,7 +101,7 @@ namespace Oxfall.Core.Net
             if (kind == ArrowTarget.Animal)
             {
                 if (!Fauna.TryGet(targetId, out var animal) || animal.IsDead) return false;
-                float ay = Ground.Height(animal.X, animal.Z);
+                float ay = animal.Y;
                 if (!Firearms.CouldHit(gun, shot.X, shot.Y, shot.Z, shot.Yaw, shot.Pitch, animal.X, ay, animal.Z, 1.3f)) return false;
                 shot.PelletsLeft -= pellets;
                 float amount = Firearms.Damage(gun, pellets, Distance3(shot, animal.X, ay + 0.7f, animal.Z));

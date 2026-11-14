@@ -157,6 +157,20 @@ namespace Oxfall.Core.Rules
             return true;
         }
 
+        /// <summary>
+        /// A bag of things on the ground that nobody owns (what a fallen bandit had): anyone may take
+        /// from it, and it rots like a dead player's.
+        /// </summary>
+        public Deployable DropBag(float x, float y, float z, float yaw, IEnumerable<Gathering.Yield> items)
+        {
+            var bag = Add(new Deployable(0, DeployableKind.Bag, x, y, z, yaw, 0));
+            var into = Container(bag.Id);
+            foreach (var item in items)
+                if (item.Amount > 0) into.Add(item.ItemId, item.Amount);
+            LootDropped?.Invoke(bag);
+            return bag;
+        }
+
         /// <summary>Seconds this settlement has been ticked (the clock for mending after a blast).</summary>
         public float Clock { get; private set; }
 

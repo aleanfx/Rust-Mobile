@@ -41,7 +41,7 @@ namespace Oxfall.Game.UI
             new Step { Text = "Levanta paredes y pon una puerta", Hint = "Con el plano elige Marco de puerta; la puerta se fabrica en BASE", Icon = ItemIds.WoodenDoor, Flag = "door" },
             new Step { Text = "Pon un armario en tu base", Hint = "Con el armario nadie más puede construir junto a tu casa", Icon = ItemIds.ToolCupboard, Flag = "cupboard" },
             new Step { Text = "Pon un saco de dormir", Hint = "Si mueres, despiertas en él y no en la playa", Icon = ItemIds.SleepingBag, Flag = "bag" },
-            new Step { Text = "Abre una caja en las ruinas", Hint = "Toca la brújula para ver el mapa: las ruinas están marcadas", Icon = null, Flag = "crate" },
+            new Step { Text = "Abre una caja en las ruinas", Hint = "Mira el mapa (toca la brújula). Ojo: hay bandidos armados", Icon = null, Flag = "crate" },
             new Step { Text = "Recicla piezas", Hint = "En las ruinas hay una recicladora: mete engranajes o tubos y enciéndela", Icon = ItemIds.Gears, Flag = "recycle" },
             new Step { Text = "Fabrica una mesa de trabajo", Hint = "Se hace con chatarra; cerca de ella fabricas armas y herramientas de metal", Icon = ItemIds.Workbench, Flag = "workbench" },
         };

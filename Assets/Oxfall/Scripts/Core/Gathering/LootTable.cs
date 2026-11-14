@@ -54,5 +54,23 @@ namespace Oxfall.Core.Gathering
             loot.Add(new Yield(find.Id, find.Min + random.Next(find.Max - find.Min + 1)));
             return loot;
         }
+
+        /// <summary>
+        /// What a bandit had on him: rounds for his revolver, scrap and cloth, sometimes a bandage or a
+        /// part, and now and then the revolver itself.
+        /// </summary>
+        public static List<Yield> Bandit(Random random)
+        {
+            var loot = new List<Yield>(6)
+            {
+                new Yield(ItemIds.PistolBullet, 4 + random.Next(7)),
+                new Yield(ItemIds.Scrap, 6 + random.Next(9)),
+                new Yield(ItemIds.Cloth, 5 + random.Next(11)),
+            };
+            if (random.NextDouble() < 0.3) loot.Add(new Yield(ItemIds.Bandage, 1));
+            if (random.NextDouble() < 0.25) loot.Add(new Yield(Components[random.Next(Components.Length)], 1));
+            if (random.NextDouble() < 0.12) loot.Add(new Yield(ItemIds.Revolver, 1));
+            return loot;
+        }
     }
 }

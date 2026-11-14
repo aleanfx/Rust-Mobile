@@ -12,7 +12,7 @@ namespace Oxfall.Core.Net
     public static class Protocol
     {
         /// <summary>Raised whenever a message changes shape; a client of another version is turned away.</summary>
-        public const ushort Version = 12;
+        public const ushort Version = 13;
 
         /// <summary>Snapshots per second the server sends.</summary>
         public const int TickRate = 20;
@@ -809,6 +809,7 @@ namespace Oxfall.Core.Net
                 w.Byte((byte)((int)Math.Round(a.Yaw / 360f * 256f) & 0xFF));
                 w.Byte((byte)Math.Min(255, (int)Math.Round(a.Speed * 20f)));
                 w.Byte((byte)Math.Min(255, Math.Max(0, (int)Math.Round(a.Health / Wildlife.Animals.MaxHealth(a.Kind) * 255f))));
+                w.Byte((byte)(a.Shots & 0xFF));
                 count++;
             }
             w.PatchUShort(countAt, (ushort)count);
@@ -827,8 +828,9 @@ namespace Oxfall.Core.Net
                 float yaw = r.Byte() / 256f * 360f;
                 float speed = r.Byte() / 20f;
                 float health = r.Byte() / 255f;
+                int shots = r.Byte();
                 if (!Wildlife.Animals.IsKnown(kind)) continue;
-                into.Add(new AnimalSnap(id, kind, state, x, z, yaw, speed, health));
+                into.Add(new AnimalSnap(id, kind, state, x, z, yaw, speed, health, shots));
             }
         }
 

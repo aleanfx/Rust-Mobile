@@ -13,6 +13,12 @@ namespace Oxfall.Core.Wildlife
 
         /// <summary>Grazes in the open; runs from everyone.</summary>
         Deer = 3,
+
+        /// <summary>
+        /// Not an animal: an armed man guarding the ruins. Shoots whoever comes in sight, keeps to his
+        /// post, drops what he carried when he falls, and another takes his place a while later.
+        /// </summary>
+        Bandit = 4,
     }
 
     public enum AnimalState : byte
@@ -27,7 +33,7 @@ namespace Oxfall.Core.Wildlife
     /// <summary>How each kind of animal lives, fights and what its body gives.</summary>
     public static class Animals
     {
-        public static bool IsKnown(AnimalKind kind) => kind >= AnimalKind.Boar && kind <= AnimalKind.Deer;
+        public static bool IsKnown(AnimalKind kind) => kind >= AnimalKind.Boar && kind <= AnimalKind.Bandit;
 
         public static string Name(AnimalKind kind)
         {
@@ -35,6 +41,7 @@ namespace Oxfall.Core.Wildlife
             {
                 case AnimalKind.Boar: return "Jabalí";
                 case AnimalKind.Wolf: return "Lobo";
+                case AnimalKind.Bandit: return "Bandido";
                 default: return "Ciervo";
             }
         }
@@ -45,6 +52,7 @@ namespace Oxfall.Core.Wildlife
             {
                 case AnimalKind.Boar: return 120f;
                 case AnimalKind.Wolf: return 90f;
+                case AnimalKind.Bandit: return 100f;
                 default: return 80f;
             }
         }
@@ -58,6 +66,7 @@ namespace Oxfall.Core.Wildlife
             {
                 case AnimalKind.Boar: return 5.2f;
                 case AnimalKind.Wolf: return 6.9f;
+                case AnimalKind.Bandit: return 4.4f;
                 default: return 7.6f;
             }
         }
@@ -119,9 +128,41 @@ namespace Oxfall.Core.Wildlife
             {
                 case AnimalKind.Boar: return (0.3f, 0.42f, 0.65f);
                 case AnimalKind.Wolf: return (0.22f, 0.45f, 0.7f);
+                case AnimalKind.Bandit: return (0.3f, 0.9f, 0.3f);
                 default: return (0.25f, 0.75f, 0.75f);
             }
         }
+    }
+
+    /// <summary>How the ruins' bandits see, shoot and come back.</summary>
+    public static class Bandits
+    {
+        /// <summary>How near a bandit notices a player in the open.</summary>
+        public const float Sight = 24f;
+
+        /// <summary>How near he shoots from (further, he closes in if he may).</summary>
+        public const float Range = 21f;
+
+        /// <summary>He never goes further than this from his post.</summary>
+        public const float Leash = 24f;
+
+        /// <summary>A target out of sight this long, or this far, is given up.</summary>
+        public const float LoseSeconds = 6f, LoseRange = 34f;
+
+        /// <summary>Seconds between shots, and before the first once he sees someone.</summary>
+        public const float FireSeconds = 1.35f, FirstShotSeconds = 0.9f;
+
+        /// <summary>Health a shot that hits takes off (before what the player wears).</summary>
+        public const float Damage = 12f;
+
+        /// <summary>How likely a shot is to hit at this distance: likely close, a long shot rarely.</summary>
+        public static float HitChance(float distance) => Math.Max(0.2f, Math.Min(0.85f, 0.95f - distance / 30f));
+
+        /// <summary>How long a fallen bandit lies there, and how long before another holds his post.</summary>
+        public const float BodySeconds = 10f, RespawnSeconds = 300f;
+
+        /// <summary>Another only turns up when nobody is this near the post.</summary>
+        public const float RespawnClearance = 40f;
     }
 
     /// <summary>One animal on the island: where it is, which way it faces, how it is, what it is doing.</summary>
@@ -145,6 +186,12 @@ namespace Oxfall.Core.Wildlife
         /// <summary>Blows left before the carcass is used up.</summary>
         public int Carcass { get; internal set; }
 
+        /// <summary>A bandit's shots so far (each one is drawn and heard where he stands).</summary>
+        public int Shots { get; internal set; }
+
+        /// <summary>A bandit, who keeps to his post (it never moves with him).</summary>
+        public bool Guard { get; internal set; }
+
         public bool IsDead => State == AnimalState.Dead;
 
         // What it is about: a spot to walk to, someone to chase or run from, and timers.
@@ -154,6 +201,8 @@ namespace Oxfall.Core.Wildlife
         internal float AttackTimer;
         internal float HomeX, HomeZ;
         internal bool Angry;
+        internal float Lost;
+        internal float PostYaw;
 
         public override string ToString() => $"{Kind} {Id} ({X:0.0}, {Z:0.0}) {State} {Health:0}";
     }

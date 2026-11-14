@@ -195,6 +195,105 @@ namespace Oxfall.Core.World
             return false;
         }
 
+        /// <summary>Where a monument's guards keep watch, in world space, and which way each faces (the outpost has two).</summary>
+        public static IEnumerable<(float X, float Z, float Yaw)> GuardPosts(Monument m)
+        {
+            var posts = m.Kind == MonumentKind.Outpost
+                ? new[] { (-1f, 2.5f, 0f), (6f, -6.5f, 330f) }
+                : new[] { (-2.5f, 0f, 0f) };
+            foreach (var (lx, lz, yaw) in posts)
+            {
+                Place(m, lx, lz, out float x, out float z);
+                yield return (x, z, m.Yaw + yaw);
+            }
+        }
+
+        /// <summary>The top of the monument's concrete pad under (x, z), or float.MinValue off every pad.</summary>
+        public static float PadTop(IslandGround ground, float x, float z)
+        {
+            foreach (var m in Find(ground))
+            {
+                float dx = x - m.X, dz = z - m.Z;
+                if (dx * dx + dz * dz > 18f * 18f) continue;
+                ToLocal(m.Yaw, dx, dz, out float lx, out float lz);
+                float hx = m.Kind == MonumentKind.Outpost ? 11f : 12f, hz = m.Kind == MonumentKind.Outpost ? 11f : 10f;
+                if (Math.Abs(lx) <= hx && Math.Abs(lz) <= hz) return m.Y + 0.15f;
+            }
+            return float.MinValue;
+        }
+
+        /// <summary>What a foot finds at (x, z): the ground, or a monument's pad over it.</summary>
+        public static float SurfaceHeight(IslandGround ground, float x, float z) => Math.Max(ground.Height(x, z), PadTop(ground, x, z));
+
+        /// <summary>The walls, huts and blocks of every monument on an island (not their pads, which are floor).</summary>
+        private static List<MonumentProp> Solids(IslandGround ground)
+        {
+            lock (SolidCache)
+            {
+                if (SolidCache.TryGetValue(ground.Seed, out var solids)) return solids;
+                solids = new List<MonumentProp>();
+                foreach (var m in Find(ground))
+                    foreach (var p in Props(m))
+                        if (p.Y + p.SizeY * 0.5f > m.Y + 0.5f) solids.Add(p);
+                SolidCache[ground.Seed] = solids;
+                return solids;
+            }
+        }
+
+        private static readonly Dictionary<int, List<MonumentProp>> SolidCache = new Dictionary<int, List<MonumentProp>>();
+
+        /// <summary>Whether (x, z), widened by <paramref name="pad"/>, is inside a monument's wall or block (no walking through).</summary>
+        public static bool Solid(IslandGround ground, float x, float z, float pad)
+        {
+            if (!Inside(ground, x, z, 1f)) return false;
+            foreach (var p in Solids(ground))
+            {
+                ToLocal(p.Yaw, x - p.X, z - p.Z, out float lx, out float lz);
+                if (Math.Abs(lx) <= p.SizeX * 0.5f + pad && Math.Abs(lz) <= p.SizeZ * 0.5f + pad) return true;
+            }
+            return false;
+        }
+
+        /// <summary>Whether a monument's wall or block stands between two points (a line of sight).</summary>
+        public static bool LineBlocked(IslandGround ground, float x0, float y0, float z0, float x1, float y1, float z1)
+        {
+            if (!Inside(ground, x0, z0, 30f) && !Inside(ground, x1, z1, 30f)) return false;
+            foreach (var p in Solids(ground))
+            {
+                // Into the block's own frame, then the slab test against its box.
+                ToLocal(p.Yaw, x0 - p.X, z0 - p.Z, out float ax, out float az);
+                ToLocal(p.Yaw, x1 - p.X, z1 - p.Z, out float bx, out float bz);
+                float ay = y0 - p.Y, by = y1 - p.Y;
+                if (SegmentHitsBox(ax, ay, az, bx, by, bz, p.SizeX * 0.5f, p.SizeY * 0.5f, p.SizeZ * 0.5f)) return true;
+            }
+            return false;
+        }
+
+        private static bool SegmentHitsBox(float ax, float ay, float az, float bx, float by, float bz, float hx, float hy, float hz)
+        {
+            float t0 = 0f, t1 = 1f;
+            return Slab(ax, bx - ax, hx, ref t0, ref t1) && Slab(ay, by - ay, hy, ref t0, ref t1) && Slab(az, bz - az, hz, ref t0, ref t1);
+        }
+
+        private static bool Slab(float start, float delta, float half, ref float t0, ref float t1)
+        {
+            if (Math.Abs(delta) < 1e-6f) return Math.Abs(start) <= half;
+            float ta = (-half - start) / delta, tb = (half - start) / delta;
+            if (ta > tb) (ta, tb) = (tb, ta);
+            t0 = Math.Max(t0, ta);
+            t1 = Math.Min(t1, tb);
+            return t0 <= t1;
+        }
+
+        /// <summary>A world offset into a frame turned by <paramref name="yaw"/> (the inverse of <see cref="Place"/>).</summary>
+        private static void ToLocal(float yaw, float dx, float dz, out float lx, out float lz)
+        {
+            float a = yaw * (MathF.PI / 180f);
+            float c = MathF.Cos(a), s = MathF.Sin(a);
+            lx = dx * c - dz * s;
+            lz = dx * s + dz * c;
+        }
+
         /// <summary>Where a monument's recycler stands, in world space, and which way it faces (its back to a wall).</summary>
         public static (float X, float Y, float Z, float Yaw) RecyclerSpot(Monument m)
         {

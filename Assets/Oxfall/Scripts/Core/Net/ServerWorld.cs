@@ -82,8 +82,18 @@ namespace Oxfall.Core.Net
                 _nodes[spawn.Id] = new Node { State = new ResourceNode(spawn.Id, spawn.Type), X = spawn.X, Y = spawn.Y, Z = spawn.Z };
             var obstacles = new Obstacles(spawns);
             Settlement.Obstacles = obstacles;
-            Fauna = new Fauna(Ground, seed) { Blocked = Fauna.Barriers(Settlement.Grid, obstacles) };
+            Fauna = new Fauna(Ground, seed)
+            {
+                Blocked = Fauna.Barriers(Settlement.Grid, obstacles, Ground),
+                WallBetween = Fauna.Walls(Settlement.Grid),
+            };
             Fauna.Populate();
+            Fauna.Guard(Fauna.Posts(Ground));
+            // A fallen bandit drops what he had (everyone sees the bag through LootDropped).
+            Fauna.Died += a =>
+            {
+                if (a.Kind == AnimalKind.Bandit) Settlement.DropBag(a.X, a.Y, a.Z, a.Yaw, LootTable.Bandit(_random));
+            };
         }
 
         public ServerState Players { get; }

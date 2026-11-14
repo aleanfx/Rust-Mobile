@@ -1,6 +1,9 @@
 using System;
 using System.Collections.Generic;
+using Oxfall.Core.Items;
 using Oxfall.Core.Wildlife;
+using Oxfall.Game.Items;
+using Oxfall.Game.Net;
 using Oxfall.Game.Rendering;
 using UnityEngine;
 using UnityEngine.Rendering;
@@ -18,7 +21,8 @@ namespace Oxfall.Game.World
     /// Draws the animals from what is known of them (alone: the game's own; online: the server's few
     /// updates a second). Each walks on between updates the way it faces, eases to where it should be,
     /// follows the slope of the ground, swings its legs in a trot that quickens with its speed, flinches
-    /// when hit and falls on its side when it dies.
+    /// when hit and falls on its side when it dies. A bandit is a survivor figure in rags with a
+    /// revolver, raised at whoever he is after, that flashes when he fires.
     /// </summary>
     public sealed class AnimalViews
     {
@@ -46,10 +50,20 @@ namespace Oxfall.Game.World
             public float Flinch;
             public bool Seen;
             public float CalledAt = -10f;
+
+            // A bandit: the figure, and his count of shots (a new one: he fired).
+            public RemotePlayer Man;
+            public int Shots;
         }
 
         /// <summary>An animal calls out (a wolf or boar starting a charge, a deer bolting, any of them hurt): its kind, where.</summary>
         public event Action<AnimalKind, Vector3> Called;
+
+        /// <summary>A bandit fired: from his revolver's muzzle, the way it points.</summary>
+        public event Action<Vector3, Vector3> BanditFired;
+
+        /// <summary>What bandits wear: a headwrap, a burlap shirt, hide trousers and boots.</summary>
+        private static readonly string[] BanditOutfit = { ItemIds.BurlapHeadwrap, ItemIds.BurlapShirt, ItemIds.HidePants, ItemIds.HideBoots };
 
         private const float DrawDistance = 150f;
 
@@ -59,10 +73,15 @@ namespace Oxfall.Game.World
         private readonly Func<float, float, float> _height;
         private readonly Transform _parent;
         private readonly List<int> _gone = new List<int>();
+        private readonly MaterialLibrary _materials;
+        private readonly Func<string, ItemModel> _models;
+        private Vector3 _eye;
 
-        public AnimalViews(MaterialLibrary materials, Func<float, float, float> height)
+        public AnimalViews(MaterialLibrary materials, Func<float, float, float> height, Func<string, ItemModel> models = null)
         {
             _height = height;
+            _materials = materials;
+            _models = models;
             _parent = new GameObject("Animals").transform;
             foreach (AnimalKind kind in new[] { AnimalKind.Boar, AnimalKind.Wolf, AnimalKind.Deer })
             {
@@ -108,9 +127,15 @@ namespace Oxfall.Game.World
                 v.TargetYaw = a.Yaw;
                 v.Speed = a.State == AnimalState.Dead ? 0f : a.Speed;
                 bool hurt = a.Health < v.Health - 0.001f;
-                if (hurt && a.State != AnimalState.Dead) v.Flinch = 1f;
+                if (hurt && a.State != AnimalState.Dead) Flinch(v);
+                if (v.Man != null && (a.Shots & 0xFF) != (v.Shots & 0xFF))
+                {
+                    v.Shots = a.Shots;
+                    Fired(v);
+                }
                 bool alarm = a.State != v.State && (a.State == AnimalState.Chase || (a.State == AnimalState.Flee && a.Kind == AnimalKind.Deer));
-                if ((alarm || hurt) && Time.time - v.CalledAt > 3f)
+                // A bandit makes no animal's cry.
+                if (v.Man == null && (alarm || hurt) && Time.time - v.CalledAt > 3f)
                 {
                     v.CalledAt = Time.time;
                     Called?.Invoke(a.Kind, v.Root.transform.position + Vector3.up * 0.6f);
@@ -133,7 +158,21 @@ namespace Oxfall.Game.World
         /// <summary>A blow landed on it: a start.</summary>
         public void Flinch(int id)
         {
-            if (_views.TryGetValue(id, out var v)) v.Flinch = 1f;
+            if (_views.TryGetValue(id, out var v)) Flinch(v);
+        }
+
+        private static void Flinch(View v)
+        {
+            v.Flinch = 1f;
+            v.Man?.Flinch();
+        }
+
+        /// <summary>A bandit's shot: the flash at his muzzle, where he aims.</summary>
+        private void Fired(View v)
+        {
+            if (!v.Shown || !v.Man.TryMuzzle(out var muzzle)) return;
+            var forward = Quaternion.Euler(-v.Pitch, v.Yaw, 0f) * Vector3.forward;
+            BanditFired?.Invoke(muzzle, forward);
         }
 
         public void Clear()
@@ -146,6 +185,7 @@ namespace Oxfall.Game.World
         public void Tick(float dt, Vector3 eye)
         {
             if (dt <= 0f) return;
+            _eye = eye;
             float ease = 1f - Mathf.Exp(-8f * dt);
             float turn = 1f - Mathf.Exp(-10f * dt);
             foreach (var v in _views.Values)
@@ -186,6 +226,11 @@ namespace Oxfall.Game.World
 
         private void Place(View v, float dt)
         {
+            if (v.Man != null)
+            {
+                PlaceMan(v, dt);
+                return;
+            }
             float half = Animals.HalfSize(v.Kind).Z;
             float yawRad = v.Yaw * Mathf.Deg2Rad;
             float fx = Mathf.Sin(yawRad), fz = Mathf.Cos(yawRad);
@@ -223,8 +268,29 @@ namespace Oxfall.Game.World
             v.Figure.localRotation = Quaternion.Euler(-v.Flinch * 14f, 0f, 90f * fall);
         }
 
+        /// <summary>A bandit: drawn like a player, his revolver raised at whoever he is after (when that is this player, at their eyes).</summary>
+        private void PlaceMan(View v, float dt)
+        {
+            float y = _height(v.X, v.Z);
+            float pitch = 0f;
+            if (v.State == AnimalState.Chase)
+            {
+                float flat = new Vector2(_eye.x - v.X, _eye.z - v.Z).magnitude;
+                if (flat < Bandits.LoseRange) pitch = Mathf.Clamp(Mathf.Atan2(_eye.y - (y + 1.5f), Mathf.Max(flat, 0.5f)) * Mathf.Rad2Deg, -40f, 40f);
+            }
+            v.Pitch = pitch;
+            v.Man.SetPitch(pitch);
+            v.Man.Poses.Add(Time.time, new Oxfall.Core.Net.Pose(v.X, y, v.Z, v.Yaw));
+            v.Man.Draw(Time.time, dt);
+        }
+
         private void SetDead(View v, bool dead)
         {
+            if (v.Man != null)
+            {
+                v.Man.SetDown(dead);
+                return;
+            }
             var size = Animals.HalfSize(v.Kind);
             if (dead)
             {
@@ -243,6 +309,7 @@ namespace Oxfall.Game.World
 
         private View Make(AnimalSnap a)
         {
+            if (a.Kind == AnimalKind.Bandit) return MakeMan(a);
             var rig = _rigs[a.Kind];
             var root = new GameObject(Animals.Name(a.Kind) + " " + a.Id);
             root.transform.SetParent(_parent, false);
@@ -284,6 +351,40 @@ namespace Oxfall.Game.World
             };
             SetDead(v, a.State == AnimalState.Dead);
             if (a.State == AnimalState.Dead) v.Fallen = 1f;
+            Place(v, 0.02f);
+            return v;
+        }
+
+        private View MakeMan(AnimalSnap a)
+        {
+            var man = new RemotePlayer(0, Animals.Name(a.Kind), _materials, _parent);
+            man.Root.name = Animals.Name(a.Kind) + " " + a.Id;
+            // Hit as an animal is (the server keeps him with them), not as a player.
+            UnityEngine.Object.DestroyImmediate(man.Root.GetComponent<PlayerTag>());
+            var tag = man.Root.gameObject.AddComponent<AnimalTag>();
+            tag.Id = a.Id;
+            tag.Kind = a.Kind;
+            man.SetOutfit(BanditOutfit);
+            man.SetHeld(ItemIds.Revolver, _models?.Invoke(ItemIds.Revolver));
+            var v = new View
+            {
+                Id = a.Id,
+                Kind = a.Kind,
+                Root = man.Root.gameObject,
+                Figure = man.Root,
+                Man = man,
+                Shots = a.Shots,
+                Renderers = man.Root.GetComponentsInChildren<Renderer>(true),
+                X = a.X,
+                Z = a.Z,
+                Yaw = a.Yaw,
+                TargetX = a.X,
+                TargetZ = a.Z,
+                TargetYaw = a.Yaw,
+                State = a.State,
+                Health = a.Health,
+            };
+            man.SetDown(a.State == AnimalState.Dead);
             Place(v, 0.02f);
             return v;
         }
