@@ -404,7 +404,7 @@ namespace Oxfall.Game.UI
             TapTargets.Add(new TapTarget { Rect = close, OnTap = onTap });
         }
 
-        private void ToggleSettings()
+        public void ToggleSettings()
         {
             bool open = !_settings.gameObject.activeSelf;
             if (open) CloseCraftPanel();

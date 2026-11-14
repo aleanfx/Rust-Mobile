@@ -296,6 +296,23 @@ namespace Oxfall.Game
             foreach (var pair in _counting) _owned[pair.Key] = pair.Value;
         }
 
+        /// <summary>Test view: turns to look at the nearest other player.</summary>
+        private void FacePlayer()
+        {
+            RemotePlayer nearest = null;
+            float best = float.MaxValue;
+            foreach (var other in _net.Players.Values)
+            {
+                float d = (other.Root.position - _player.transform.position).sqrMagnitude;
+                if (other.Visible && d < best) { best = d; nearest = other; }
+            }
+            if (nearest == null) return;
+            var to = nearest.Root.position - _player.transform.position;
+            float yaw = Mathf.Atan2(to.x, to.z) * Mathf.Rad2Deg;
+            _player.Teleport(_player.transform.position, yaw, 4f);
+            Debug.Log($"[Oxfall] Facing {nearest.Name}, {Mathf.Sqrt(best):0.0} m away");
+        }
+
         private void OnNetStatus(NetClient.Status status)
         {
             _shownOnline = -1;
@@ -375,8 +392,12 @@ namespace Oxfall.Game
         /// </summary>
         public void DebugCommand(string command)
         {
+            // Test commands move the player at will; the server is told so it does not pull them back.
+            _net?.MarkTeleport();
             switch (command)
             {
+                case "settings": _hud.ToggleSettings(); break;
+                case "face-player": FacePlayer(); break;
                 case "nearest-tree": FaceNearest(ResourceNodeType.Tree); break;
                 case "view-hill": ViewFromHill(); break;
                 case "view-forest": ViewInForest(); break;
