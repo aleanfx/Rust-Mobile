@@ -56,6 +56,9 @@ namespace Oxfall.Game.Audio
         public AudioClip WindLoop { get; }
         public AudioClip WavesLoop { get; }
 
+        /// <summary>A recycler running: a motor's hum, the drum's grinding rasp and a clank each turn (a loop).</summary>
+        public AudioClip MachineLoop { get; }
+
         private readonly System.Random _random = new System.Random(5);
 
         public SoundBank()
@@ -179,6 +182,7 @@ namespace Oxfall.Game.Audio
                 (Tone(t, 3100f) * 0.6f + Tone(t, 5300f) * 0.3f) * Env(t, 0.0003f, 0.01f) + Noise() * Env(t, 0.0002f, 0.004f) * 0.5f);
             WindLoop = MakeLoop("wind", 6f, WindSample);
             WavesLoop = MakeLoop("waves", 8f, WavesSample);
+            MachineLoop = MakeLoop("machine", 2f, MachineSample);
         }
 
         // ---- building blocks ----
@@ -257,6 +261,19 @@ namespace Oxfall.Game.Audio
             float sample = (n - _hissLow) * (0.45f + 0.15f * Mathf.Sin(t * 23f)) + Noise() * _spit * 0.7f;
             _spit *= 0.93f;
             return sample;
+        }
+
+        private float _grind;
+        private float MachineSample(float t, int i)
+        {
+            // Whole cycles in the loop's two seconds, so it joins up: a 55 Hz hum with its overtones,
+            // grinding that swells twice a second, and a clank as the drum comes round.
+            float hum = Tone(t, 55f) * 0.32f + Tone(t, 110f) * 0.18f + Tone(t, 165f) * 0.07f;
+            _grind += (Noise() - _grind) * 0.3f;
+            float grind = _grind * (0.3f + 0.22f * Mathf.Sin(t * Mathf.PI * 4f));
+            float turn = t % 0.5f;
+            float clank = Tone(turn, 410f) * Env(turn, 0.0005f, 0.03f) * 0.45f + Noise() * Env(turn, 0.0005f, 0.012f) * 0.3f;
+            return hum + grind + clank;
         }
 
         private float _wind;

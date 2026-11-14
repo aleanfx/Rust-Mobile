@@ -307,6 +307,7 @@ namespace Oxfall.Game
             // the settlement; holding one shows where it would go and attack puts it down.
             _deployables = new DeployableViews(_settlement, models, materials);
             _deployables.FireStarted += fire => GameAudio.Attach(fire, audio.Bank.FireLoop, 0.7f, 16f);
+            _deployables.MachineStarted += hum => GameAudio.Attach(hum, audio.Bank.MachineLoop, 0.55f, 18f);
             _placer = playerObject.AddComponent<DeployablePlacer>();
             _placer.Init(input, player, materials, _hud, _settlement, _deployables);
             _placer.Actions = _actions;
@@ -1330,6 +1331,17 @@ namespace Oxfall.Game
                 case "face-furnace": FaceDeployable(Nearest(DeployableKind.Furnace)); break;
                 case "face-cupboard": FaceDeployable(Nearest(DeployableKind.ToolCupboard)); break;
                 case "face-workbench": FaceDeployable(Nearest(DeployableKind.Workbench)); break;
+                case "to-recycler": ToRecycler(); break;
+                case "open-recycler": OpenBox(Nearest(DeployableKind.Recycler)); break;
+                case "put-parts":
+                    // Test: the gun parts carried go into the open recycler.
+                    for (int i = 0; i < _inventory.SlotCount; i++)
+                    {
+                        string item = _inventory[i].ItemId;
+                        if (item == ItemIds.Gears || item == ItemIds.MetalSpring || item == ItemIds.MetalPipe)
+                            Debug.Log($"[Oxfall] Put {item}: {_actions.Put(i, -1)}");
+                    }
+                    break;
                 case "face-bag": FaceDeployable(Nearest(DeployableKind.Bag)); break;
                 case "open-bag": OpenBox(Nearest(DeployableKind.Bag)); break;
                 case "open-fire": OpenBox(Nearest(DeployableKind.Campfire)); break;
@@ -1719,6 +1731,17 @@ namespace Oxfall.Game
             var to = crate != null ? crate.transform.position - at : Vector3.forward;
             _player.Teleport(at, Mathf.Atan2(to.x, to.z) * Mathf.Rad2Deg, 8f);
             Debug.Log($"[Oxfall] At the ruins '{ruins.Name}' ({ruins.Kind}) {at}");
+        }
+
+        /// <summary>Test: in front of the nearest recycler, looking at it.</summary>
+        private void ToRecycler()
+        {
+            if (!_settlement.TryGet(Nearest(DeployableKind.Recycler), out var d)) return;
+            var front = Quaternion.Euler(0f, d.Yaw, 0f) * Vector3.forward;
+            var at = new Vector3(d.X, d.Y + 0.05f, d.Z) + front * 2.4f + Quaternion.Euler(0f, d.Yaw, 0f) * Vector3.right * 0.6f;
+            _player.Teleport(at, 0f, 0f);
+            FaceDeployable(d.Id);
+            Debug.Log($"[Oxfall] At the recycler {d}");
         }
 
         private void FaceNearest(ResourceNodeType type)

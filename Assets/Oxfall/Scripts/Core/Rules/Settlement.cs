@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using Oxfall.Core.Building;
+using Oxfall.Core.Crafting;
 using Oxfall.Core.Items;
 using Oxfall.Core.World;
 
@@ -46,6 +47,7 @@ namespace Oxfall.Core.Rules
         private readonly Dictionary<int, float> _deployableHealth = new Dictionary<int, float>();
         private readonly List<Deployable> _falling = new List<Deployable>();
         private bool _clearing;
+        private Recycling _recycling;
 
         public Settlement(IslandGround ground, ItemCatalog catalog)
         {
@@ -77,13 +79,14 @@ namespace Oxfall.Core.Rules
                 if (_clearing || !DropsLoot) return;
                 _falling.Clear();
                 foreach (var d in _deployables.Values)
-                    if (BuildingGrid.CellAt(d.X, d.Z).Equals(cell.Ground) && d.Y > top - OnFloorSlack) _falling.Add(d);
+                    if (d.Kind != DeployableKind.Recycler && BuildingGrid.CellAt(d.X, d.Z).Equals(cell.Ground) && d.Y > top - OnFloorSlack) _falling.Add(d);
                 foreach (var d in _falling)
                 {
                     DeployableFell?.Invoke(d.Id);
                     Destroy(d.Id);
                 }
             };
+            PlaceRecyclers();
         }
 
         /// <summary>How far below a floor's top something can stand and still be on it (one put on the ground is well below).</summary>
@@ -167,7 +170,63 @@ namespace Oxfall.Core.Rules
         public BuildingGrid Grid { get; }
 
         public IEnumerable<Deployable> Deployables => _deployables.Values;
-        public int DeployableCount => _deployables.Count;
+
+        /// <summary>How many things players have set down (the ruins' machines are not counted).</summary>
+        public int DeployableCount
+        {
+            get
+            {
+                int n = 0;
+                foreach (int id in _deployables.Keys)
+                    if (id > 0) n++;
+                return n;
+            }
+        }
+
+        /// <summary>What recyclers make of things.</summary>
+        public Recycling Recycling => _recycling ??= new Recycling(Catalog, RecipeBook.CreateDefault(Catalog));
+
+        /// <summary>The id of the recycler in the island's <paramref name="monument"/>th ruin: below zero, the same on every copy.</summary>
+        public static int RecyclerId(int monument) => -1 - monument;
+
+        /// <summary>Sets a recycler in each of the island's ruins (again after <see cref="Clear"/>), where it always stands.</summary>
+        private void PlaceRecyclers()
+        {
+            var monuments = Monuments.Find(Ground);
+            for (int i = 0; i < monuments.Count; i++)
+            {
+                var (x, y, z, yaw) = Monuments.RecyclerSpot(monuments[i]);
+                Add(new Deployable(RecyclerId(i), DeployableKind.Recycler, x, y, z, yaw));
+            }
+        }
+
+        /// <summary>Whether a recycler has something in its input slots it would take now (and room for what comes out).</summary>
+        public bool CanRecycle(int id) => _containers.TryGetValue(id, out var box) && box.OutputSlots > 0 && NextToRecycle(box) >= 0;
+
+        private int NextToRecycle(Inventory box)
+        {
+            for (int slot = 0; slot < box.SlotCount - box.OutputSlots; slot++)
+            {
+                var stack = box[slot];
+                if (stack.IsEmpty || !Recycling.Takes(stack.ItemId)) continue;
+                bool fits = true;
+                foreach (var y in Recycling.Yield(stack.ItemId))
+                    if (box.SpaceForOutput(y.ItemId) < y.Amount) { fits = false; break; }
+                if (fits) return slot;
+            }
+            return -1;
+        }
+
+        /// <summary>One thing from a recycler's input slots becomes what it was made of, in its output slots. False if nothing could be.</summary>
+        private bool RecycleOne(Inventory box)
+        {
+            int slot = NextToRecycle(box);
+            if (slot < 0) return false;
+            string item = box[slot].ItemId;
+            box.TakeFromSlot(slot, 1);
+            foreach (var y in Recycling.Yield(item)) box.AddOutput(y.ItemId, y.Amount);
+            return true;
+        }
 
         public event Action<Deployable> DeployableAdded;
         public event Action<int> DeployableRemoved;
@@ -188,7 +247,8 @@ namespace Oxfall.Core.Rules
             _nextId = Math.Max(_nextId, deployable.Id + 1);
             _deployables.Add(deployable.Id, deployable);
             int slots = Rules.Deployables.Slots(deployable.Kind);
-            if (slots > 0) _containers.Add(deployable.Id, new Inventory(Catalog, slots, hasHotbar: false));
+            int output = deployable.Kind == DeployableKind.Recycler ? Rules.Deployables.RecyclerInputSlots : 0;
+            if (slots > 0) _containers.Add(deployable.Id, new Inventory(Catalog, slots, hasHotbar: false, outputSlots: output));
             if (deployable.Kind == DeployableKind.ToolCupboard) _authorized[deployable.Id] = new HashSet<int> { deployable.Owner };
             if (deployable.Kind == DeployableKind.Bag) _rotting[deployable.Id] = Rules.Deployables.DeathBagSeconds;
             DeployableAdded?.Invoke(deployable);
@@ -454,6 +514,24 @@ namespace Oxfall.Core.Rules
             {
                 var furnace = _lit[id];
                 var box = _containers[id];
+                // A recycler needs no wood: it runs while it has something to take, then stops.
+                if (_deployables[id].Kind == DeployableKind.Recycler)
+                {
+                    furnace.Smelt += dt;
+                    bool going = true;
+                    while (going && furnace.Smelt >= Recycling.Seconds)
+                    {
+                        furnace.Smelt -= Recycling.Seconds;
+                        going = RecycleOne(box);
+                    }
+                    if (going && NextToRecycle(box) < 0) going = false;
+                    if (!going)
+                    {
+                        SetLit(id, false);
+                        wentOut?.Add(id);
+                    }
+                    continue;
+                }
                 furnace.Fuel -= dt;
                 bool burning = true;
                 while (furnace.Fuel < 0f)
@@ -518,6 +596,7 @@ namespace Oxfall.Core.Rules
             _deployableHealth.Clear();
             _nextId = 1;
             _clearing = false;
+            PlaceRecyclers();
         }
     }
 }

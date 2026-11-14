@@ -1,6 +1,7 @@
 // The ruins, solo: the nearest monument seen from its middle, a supply crate opened with the use
 // button (scrap, parts and a find into the inventory), the map with the ruins on it, and the
-// workbench: set down, its MESA button opening the craft panel, a revolver made beside it.
+// workbench: set down, its MESA button opening the craft panel, a revolver made beside it; and the
+// recycler turning the parts carried into scrap.
 // Usage: node ruins.js [outDir]   (solo, against the build served on localhost:8080)
 const { chromium } = require('playwright');
 const fs = require('fs');
@@ -83,7 +84,24 @@ const stamp = () => ((Date.now() - t0) / 1000).toFixed(1).padStart(6);
   await cmd('look-0', 1500);
   await shot('10-bench');
 
+  // The recycler: walk up to it, put the parts in, switch it on, and watch scrap come out.
+  await cmd('to-ruins', 1500);
+  await cmd('to-recycler', 3000);
+  await shot('11-recycler');
+  await cmd('give-metal', 1500);
+  await cmd('interact', 2500);
+  await shot('12-recycler-panel');
+  await cmd('put-parts', 2000);
+  await cmd('light', 2500);
+  await shot('13-recycler-running');
+  await wait(14000);
+  await shot('14-recycler-scrap');
+  await cmd('stats', 800);
+  await cmd('close-box', 800);
+  await cmd('inventory', 800);
+  await shot('15-recycler-machine');
+
   fs.writeFileSync(path.join(out, 'console.log'), log.join('\n'));
-  console.log(log.filter(l => l.includes('[test]') || l.includes('Gathered') || l.includes('At the ruins') || l.includes('Craft') || l.includes('[pageerror]') || l.includes('Exception') || l.includes('Unknown debug')).join('\n'));
+  console.log(log.filter(l => l.includes('[test]') || l.includes('Gathered') || l.includes('At the ruins') || l.includes('Craft') || l.includes('Put ') || l.includes('recycler') || l.includes('[pageerror]') || l.includes('Exception') || l.includes('Unknown debug')).join('\n'));
   await browser.close();
 })();

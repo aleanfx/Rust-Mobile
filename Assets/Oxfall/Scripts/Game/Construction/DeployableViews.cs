@@ -15,6 +15,22 @@ namespace Oxfall.Game.Construction
         public DeployableKind Kind;
     }
 
+    /// <summary>A recycler's moving parts: its flywheel spins up while it runs and runs down when it stops.</summary>
+    public sealed class RecyclerView : MonoBehaviour
+    {
+        public Transform Wheel;
+        /// <summary>Where its hum plays from, while it runs.</summary>
+        public GameObject Hum;
+        public bool Running;
+        private float _speed;
+
+        private void Update()
+        {
+            _speed = Mathf.MoveTowards(_speed, Running ? 560f : 0f, 700f * Time.deltaTime);
+            if (_speed > 0f && Wheel != null) Wheel.Rotate(_speed * Time.deltaTime, 0f, 0f, Space.Self);
+        }
+    }
+
     /// <summary>
     /// Draws what is set down in the settlement and nothing else: it listens to the Core
     /// <see cref="Settlement"/> and adds, lights and removes objects to match. A campfire always
@@ -33,6 +49,13 @@ namespace Oxfall.Game.Construction
         /// <summary>A fire started (a campfire set down, a furnace lit), for its crackle.</summary>
         public event Action<GameObject> FireStarted;
 
+        /// <summary>A recycler started: the object its hum should play from.</summary>
+        public event Action<GameObject> MachineStarted;
+
+        private readonly Mesh _wheel;
+        private readonly Material[] _wheelMaterials;
+        private readonly Material _lampOn, _lampOff;
+
         /// <summary>Something set down is going (picked up, or destroyed): where it stood and what it was made of.</summary>
         public event Action<Bounds, Material> Fell;
 
@@ -48,6 +71,16 @@ namespace Oxfall.Game.Construction
             }
             // A dead player's bag is made from no item, so it has a model of its own.
             _models[DeployableKind.Bag] = new ItemModel { Mesh = MeshFactory.LootBag(), Materials = new[] { materials.Cloth, materials.Rope } };
+            // So is the ruins' recycler.
+            _models[DeployableKind.Recycler] = new ItemModel
+            {
+                Mesh = MeshFactory.Recycler(),
+                Materials = new[] { materials.RecyclerPaint, materials.Steel, materials.BarrelRust, materials.LedRed },
+            };
+            _wheel = MeshFactory.RecyclerWheel();
+            _wheelMaterials = new[] { materials.Steel, materials.BarrelRust };
+            _lampOn = materials.LedGreen;
+            _lampOff = materials.LedRed;
             _flame = MeshFactory.Flame();
             _flameMaterial = materials.Flame;
             _root = new GameObject("Deployables").transform;
@@ -90,6 +123,16 @@ namespace Oxfall.Game.Construction
                 Light(d.Id, go, new Vector3(0f, 0.04f, 0f), 1.7f, 5, 14f, 3.4f);
             else if (d.Kind == DeployableKind.Furnace && _settlement.IsLit(d.Id))
                 Changed(d.Id);
+            else if (d.Kind == DeployableKind.Recycler)
+            {
+                var wheel = new GameObject("Flywheel");
+                wheel.transform.SetParent(go.transform, false);
+                wheel.transform.localPosition = new Vector3(-0.99f, 0.62f, -0.12f);
+                wheel.AddComponent<MeshFilter>().sharedMesh = _wheel;
+                wheel.AddComponent<MeshRenderer>().sharedMaterials = _wheelMaterials;
+                go.AddComponent<RecyclerView>().Wheel = wheel.transform;
+                Changed(d.Id);
+            }
         }
 
         private void Hide(int id)
@@ -98,14 +141,21 @@ namespace Oxfall.Game.Construction
             _views.Remove(id);
             _fires.Remove(id);
             var renderer = go.GetComponent<MeshRenderer>();
-            if (renderer != null) Fell?.Invoke(renderer.bounds, renderer.sharedMaterial);
+            // (A recycler only goes when the whole island is redrawn: no dust for it.)
+            if (renderer != null && go.GetComponent<RecyclerView>() == null) Fell?.Invoke(renderer.bounds, renderer.sharedMaterial);
             UnityEngine.Object.Destroy(go);
         }
 
-        /// <summary>A furnace lit up or went out.</summary>
+        /// <summary>A furnace lit up or went out; a recycler started or stopped.</summary>
         private void Changed(int id)
         {
-            if (!_views.TryGetValue(id, out var go) || !_settlement.TryGet(id, out var d) || d.Kind != DeployableKind.Furnace) return;
+            if (!_views.TryGetValue(id, out var go) || !_settlement.TryGet(id, out var d)) return;
+            if (d.Kind == DeployableKind.Recycler)
+            {
+                Run(go, _settlement.IsLit(id));
+                return;
+            }
+            if (d.Kind != DeployableKind.Furnace) return;
             bool lit = _settlement.IsLit(id);
             if (lit && !_fires.ContainsKey(id))
                 Light(id, go, new Vector3(0f, 0.16f, 0.42f), 0.9f, 3, 9f, 2.6f);
@@ -113,6 +163,31 @@ namespace Oxfall.Game.Construction
             {
                 _fires.Remove(id);
                 UnityEngine.Object.Destroy(fire.gameObject);
+            }
+        }
+
+        /// <summary>A recycler's lamp goes green and its flywheel turns, humming, while it runs; red and still when it stops.</summary>
+        private void Run(GameObject go, bool running)
+        {
+            var view = go.GetComponent<RecyclerView>();
+            if (view == null) return;
+            var renderer = go.GetComponent<MeshRenderer>();
+            var materials = renderer.sharedMaterials;
+            materials[3] = running ? _lampOn : _lampOff;
+            renderer.sharedMaterials = materials;
+            if (view.Running == running) return;
+            view.Running = running;
+            if (running)
+            {
+                view.Hum = new GameObject("Hum");
+                view.Hum.transform.SetParent(go.transform, false);
+                view.Hum.transform.localPosition = new Vector3(0f, 0.8f, 0f);
+                MachineStarted?.Invoke(view.Hum);
+            }
+            else if (view.Hum != null)
+            {
+                UnityEngine.Object.Destroy(view.Hum);
+                view.Hum = null;
             }
         }
 

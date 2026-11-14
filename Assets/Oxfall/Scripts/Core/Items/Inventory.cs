@@ -30,8 +30,10 @@ namespace Oxfall.Core.Items
 
         /// <param name="hasHotbar">A player's inventory (its first slots are the hotbar); a box's has none and fills from the top.</param>
         /// <param name="hasWear">A player's: its last <see cref="WearSlots"/> slots are worn clothing.</param>
-        public Inventory(ItemCatalog catalog, int slotCount = DefaultSlotCount, bool hasHotbar = true, bool hasWear = false)
+        /// <param name="outputSlots">A machine's: its last slots only give out what it makes (nothing is put in them).</param>
+        public Inventory(ItemCatalog catalog, int slotCount = DefaultSlotCount, bool hasHotbar = true, bool hasWear = false, int outputSlots = 0)
         {
+            if (outputSlots < 0 || outputSlots >= slotCount || (outputSlots > 0 && (hasHotbar || hasWear))) throw new ArgumentOutOfRangeException(nameof(outputSlots));
             if (hasHotbar && slotCount < HotbarSize) throw new ArgumentOutOfRangeException(nameof(slotCount), $"Need at least {HotbarSize} slots.");
             if (hasWear && slotCount < HotbarSize + WearSlots) throw new ArgumentOutOfRangeException(nameof(slotCount));
             if (slotCount < 1) throw new ArgumentOutOfRangeException(nameof(slotCount));
@@ -40,7 +42,16 @@ namespace Oxfall.Core.Items
             HasHotbar = hasHotbar;
             HasWear = hasWear;
             CarrySlots = hasWear ? slotCount - WearSlots : slotCount;
+            OutputSlots = outputSlots;
         }
+
+        /// <summary>How many of the last slots only give out (a recycler's): see <see cref="AddOutput"/>.</summary>
+        public int OutputSlots { get; }
+
+        /// <summary>Where things put in stop: the slots before the output ones.</summary>
+        private int FillEnd => CarrySlots - OutputSlots;
+
+        public bool IsOutputSlot(int slot) => OutputSlots > 0 && slot >= FillEnd && slot < CarrySlots;
 
         public bool HasHotbar { get; }
         public bool HasWear { get; }
@@ -59,6 +70,7 @@ namespace Oxfall.Core.Items
         /// <summary>Whether this stack may lie in this slot: anything in a carry slot, only the right clothing in a wear slot.</summary>
         public bool CanHold(int slot, ItemStack stack)
         {
+            if (!stack.IsEmpty && IsOutputSlot(slot)) return false;
             if (stack.IsEmpty || !IsWearSlot(slot)) return true;
             return _catalog.TryGet(stack.ItemId, out var def) && def.Category == ItemCategory.Attire && def.Wear == WearOf(slot);
         }
@@ -103,7 +115,7 @@ namespace Oxfall.Core.Items
             var def = _catalog.Get(itemId);
             int space = 0;
             var probe = new ItemStack(itemId, 1, skinId);
-            for (int i = 0; i < CarrySlots; i++)
+            for (int i = 0; i < FillEnd; i++)
             {
                 if (_slots[i].IsEmpty) space += def.MaxStack;
                 else if (_slots[i].CanMergeWith(probe)) space += def.MaxStack - _slots[i].Amount;
@@ -124,7 +136,7 @@ namespace Oxfall.Core.Items
             int remaining = amount;
             bool changed = false;
 
-            for (int i = 0; i < CarrySlots && remaining > 0; i++)
+            for (int i = 0; i < FillEnd && remaining > 0; i++)
             {
                 if (!_slots[i].CanMergeWith(probe)) continue;
                 int room = def.MaxStack - _slots[i].Amount;
@@ -146,6 +158,40 @@ namespace Oxfall.Core.Items
             }
 
             if (changed) Changed?.Invoke(-1);
+            return remaining;
+        }
+
+        /// <summary>How many of this item the output slots have room for.</summary>
+        public int SpaceForOutput(string itemId)
+        {
+            var def = _catalog.Get(itemId);
+            int space = 0;
+            for (int i = FillEnd; i < CarrySlots; i++)
+            {
+                if (_slots[i].IsEmpty) space += def.MaxStack;
+                else if (_slots[i].ItemId == itemId && _slots[i].SkinId == 0) space += def.MaxStack - _slots[i].Amount;
+            }
+            return space;
+        }
+
+        /// <summary>Puts what a machine made into its output slots: onto matching stacks, then empty slots. Returns what did not fit.</summary>
+        public int AddOutput(string itemId, int amount)
+        {
+            if (amount < 0) throw new ArgumentOutOfRangeException(nameof(amount));
+            if (amount == 0 || OutputSlots == 0) return amount;
+            var def = _catalog.Get(itemId);
+            int remaining = amount;
+            for (int pass = 0; pass < 2 && remaining > 0; pass++)
+            for (int i = FillEnd; i < CarrySlots && remaining > 0; i++)
+            {
+                var there = _slots[i];
+                if (pass == 0 ? there.IsEmpty || there.ItemId != itemId || there.SkinId != 0 : !there.IsEmpty) continue;
+                int put = Math.Min(def.MaxStack - (pass == 0 ? there.Amount : 0), remaining);
+                if (put <= 0) continue;
+                _slots[i] = pass == 0 ? there.WithAmount(there.Amount + put) : new ItemStack(itemId, put);
+                remaining -= put;
+            }
+            if (remaining != amount) Changed?.Invoke(-1);
             return remaining;
         }
 
@@ -383,7 +429,7 @@ namespace Oxfall.Core.Items
             bool hotbarFirst = !HasHotbar || category != ItemCategory.Resource;
             if (hotbarFirst)
             {
-                for (int i = 0; i < CarrySlots; i++) yield return i;
+                for (int i = 0; i < FillEnd; i++) yield return i;
             }
             else
             {

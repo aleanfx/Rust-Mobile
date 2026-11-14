@@ -124,6 +124,18 @@ namespace Oxfall.Game.UI
             return Mathf.Min(ring, head);
         });
 
+        /// <summary>Two round arrows chasing each other: a recycler.</summary>
+        public static Sprite Recycle => Get("recycle", p =>
+        {
+            float ring = Mathf.Abs(Circle(p, Vector2.zero, 0.5f)) - Stroke * 0.85f;
+            float angle = Mathf.Atan2(p.y, p.x) * Mathf.Rad2Deg;
+            // Two gaps, each between one arrow's head and the other's tail.
+            if ((angle > 12f && angle < 78f) || (angle > -168f && angle < -102f)) ring = Mathf.Max(ring, 0.06f);
+            float right = Polygon(p, new Vector2(0.24f, 0.13f), new Vector2(0.76f, 0.13f), new Vector2(0.5f, -0.2f));
+            float left = Polygon(p, new Vector2(-0.24f, -0.13f), new Vector2(-0.76f, -0.13f), new Vector2(-0.5f, 0.2f));
+            return Min(ring, right, left);
+        });
+
         public static Sprite Jump => Get("jump", p =>
             Mathf.Min(Chevron(p, 0.5f, 0.48f), Chevron(p, -0.02f, 0.48f)));
 

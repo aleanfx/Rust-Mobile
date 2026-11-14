@@ -178,6 +178,12 @@ namespace Oxfall.Core.World
             }
         }
 
+        /// <summary>How far past a monument's edge nobody may build or set anything down.</summary>
+        public const float NoBuildMargin = 5f;
+
+        /// <summary>Whether (x, z) is too near a monument to build on (the ruins are everyone's).</summary>
+        public static bool NoBuilding(IslandGround ground, float x, float z) => Inside(ground, x, z, NoBuildMargin);
+
         /// <summary>Whether (x, z) is on a monument's ground, where nothing grows.</summary>
         public static bool Inside(IslandGround ground, float x, float z, float margin = 2f)
         {
@@ -187,6 +193,15 @@ namespace Oxfall.Core.World
                 if ((m.X - x) * (m.X - x) + (m.Z - z) * (m.Z - z) < r * r) return true;
             }
             return false;
+        }
+
+        /// <summary>Where a monument's recycler stands, in world space, and which way it faces (its back to a wall).</summary>
+        public static (float X, float Y, float Z, float Yaw) RecyclerSpot(Monument m)
+        {
+            // The outpost's against the yard's back wall; the gas station's outside the shop's side.
+            bool outpost = m.Kind == MonumentKind.Outpost;
+            Place(m, outpost ? 2.6f : 5.85f, outpost ? -9.65f : -6f, out float x, out float z);
+            return (x, m.Y + 0.15f, z, m.Yaw + (outpost ? 0f : 90f));
         }
 
         /// <summary>The solid blocks a monument is built of, in world space.</summary>

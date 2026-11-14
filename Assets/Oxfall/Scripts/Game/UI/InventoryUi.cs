@@ -27,6 +27,9 @@ namespace Oxfall.Game.UI
         private static Color Picked => UiTheme.Text;
         private static Color Held => UiTheme.Accent;
 
+        // A recycler's slots that only give out, a shade of the accent.
+        private static Color OutputTint => Color.Lerp(UiTheme.Slot, UiTheme.Accent, 0.18f);
+
         private readonly Hud _hud;
         private readonly Inventory _inventory;
         private readonly Hotbar _hotbar;
@@ -140,11 +143,12 @@ namespace Oxfall.Game.UI
             _settlement.TryGet(id, out var d);
             _boxKind = d.Kind;
             bool furnace = d.Kind == DeployableKind.Furnace, bag = d.Kind == DeployableKind.Bag, fire = d.Kind == DeployableKind.Campfire;
-            _lootTitle.text = furnace ? "HORNO" : bag ? "BOLSA" : fire ? "FOGATA" : "CAJA";
+            bool recycler = d.Kind == DeployableKind.Recycler;
+            _lootTitle.text = furnace ? "HORNO" : bag ? "BOLSA" : fire ? "FOGATA" : recycler ? "RECICLADORA" : "CAJA";
             for (int i = 0; i < _boxSlots.Length; i++) _boxSlots[i].Rect.gameObject.SetActive(i < box.SlotCount);
-            // A furnace's switch; on a dead player's bag the same button takes everything.
-            _lightButton.gameObject.SetActive(furnace || bag);
-            _lootStatus.gameObject.SetActive(furnace || bag || fire);
+            // A furnace's or a recycler's switch; on a dead player's bag the same button takes everything.
+            _lightButton.gameObject.SetActive(furnace || bag || recycler);
+            _lootStatus.gameObject.SetActive(furnace || bag || fire || recycler);
             _details.gameObject.SetActive(false);
             _loot.gameObject.SetActive(true);
             Refresh();
@@ -294,6 +298,7 @@ namespace Oxfall.Game.UI
                     : "Mete madera y mineral (metal o azufre), y enciéndelo";
                 _lootStatus.color = lit ? UiTheme.Accent : UiTheme.TextMuted;
             }
+            if (_boxKind == DeployableKind.Recycler) DrawRecycler();
             if (_boxKind == DeployableKind.Campfire)
             {
                 int raw = _boxInventory.Count(ItemIds.RawMeat);
@@ -303,7 +308,52 @@ namespace Oxfall.Game.UI
             // Nothing goes into a bag: it only empties.
             bool any = _picked >= 0 && (_pickedInBox || _boxKind != DeployableKind.Bag);
             _lootQuick.gameObject.SetActive(any);
-            if (any) _lootQuickLabel.text = _pickedInBox ? "AL INVENTARIO" : furnace ? "AL HORNO" : _boxKind == DeployableKind.Campfire ? "AL FUEGO" : "A LA CAJA";
+            if (any)
+                _lootQuickLabel.text = _pickedInBox ? "AL INVENTARIO" : furnace ? "AL HORNO" : _boxKind == DeployableKind.Campfire ? "AL FUEGO"
+                    : _boxKind == DeployableKind.Recycler ? "A RECICLAR" : "A LA CAJA";
+        }
+
+        /// <summary>
+        /// A recycler: its switch; what the picked item would come out as (or what is left to do,
+        /// or how it works); and its bottom row, which only gives out, shaded.
+        /// </summary>
+        private void DrawRecycler()
+        {
+            bool running = _settlement.IsLit(_box);
+            _lightLabel.text = running ? "APAGAR" : "ENCENDER";
+            _lightFill.color = running ? UiTheme.Panel : UiTheme.Accent;
+            var recycling = _settlement.Recycling;
+            int fillEnd = _boxInventory.SlotCount - _boxInventory.OutputSlots;
+            string picked = _picked < 0 ? null : _pickedInBox ? _boxInventory[_picked].ItemId : _inventory[_picked].ItemId;
+            if (picked != null && !(_pickedInBox && _picked >= fillEnd))
+            {
+                string name = _inventory.Catalog.Get(picked).DisplayName;
+                bool takes = recycling.Takes(picked);
+                _lootStatus.text = takes ? name + " da " + Describe(recycling.Yield(picked)) : name + " no se recicla";
+                _lootStatus.color = takes ? UiTheme.Text : UiTheme.TextMuted;
+            }
+            else
+            {
+                int waiting = 0;
+                for (int i = 0; i < fillEnd; i++)
+                    if (!_boxInventory[i].IsEmpty && recycling.Takes(_boxInventory[i].ItemId)) waiting += _boxInventory[i].Amount;
+                _lootStatus.text = running ? $"Reciclando · quedan {waiting}" : "Arriba lo que reciclas · abajo sale la chatarra";
+                _lootStatus.color = running ? UiTheme.Accent : UiTheme.TextMuted;
+            }
+            for (int i = fillEnd; i < _boxInventory.SlotCount && i < _boxSlots.Length; i++)
+                if (!(_pickedInBox && i == _picked)) _boxSlots[i].Back.color = OutputTint;
+        }
+
+        /// <summary>"10 chatarra y 13 fragmentos de metal".</summary>
+        private string Describe(System.Collections.Generic.IReadOnlyList<Oxfall.Core.Crafting.Ingredient> yields)
+        {
+            var text = new System.Text.StringBuilder();
+            for (int i = 0; i < yields.Count; i++)
+            {
+                if (i > 0) text.Append(i == yields.Count - 1 ? " y " : ", ");
+                text.Append(yields[i].Amount).Append(' ').Append(_inventory.Catalog.Get(yields[i].ItemId).DisplayName.ToLowerInvariant());
+            }
+            return text.ToString();
         }
 
         private void Draw(SlotView view, ItemStack stack, Color frame)

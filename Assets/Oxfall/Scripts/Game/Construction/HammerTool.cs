@@ -249,7 +249,9 @@ namespace Oxfall.Game.Construction
                     door = tag.IsDoor && tag.Piece.IsEdge && _grid.HasDoor(tag.Piece.Edge);
                 }
                 var placed = hit.collider.GetComponent<DeployableTag>();
-                if (placed != null && Settlement != null && Settlement.TryGet(placed.Id, out _)) deployable = placed.Id;
+                // Only what a player can pick up again (not a dead player's bag, nor the ruins' recyclers).
+                if (placed != null && Settlement != null && Settlement.TryGet(placed.Id, out var pd) && Deployables.ItemOf(pd.Kind) != null)
+                    deployable = placed.Id;
             }
 
             if (deployable != _deployable) _info = null;

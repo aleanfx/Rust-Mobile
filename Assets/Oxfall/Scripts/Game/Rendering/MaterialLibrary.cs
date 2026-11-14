@@ -78,6 +78,8 @@ namespace Oxfall.Game.Rendering
         /// <summary>The ruins: weathered concrete, and the olive paint of their supply crates.</summary>
         public Material Concrete { get; }
         public Material CratePaint { get; }
+        /// <summary>The ruins' recycler: chipped machine yellow.</summary>
+        public Material RecyclerPaint { get; }
         public Material BarrelRust { get; }
         /// <summary>A code lock: its dark casing, its keys, and its light (red locked, green open).</summary>
         public Material LockBody { get; }
@@ -233,6 +235,8 @@ namespace Oxfall.Game.Rendering
                 ? new Color(1.05f, 1.05f, 1.02f) : new Color(0.62f, 0.61f, 0.58f));
             CratePaint = Make("Crate paint", new Color(0.25f, 0.29f, 0.17f), 0.28f);
             CratePaint.SetFloat(Metallic, 0.2f);
+            RecyclerPaint = Make("Recycler paint", new Color(0.62f, 0.47f, 0.12f), 0.3f);
+            RecyclerPaint.SetFloat(Metallic, 0.25f);
             LockBody = Make("Lock body", new Color(0.15f, 0.16f, 0.17f), 0.55f);
             LockKeys = Make("Lock keys", new Color(0.58f, 0.59f, 0.57f), 0.4f);
             LedRed = Make("Lock red", new Color(1f, 0.16f, 0.1f), 0.9f);

@@ -1537,6 +1537,78 @@ namespace Oxfall.Game.World
             return b.Build("SupplyCrate");
         }
 
+        /// <summary>
+        /// The ruins' recycler: a squat machine with a hopper on top, a chute out of its front, a
+        /// motor on its left side and a lamp on its panel. Its front looks along +Z; 1.8 m wide.
+        /// Submeshes: 0 paint, 1 steel, 2 rust, 3 the lamp (red while it stands, green while it runs).
+        /// </summary>
+        public static Mesh Recycler()
+        {
+            var b = new FlatMeshBuilder(4) { UvScale = 0.9f };
+            // The skid it stands on, its body, the steel bands round it and its corner posts.
+            b.AddBox(1, new Vector3(-0.9f, 0f, -0.62f), new Vector3(0.9f, 0.12f, 0.62f));
+            b.AddBox(0, new Vector3(-0.84f, 0.12f, -0.56f), new Vector3(0.84f, 1.22f, 0.52f));
+            foreach (float y in new[] { 0.42f, 0.95f })
+                b.AddBox(1, new Vector3(-0.86f, y, -0.58f), new Vector3(0.86f, y + 0.05f, 0.54f));
+            foreach (float sx in new[] { -1f, 1f })
+            foreach (float sz in new[] { -1f, 1f })
+            {
+                float cx = sx * 0.83f, cz = sz > 0f ? 0.5f : -0.54f;
+                b.AddBox(1, new Vector3(cx - 0.05f, 0.12f, cz - 0.05f), new Vector3(cx + 0.05f, 1.26f, cz + 0.05f));
+            }
+            // The hopper, wider at the top, dark inside, with a steel rim.
+            b.AddHex(0, (ix, iy, iz) =>
+            {
+                float y = iy == 0 ? 1.22f : 1.62f, hx = iy == 0 ? 0.5f : 0.7f;
+                float z = iz == 0 ? (iy == 0 ? -0.36f : -0.5f) : (iy == 0 ? 0.24f : 0.4f);
+                return new Vector3(ix == 0 ? -hx : hx, y, z);
+            });
+            b.AddBox(2, new Vector3(-0.63f, 1.62f, -0.44f), new Vector3(0.63f, 1.632f, 0.34f));
+            b.AddBox(1, new Vector3(-0.72f, 1.6f, 0.37f), new Vector3(0.72f, 1.66f, 0.42f));
+            b.AddBox(1, new Vector3(-0.72f, 1.6f, -0.52f), new Vector3(0.72f, 1.66f, -0.47f));
+            b.AddBox(1, new Vector3(-0.72f, 1.6f, -0.52f), new Vector3(-0.67f, 1.66f, 0.42f));
+            b.AddBox(1, new Vector3(0.67f, 1.6f, -0.52f), new Vector3(0.72f, 1.66f, 0.42f));
+            // Its mouth at the front, and the chute sloping out of it between two steel lips.
+            b.AddBox(2, new Vector3(-0.4f, 0.58f, 0.52f), new Vector3(0.4f, 0.88f, 0.535f));
+            b.AddHex(2, (ix, iy, iz) =>
+            {
+                float y = (iz == 0 ? 0.56f : 0.4f) + (iy == 0 ? 0f : 0.04f);
+                return new Vector3(ix == 0 ? -0.42f : 0.42f, y, iz == 0 ? 0.5f : 0.9f);
+            });
+            foreach (float sx in new[] { -1f, 1f })
+                b.AddHex(1, (ix, iy, iz) =>
+                {
+                    float y = (iz == 0 ? 0.56f : 0.4f) + (iy == 0 ? 0f : 0.14f);
+                    return new Vector3(sx * 0.42f + (ix == 0 ? -0.03f : 0.03f), y, iz == 0 ? 0.5f : 0.9f);
+                });
+            // The panel on the front right: its lamp, and a lever.
+            b.AddBox(1, new Vector3(0.5f, 0.62f, 0.52f), new Vector3(0.8f, 1.12f, 0.6f));
+            b.AddBox(3, new Vector3(0.59f, 0.97f, 0.6f), new Vector3(0.71f, 1.06f, 0.645f));
+            b.AddTube(2, new Vector3(0.72f, 0.76f, 0.6f), new Vector3(0.72f, 0.76f, 0.76f), 0.02f, 0.02f, 6);
+            b.AddCylinder(2, new Vector3(0.72f, 0.735f, 0.78f), 0.035f, 0.035f, 0.05f, 6, 0f);
+            // The motor on its left side (its flywheel is a mesh of its own, so it can turn).
+            b.AddTube(1, new Vector3(-0.84f, 0.62f, -0.12f), new Vector3(-0.99f, 0.62f, -0.12f), 0.24f, 0.24f, 12, 1);
+            b.AddTube(2, new Vector3(-0.84f, 0.62f, -0.12f), new Vector3(-0.9f, 0.62f, -0.12f), 0.27f, 0.27f, 12, 2);
+            // An exhaust up the back.
+            b.AddTube(1, new Vector3(0.55f, 1.22f, -0.45f), new Vector3(0.55f, 1.95f, -0.45f), 0.055f, 0.055f, 8);
+            b.AddTube(2, new Vector3(0.55f, 1.93f, -0.45f), new Vector3(0.55f, 2.0f, -0.45f), 0.075f, 0.075f, 8, 2);
+            return b.Build("Recycler");
+        }
+
+        /// <summary>
+        /// The recycler's flywheel: a disc with four spokes and a hub, facing -X from its middle
+        /// (it turns about X while the machine runs). Submeshes: 0 steel, 1 rust.
+        /// </summary>
+        public static Mesh RecyclerWheel()
+        {
+            var b = new FlatMeshBuilder(2) { UvScale = 0.4f };
+            b.AddTube(0, Vector3.zero, new Vector3(-0.04f, 0f, 0f), 0.2f, 0.2f, 16, 0);
+            b.AddBox(1, new Vector3(-0.065f, -0.18f, -0.025f), new Vector3(-0.04f, 0.18f, 0.025f));
+            b.AddBox(1, new Vector3(-0.065f, -0.025f, -0.18f), new Vector3(-0.04f, 0.025f, 0.18f));
+            b.AddTube(1, new Vector3(-0.04f, 0f, 0f), new Vector3(-0.09f, 0f, 0f), 0.05f, 0.04f, 8, 1);
+            return b.Build("RecyclerWheel");
+        }
+
         /// <summary>Scrap: bent plates, a bolt and a cog's worth of rusty odds and ends.</summary>
         public static Mesh ScrapPile()
         {

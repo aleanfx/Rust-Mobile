@@ -51,6 +51,10 @@ namespace Oxfall.Core.Rules
         TooHigh,
         /// <summary>Made only near a workbench.</summary>
         NeedsWorkbench,
+        /// <summary>Too near the ruins: nobody builds or sets anything down there.</summary>
+        Monument,
+        /// <summary>A recycler with nothing in it that it takes (or no room left for what comes out).</summary>
+        NothingToRecycle,
     }
 
     /// <summary>
@@ -320,6 +324,8 @@ namespace Oxfall.Core.Rules
             if (s.Inventory[from].IsEmpty) return ActionResult.Invalid;
             // A dead player's bag only empties.
             if (settlement.TryGet(s.Looting, out var bag) && bag.Kind == DeployableKind.Bag) return ActionResult.Invalid;
+            // A recycler takes only what it can make something of.
+            if (bag.Kind == DeployableKind.Recycler && !settlement.Recycling.Takes(s.Inventory[from].ItemId)) return ActionResult.NothingToRecycle;
             bool moved = to == -1 ? Inventory.TransferAll(s.Inventory, from, box) : Inventory.Transfer(s.Inventory, from, box, to);
             return moved ? ActionResult.Ok : ActionResult.NoSpace;
         }
@@ -533,9 +539,10 @@ namespace Oxfall.Core.Rules
                 case BuildOpKind.Light:
                 {
                     if (!settlement.TryGet(op.Id, out var d)) return ActionResult.NoPiece;
-                    if (d.Kind != DeployableKind.Furnace) return ActionResult.Invalid;
+                    if (d.Kind != DeployableKind.Furnace && d.Kind != DeployableKind.Recycler) return ActionResult.Invalid;
                     if (!Near(x, y, z, d.X, d.Y, d.Z, UseReach)) return ActionResult.TooFar;
-                    if (op.Open && !settlement.Container(d.Id).Has(ItemIds.Wood, 1)) return ActionResult.NoFuel;
+                    if (op.Open && d.Kind == DeployableKind.Furnace && !settlement.Container(d.Id).Has(ItemIds.Wood, 1)) return ActionResult.NoFuel;
+                    if (op.Open && d.Kind == DeployableKind.Recycler && !settlement.CanRecycle(d.Id)) return ActionResult.NothingToRecycle;
                     settlement.SetLit(d.Id, op.Open);
                     done = BuildOp.Light(d.Id, op.Open);
                     return ActionResult.Ok;
@@ -660,6 +667,7 @@ namespace Oxfall.Core.Rules
         {
             float ground = settlement.Ground.Height(x, z);
             if (ground < IslandGround.WaterLevel + 0.3f) return ActionResult.InWater;
+            if (Monuments.NoBuilding(settlement.Ground, x, z)) return ActionResult.Monument;
             float floor = settlement.Grid.TryGetFloorBelow(x, y, z, out float top) ? top : ground;
             if (Math.Abs(y - floor) > 0.7f && Math.Abs(y - ground) > 0.7f) return ActionResult.Invalid;
             if (!settlement.HasPrivilege(owner, x, z)) return ActionResult.BuildingBlocked;
@@ -696,6 +704,7 @@ namespace Oxfall.Core.Rules
                 top = t;
 
             if (grid.HasFoundation(cell)) return ActionResult.Occupied;
+            if (Monuments.NoBuilding(ground, x0 + S * 0.5f, z0 + S * 0.5f)) return ActionResult.Monument;
             if (lowest < 0.4f) return ActionResult.InWater;
             if (top - lowest > 2.4f) return ActionResult.TooSteep;
             if (top < highest - 0.4f) return ActionResult.GroundInTheWay;

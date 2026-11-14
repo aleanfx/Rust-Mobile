@@ -104,7 +104,7 @@ namespace Oxfall.Game.UI
             AddLegend(_root, left, new Vector2(60f, 200f), Icons.Pointer, UiTheme.Accent, "Tú");
             AddLegend(_root, left, new Vector2(60f, 155f), Icons.Bed, new Color(0.55f, 0.78f, 1f), "Saco de dormir");
             AddLegend(_root, left, new Vector2(60f, 110f), Icons.Home, new Color(1f, 0.82f, 0.4f), "Tu base");
-            AddLegend(_root, left, new Vector2(60f, 65f), Icons.Ruins, RuinsColour, "Ruinas: botín");
+            AddLegend(_root, left, new Vector2(60f, 65f), Icons.Ruins, RuinsColour, "Ruinas: botín y recicladora");
             AddLegend(_root, left, new Vector2(60f, 20f), Icons.Close, UiTheme.Bad, "Donde moriste");
             var hint = UiFactory.NewRect("Hint", _root, new Vector2(0.5f, 0f), centre, new Vector2(0f, 16f), new Vector2(600f, 30f));
             UiFactory.AddText(hint, "Toca para cerrar", 22, TextAnchor.MiddleCenter, UiTheme.TextFaint);

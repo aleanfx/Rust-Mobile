@@ -426,6 +426,8 @@ namespace Oxfall.Game.Net
                 case ActionResult.NeedsFloor: return "Necesita un piso debajo (un techo en el piso de abajo)";
                 case ActionResult.TooHigh: return $"Máximo {BuildingGrid.MaxLevel + 1} pisos";
                 case ActionResult.NeedsWorkbench: return "Hace falta una mesa de trabajo cerca";
+                case ActionResult.Monument: return "Las ruinas son de todos: aquí no se construye";
+                case ActionResult.NothingToRecycle: return "Mete algo que se recicle: piezas, herramientas, armas o ropa";
                 case ActionResult.NeedsDoorway: return "Apunta a un marco de puerta vacío";
                 case ActionResult.NoPiece: return "Ya no está ahí";
                 case ActionResult.MaxTier: return "Ya está al nivel máximo";

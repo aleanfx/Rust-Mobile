@@ -131,6 +131,7 @@ namespace Oxfall.Game.Construction
                     if (d.Kind == DeployableKind.Bag) _hud.SetUseButton("BOLSA", Icons.Bag);
                     else if (d.Kind == DeployableKind.Furnace) _hud.SetUseButton("HORNO", Icons.Flame);
                     else if (d.Kind == DeployableKind.Campfire) _hud.SetUseButton("FOGATA", Icons.Flame);
+                    else if (d.Kind == DeployableKind.Recycler) _hud.SetUseButton("RECICLAR", Icons.Recycle);
                     else _hud.SetUseButton("ABRIR", Icons.Box);
                     break;
                 case Target.Cupboard:
