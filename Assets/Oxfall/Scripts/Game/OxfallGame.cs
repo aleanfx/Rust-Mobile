@@ -221,6 +221,11 @@ namespace Oxfall.Game
             _vitalsUi.WakeUpTapped += WakeUp;
             _vitalsUi.BagTapped += WakeUpInBag;
 
+            // The map, painted in the background a few rows a frame; the compass opens it.
+            _map = new MapUi(_hud, (RectTransform)_hud.transform, _world.Shape);
+            StartCoroutine(_map.Paint());
+            _hud.MapTapped += _map.Toggle;
+
             // The clock: the island starts in the morning; a day lasts 30 minutes and a night 10.
             _dayNight = _world.Root.gameObject.AddComponent<DayNight>();
             _dayNight.ClockChanged += _hud.SetClock;
@@ -1026,9 +1031,32 @@ namespace Oxfall.Game
             _fauna.Add(kind, at.x, at.z, t.eulerAngles.y + 180f);
         }
 
+        private MapUi _map;
+        private Vector3? _diedAt;
+        private readonly System.Collections.Generic.List<MapUi.Pin> _mapPins = new System.Collections.Generic.List<MapUi.Pin>();
+
+        /// <summary>The map's marks: this player's bags and cupboards, and where they last died.</summary>
+        private void RefreshMap()
+        {
+            _mapPins.Clear();
+            int owner = _actions.Owner;
+            foreach (var d in _settlement.Deployables)
+            {
+                if (d.Owner != owner) continue;
+                if (d.Kind == DeployableKind.SleepingBag)
+                    _mapPins.Add(new MapUi.Pin(new Vector3(d.X, d.Y, d.Z), Icons.Bed, new Color(0.55f, 0.78f, 1f)));
+                else if (d.Kind == DeployableKind.ToolCupboard)
+                    _mapPins.Add(new MapUi.Pin(new Vector3(d.X, d.Y, d.Z), Icons.Home, new Color(1f, 0.82f, 0.4f)));
+            }
+            if (_diedAt.HasValue) _mapPins.Add(new MapUi.Pin(_diedAt.Value, Icons.Close, UiTheme.Bad, "Moriste aquí"));
+            _map.Refresh(_player.transform.position, _player.Yaw, _mapPins);
+        }
+
         private void OnDied()
         {
             Debug.Log("[Oxfall] The player died.");
+            _map.Close();
+            _diedAt = _player.transform.position;
             _inventoryUi.Close();
             _cupboard.Close();
             _keypad.Close();
@@ -1214,6 +1242,7 @@ namespace Oxfall.Game
                 case "revolver": HoldItem(ItemIds.Revolver); break;
                 case "blunderbuss": HoldItem(ItemIds.Blunderbuss); break;
                 case "bandage": HoldItem(ItemIds.Bandage); break;
+                case "map": _map.Toggle(); break;
                 case "syringe": HoldItem(ItemIds.MedicalSyringe); break;
                 case "fire": _gatherer.UseOnce(); break;
                 case "reload":
@@ -1638,6 +1667,7 @@ namespace Oxfall.Game
             }
             TickNet();
             TickAnimals(Time.deltaTime);
+            if (_map != null && _map.IsOpen) RefreshMap();
             _chat?.Tick(Time.unscaledDeltaTime);
 
             // Charges thrown alone burn down here (online the server sets them off).

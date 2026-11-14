@@ -215,6 +215,7 @@ namespace Oxfall.Game.Controls
             if (UnityEngine.Input.GetKeyDown(KeyCode.E) && _hud.UseButton.gameObject.activeInHierarchy) PressTarget(_hud.UseButton);
             if (UnityEngine.Input.GetKeyDown(KeyCode.R) && _hud.PieceButton.gameObject.activeInHierarchy) PressTarget(_hud.PieceButton);
             if (UnityEngine.Input.GetKeyDown(KeyCode.L) && _hud.LockButton.gameObject.activeInHierarchy) PressTarget(_hud.LockButton);
+            if (UnityEngine.Input.GetKeyDown(KeyCode.M)) _hud.ToggleMap();
         }
 
         private void PressTarget(RectTransform rect)

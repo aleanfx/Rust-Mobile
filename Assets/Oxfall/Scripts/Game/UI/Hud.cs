@@ -70,6 +70,10 @@ namespace Oxfall.Game.UI
         /// <summary>With a gun in hand that is not full: reload it now.</summary>
         public RectTransform ReloadButton { get; private set; }
 
+        /// <summary>The compass was tapped (or M pressed): open or close the map.</summary>
+        public event System.Action MapTapped;
+        public void ToggleMap() => MapTapped?.Invoke();
+
         /// <summary>The area clear of notches and rounded corners; everything on screen hangs from it.</summary>
         public RectTransform SafeArea => _safeArea;
 
@@ -135,8 +139,10 @@ namespace Oxfall.Game.UI
             _onlineText = UiFactory.AddText(onlineText, "", 26, TextAnchor.MiddleLeft, UiTheme.Text, true);
             _online.gameObject.SetActive(false);
 
-            // Top centre: the compass.
+            // Top centre: the compass; tapping it opens the map.
             _compass = Compass.Create(_safeArea);
+            TapTargets.Add(new TapTarget { Rect = _compass.Root, OnTap = ToggleMap });
+            TapTargets.Add(new TapTarget { Rect = _compass.MapChip, OnTap = ToggleMap });
 
             // Top right: settings, with the frame counter beside it.
             QualityButton = UiFactory.NewRect("Settings", _safeArea, topRight, topRight, new Vector2(-24f, -20f), new Vector2(64f, 64f));
@@ -625,12 +631,22 @@ namespace Oxfall.Game.UI
         private Text _degrees;
         private float _shown = float.NaN;
 
+        /// <summary>The whole compass, to tap for the map.</summary>
+        public RectTransform Root { get; private set; }
+        public RectTransform MapChip { get; private set; }
+
         public static Compass Create(RectTransform parent)
         {
             var c = new Compass();
             var top = new Vector2(0.5f, 1f);
             var root = UiFactory.NewRect("Compass", parent, top, top, new Vector2(0f, -18f), new Vector2(Width, 74f));
             root.gameObject.AddComponent<Canvas>();
+            c.Root = root;
+            // A small map at its left end: tap for the map.
+            var mapChip = UiFactory.NewRect("Map", root, new Vector2(0f, 1f), new Vector2(1f, 1f), new Vector2(-8f, 0f), new Vector2(44f, 44f));
+            UiFactory.AddImage(mapChip, UiFactory.Soft, UiTheme.Panel.WithAlpha(0.55f));
+            UiFactory.AddIcon(mapChip, Icons.Map, Vector2.zero, 28f, UiTheme.Text);
+            c.MapChip = mapChip;
             var strip = UiFactory.NewRect("Strip", root, top, top, Vector2.zero, new Vector2(Width, 44f));
             UiFactory.AddImage(strip, UiFactory.Soft, UiTheme.Panel.WithAlpha(0.55f));
             strip.gameObject.AddComponent<RectMask2D>();

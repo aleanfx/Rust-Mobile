@@ -197,6 +197,24 @@ namespace Oxfall.Game.UI
             return Mathf.Max(bubble, -dots);
         });
 
+        /// <summary>A folded map: three panels, zigzag at top and bottom.</summary>
+        public static Sprite Map => Get("map", p =>
+        {
+            float sheet = Mathf.Abs(Polygon(p, new Vector2(-0.72f, -0.52f), new Vector2(-0.24f, -0.66f), new Vector2(0.24f, -0.52f), new Vector2(0.72f, -0.66f),
+                new Vector2(0.72f, 0.54f), new Vector2(0.24f, 0.68f), new Vector2(-0.24f, 0.54f), new Vector2(-0.72f, 0.68f))) - Stroke * 0.8f;
+            return Min(sheet, Segment(p, new Vector2(-0.24f, -0.66f), new Vector2(-0.24f, 0.54f), 0.06f),
+                Segment(p, new Vector2(0.24f, -0.52f), new Vector2(0.24f, 0.68f), 0.06f));
+        });
+
+        /// <summary>An arrowhead pointing up: where the player is and which way they face.</summary>
+        public static Sprite Pointer => Get("pointer", p =>
+            Polygon(p, new Vector2(0f, 0.8f), new Vector2(0.56f, -0.62f), new Vector2(0f, -0.3f), new Vector2(-0.56f, -0.62f)));
+
+        /// <summary>A small house with a door: a base.</summary>
+        public static Sprite Home => Get("home", p =>
+            Mathf.Max(Polygon(p, new Vector2(-0.6f, -0.62f), new Vector2(0.6f, -0.62f), new Vector2(0.6f, 0.12f), new Vector2(0f, 0.7f), new Vector2(-0.6f, 0.12f)),
+                -RoundBox(p, new Vector2(0f, -0.38f), new Vector2(0.15f, 0.26f), 0.04f)));
+
         public static Sprite Close => Get("close", p =>
             Mathf.Min(Segment(p, new Vector2(-0.5f, -0.5f), new Vector2(0.5f, 0.5f), Stroke),
                 Segment(p, new Vector2(-0.5f, 0.5f), new Vector2(0.5f, -0.5f), Stroke)));
