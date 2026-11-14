@@ -75,6 +75,9 @@ namespace Oxfall.Game.Rendering
         public Material Steel { get; }
         /// <summary>Old oil drums: blue, rust red and olive paint, and their bare, rusting rims and lids.</summary>
         public Material[] BarrelPaint { get; }
+        /// <summary>The ruins: weathered concrete, and the olive paint of their supply crates.</summary>
+        public Material Concrete { get; }
+        public Material CratePaint { get; }
         public Material BarrelRust { get; }
         /// <summary>A code lock: its dark casing, its keys, and its light (red locked, green open).</summary>
         public Material LockBody { get; }
@@ -226,6 +229,10 @@ namespace Oxfall.Game.Rendering
             foreach (var paint in BarrelPaint) paint.SetFloat(Metallic, 0.25f);
             BarrelRust = Make("Barrel rust", new Color(0.33f, 0.21f, 0.13f), 0.22f);
             BarrelRust.SetFloat(Metallic, 0.3f);
+            Concrete = Textured("OxfallConcrete") ?? Tinted(Stone, "Concrete", Stone.HasProperty(BaseMap) && Stone.GetTexture(BaseMap) != null
+                ? new Color(1.05f, 1.05f, 1.02f) : new Color(0.62f, 0.61f, 0.58f));
+            CratePaint = Make("Crate paint", new Color(0.25f, 0.29f, 0.17f), 0.28f);
+            CratePaint.SetFloat(Metallic, 0.2f);
             LockBody = Make("Lock body", new Color(0.15f, 0.16f, 0.17f), 0.55f);
             LockKeys = Make("Lock keys", new Color(0.58f, 0.59f, 0.57f), 0.4f);
             LedRed = Make("Lock red", new Color(1f, 0.16f, 0.1f), 0.9f);

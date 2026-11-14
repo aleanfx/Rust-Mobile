@@ -26,6 +26,16 @@ namespace Oxfall.Core.Crafting
         public IReadOnlyList<Ingredient> Ingredients { get; }
         public float CraftSeconds { get; }
 
+        /// <summary>Whether it is made only near a workbench (guns, metal tools, explosives).</summary>
+        public bool NeedsWorkbench { get; private set; }
+
+        /// <summary>Marks the recipe as one made only near a workbench.</summary>
+        public Recipe AtWorkbench()
+        {
+            NeedsWorkbench = true;
+            return this;
+        }
+
         public Recipe(string id, string outputItemId, int outputAmount, float craftSeconds, params Ingredient[] ingredients)
         {
             if (string.IsNullOrEmpty(id)) throw new ArgumentException("Recipe id is required.", nameof(id));
@@ -86,7 +96,7 @@ namespace Oxfall.Core.Crafting
             new Recipe("bandage", ItemIds.Bandage, 1, 3f,
                 new Ingredient(ItemIds.Cloth, 4)),
             new Recipe("medical_syringe", ItemIds.MedicalSyringe, 1, 10f,
-                new Ingredient(ItemIds.MetalFragments, 20), new Ingredient(ItemIds.Cloth, 10)),
+                new Ingredient(ItemIds.MetalFragments, 20), new Ingredient(ItemIds.Cloth, 10)).AtWorkbench(),
             new Recipe("building_plan", ItemIds.BuildingPlan, 1, 3f,
                 new Ingredient(ItemIds.Wood, 20)),
             new Recipe("campfire", ItemIds.Campfire, 1, 5f,
@@ -123,29 +133,33 @@ namespace Oxfall.Core.Crafting
                 new Ingredient(ItemIds.Stone, 200), new Ingredient(ItemIds.Wood, 100)),
             new Recipe("tool_cupboard", ItemIds.ToolCupboard, 1, 20f,
                 new Ingredient(ItemIds.Wood, 500)),
+            // The workbench: scrap from barrels and the ruins' crates is what unlocks the metal age.
+            new Recipe("workbench", ItemIds.Workbench, 1, 30f,
+                new Ingredient(ItemIds.Wood, 500), new Ingredient(ItemIds.MetalFragments, 100), new Ingredient(ItemIds.Scrap, 50)),
             new Recipe("metal_hatchet", ItemIds.MetalHatchet, 1, 15f,
-                new Ingredient(ItemIds.Wood, 100), new Ingredient(ItemIds.MetalFragments, 75)),
+                new Ingredient(ItemIds.Wood, 100), new Ingredient(ItemIds.MetalFragments, 75)).AtWorkbench(),
             new Recipe("metal_pickaxe", ItemIds.MetalPickaxe, 1, 15f,
-                new Ingredient(ItemIds.Wood, 100), new Ingredient(ItemIds.MetalFragments, 125)),
+                new Ingredient(ItemIds.Wood, 100), new Ingredient(ItemIds.MetalFragments, 125)).AtWorkbench(),
             new Recipe("sheet_metal_door", ItemIds.SheetMetalDoor, 1, 20f,
-                new Ingredient(ItemIds.MetalFragments, 150)),
+                new Ingredient(ItemIds.MetalFragments, 150), new Ingredient(ItemIds.Gears, 1)).AtWorkbench(),
             new Recipe("code_lock", ItemIds.CodeLock, 1, 10f,
-                new Ingredient(ItemIds.MetalFragments, 100)),
+                new Ingredient(ItemIds.MetalFragments, 100), new Ingredient(ItemIds.Gears, 1)),
             // Raiding: the same mix as the PC game's gunpowder, and a charge cheaper than its satchel
             // (a small island and a weekly wipe), so a stone wall costs a night's mining, not a week's.
             new Recipe("gunpowder", ItemIds.Gunpowder, 10, 5f,
                 new Ingredient(ItemIds.Charcoal, 30), new Ingredient(ItemIds.Sulfur, 20)),
             new Recipe("satchel_charge", ItemIds.SatchelCharge, 1, 15f,
-                new Ingredient(ItemIds.Gunpowder, 40), new Ingredient(ItemIds.Cloth, 10), new Ingredient(ItemIds.MetalFragments, 20)),
+                new Ingredient(ItemIds.Gunpowder, 40), new Ingredient(ItemIds.Cloth, 10), new Ingredient(ItemIds.MetalFragments, 20)).AtWorkbench(),
             // Guns: a crude shotgun first, then a revolver; their rounds are mostly gunpowder.
             new Recipe("blunderbuss", ItemIds.Blunderbuss, 1, 20f,
                 new Ingredient(ItemIds.Wood, 150), new Ingredient(ItemIds.MetalFragments, 100), new Ingredient(ItemIds.Cloth, 20)),
             new Recipe("revolver", ItemIds.Revolver, 1, 30f,
-                new Ingredient(ItemIds.MetalFragments, 250), new Ingredient(ItemIds.Wood, 50), new Ingredient(ItemIds.Cloth, 30)),
+                new Ingredient(ItemIds.MetalFragments, 125), new Ingredient(ItemIds.MetalPipe, 1), new Ingredient(ItemIds.MetalSpring, 1),
+                new Ingredient(ItemIds.Cloth, 30)).AtWorkbench(),
             new Recipe("handmade_shells", ItemIds.Shell, 2, 5f,
                 new Ingredient(ItemIds.Gunpowder, 5), new Ingredient(ItemIds.Stone, 10)),
             new Recipe("pistol_bullets", ItemIds.PistolBullet, 4, 5f,
-                new Ingredient(ItemIds.Gunpowder, 10), new Ingredient(ItemIds.MetalFragments, 10)),
+                new Ingredient(ItemIds.Gunpowder, 10), new Ingredient(ItemIds.MetalFragments, 10)).AtWorkbench(),
         });
     }
 }

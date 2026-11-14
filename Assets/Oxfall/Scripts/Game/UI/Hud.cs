@@ -433,6 +433,20 @@ namespace Oxfall.Game.UI
             _craft = new CraftUi(this, book, catalog, inventory, queue, onCraft);
         }
 
+        /// <summary>Whether a workbench is near the player (the crafting panel asks when it redraws).</summary>
+        public System.Func<bool> NearWorkbench
+        {
+            set { if (_craft != null) _craft.NearWorkbench = value; }
+        }
+
+        /// <summary>Opens the crafting panel (at a workbench: on the weapons tab).</summary>
+        public void OpenCraftPanel(int tab = -1)
+        {
+            if (_craft == null) return;
+            if (!_craft.IsOpen) ToggleCraftPanel();
+            if (tab >= 0) _craft.SetTab(tab);
+        }
+
         public void ToggleCraftPanel()
         {
             if (_craft == null) return;

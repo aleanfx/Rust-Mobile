@@ -337,6 +337,13 @@ namespace Oxfall.Game.Player
         /// </summary>
         public Action<int, ToolKind> RemoteHit;
 
+        /// <summary>Opens a crate in sight (the use button): taken like a hit, whatever is in hand.</summary>
+        public void Open(ResourceNodeView node)
+        {
+            if (node == null || node.Node.IsDepleted) return;
+            Gather(node);
+        }
+
         private void Gather(ResourceNodeView node)
         {
             if (RemoteHit != null)
@@ -388,7 +395,7 @@ namespace Oxfall.Game.Player
         private void PlayHitSound(ResourceNodeType type) =>
             Sound?.Invoke(type == ResourceNodeType.Tree ? SoundCue.Wood
                 : type == ResourceNodeType.Stone || type == ResourceNodeType.MetalOre || type == ResourceNodeType.Sulfur ? SoundCue.Stone
-                : type == ResourceNodeType.Barrel ? SoundCue.Metal
+                : type == ResourceNodeType.Barrel || type == ResourceNodeType.Crate ? SoundCue.Metal
                 : SoundCue.Plant);
 
         /// <summary>A quick chop: the held item tips forward and down about the grip, then back.</summary>

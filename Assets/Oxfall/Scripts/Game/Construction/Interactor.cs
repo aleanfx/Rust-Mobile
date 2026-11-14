@@ -1,8 +1,10 @@
 using System;
 using Oxfall.Core.Building;
+using Oxfall.Core.Gathering;
 using Oxfall.Core.Rules;
 using Oxfall.Game.Net;
 using Oxfall.Game.UI;
+using Oxfall.Game.World;
 using UnityEngine;
 
 namespace Oxfall.Game.Construction
@@ -10,7 +12,8 @@ namespace Oxfall.Game.Construction
     /// <summary>
     /// Whatever is in hand: looking up close at something that can be used shows the use button.
     /// A door: ABRIR or CERRAR. A box or a furnace: ABRIR (its panel opens beside the inventory). A
-    /// tool cupboard: ARMARIO (who may build here). Behind a code lock the player does not know, the
+    /// tool cupboard: ARMARIO (who may build here). A supply crate in the ruins: ABRIR (what it held
+    /// goes into the inventory). A workbench: MESA (the crafting panel). Behind a code lock the player does not know, the
     /// button says CÓDIGO and opens its keypad instead; on a lock the player knows, a second, smaller
     /// button (CANDADO) opens it to lock, unlock, change the code or take it off.
     /// </summary>
@@ -24,6 +27,8 @@ namespace Oxfall.Game.Construction
             Door,
             Box,
             Cupboard,
+            Crate,
+            Workbench,
         }
 
         private BuildingGrid _grid;
@@ -33,6 +38,7 @@ namespace Oxfall.Game.Construction
         private Target _target;
         private Edge _door;
         private int _deployable;
+        private ResourceNodeView _crate;
         private bool _hasLock;
         private LockTarget _lock;
         private float _timer;
@@ -45,6 +51,12 @@ namespace Oxfall.Game.Construction
 
         /// <summary>The player opens a tool cupboard (its id).</summary>
         public event Action<int> OpenCupboard;
+
+        /// <summary>The player opens a supply crate.</summary>
+        public event Action<ResourceNodeView> OpenCrate;
+
+        /// <summary>The player taps MESA at a workbench.</summary>
+        public event Action UseWorkbench;
 
         /// <summary>The player taps CÓDIGO on a lock they do not know.</summary>
         public event Action<LockTarget> EnterCode;
@@ -124,6 +136,12 @@ namespace Oxfall.Game.Construction
                 case Target.Cupboard:
                     _hud.SetUseButton("ARMARIO", Icons.Shield);
                     break;
+                case Target.Crate:
+                    _hud.SetUseButton("ABRIR", Icons.Box);
+                    break;
+                case Target.Workbench:
+                    _hud.SetUseButton("MESA", Icons.Hammer);
+                    break;
                 default:
                     _hud.SetUseButton(null);
                     break;
@@ -145,10 +163,22 @@ namespace Oxfall.Game.Construction
                 _hasLock = _settlement.HasLock(_lock);
                 return;
             }
+            var node = hit.collider.GetComponentInParent<ResourceNodeView>();
+            if (node != null && node.Node.Type == ResourceNodeType.Crate && !node.Node.IsDepleted)
+            {
+                _target = Target.Crate;
+                _crate = node;
+                return;
+            }
             var tag = hit.collider.GetComponent<DeployableTag>();
             if (tag == null || !_settlement.TryGet(tag.Id, out _)) return;
             _deployable = tag.Id;
             if (tag.Kind == DeployableKind.ToolCupboard) _target = Target.Cupboard;
+            else if (tag.Kind == DeployableKind.Workbench)
+            {
+                _target = Target.Workbench;
+                return;
+            }
             else if (_settlement.Container(tag.Id) != null) _target = Target.Box;
             _lock = LockTarget.On(tag.Id);
             _hasLock = _target != Target.None && _settlement.HasLock(_lock);
@@ -183,6 +213,13 @@ namespace Oxfall.Game.Construction
                     break;
                 case Target.Cupboard:
                     OpenCupboard?.Invoke(_deployable);
+                    break;
+                case Target.Crate:
+                    OpenCrate?.Invoke(_crate);
+                    _timer = 0f;
+                    break;
+                case Target.Workbench:
+                    UseWorkbench?.Invoke();
                     break;
             }
         }

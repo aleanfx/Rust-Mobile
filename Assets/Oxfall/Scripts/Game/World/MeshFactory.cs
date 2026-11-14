@@ -1469,6 +1469,143 @@ namespace Oxfall.Game.World
             return b.Build("MetalScraps");
         }
 
+        /// <summary>
+        /// A workbench: a thick plank top on steel legs with a shelf under it, a vise on one corner,
+        /// a pegboard of tools along the back. 1.8 m wide (along X), its front towards +Z, the top at
+        /// 0.9 m. Submeshes: 0 planks, 1 steel, 2 dark metal.
+        /// </summary>
+        public static Mesh Workbench()
+        {
+            var b = new FlatMeshBuilder(3) { UvScale = 0.9f };
+            const float w = 0.9f, d = 0.42f, top = 0.9f;
+            b.AddBox(0, new Vector3(-w, top - 0.08f, -d), new Vector3(w, top, d));
+            b.AddBox(0, new Vector3(-w + 0.08f, 0.22f, -d + 0.06f), new Vector3(w - 0.08f, 0.26f, d - 0.06f));
+            foreach (float x in new[] { -1f, 1f })
+            foreach (float z in new[] { -1f, 1f })
+                b.AddBox(1, new Vector3(x * (w - 0.05f) - 0.03f, 0f, z * (d - 0.05f) - 0.03f), new Vector3(x * (w - 0.05f) + 0.03f, top - 0.08f, z * (d - 0.05f) + 0.03f));
+            // Rails under the top, front and back.
+            b.AddBox(1, new Vector3(-w + 0.05f, top - 0.16f, d - 0.08f), new Vector3(w - 0.05f, top - 0.08f, d - 0.03f));
+            b.AddBox(1, new Vector3(-w + 0.05f, top - 0.16f, -d + 0.03f), new Vector3(w - 0.05f, top - 0.08f, -d + 0.08f));
+            // The pegboard and the tools on it.
+            b.AddBox(0, new Vector3(-w + 0.02f, top, -d), new Vector3(w - 0.02f, top + 0.62f, -d + 0.04f));
+            b.AddBox(1, new Vector3(-w, top, -d - 0.01f), new Vector3(-w + 0.04f, top + 0.66f, -d + 0.05f));
+            b.AddBox(1, new Vector3(w - 0.04f, top, -d - 0.01f), new Vector3(w, top + 0.66f, -d + 0.05f));
+            b.AddTube(1, new Vector3(-0.55f, top + 0.18f, -d + 0.07f), new Vector3(-0.55f, top + 0.5f, -d + 0.07f), 0.016f, 0.016f, 6);
+            b.AddBox(2, new Vector3(-0.6f, top + 0.46f, -d + 0.05f), new Vector3(-0.5f, top + 0.52f, -d + 0.1f));
+            b.AddBox(2, new Vector3(-0.3f, top + 0.12f, -d + 0.05f), new Vector3(-0.29f, top + 0.5f, -d + 0.07f));
+            b.AddBox(0, new Vector3(-0.33f, top + 0.46f, -d + 0.04f), new Vector3(-0.26f, top + 0.56f, -d + 0.09f));
+            b.AddTube(2, new Vector3(0.1f, top + 0.42f, -d + 0.07f), new Vector3(0.3f, top + 0.3f, -d + 0.07f), 0.012f, 0.012f, 6);
+            b.AddTube(2, new Vector3(0.45f, top + 0.15f, -d + 0.07f), new Vector3(0.45f, top + 0.48f, -d + 0.07f), 0.02f, 0.012f, 6);
+            // The vise on the front right corner, and a box of parts on the top.
+            b.AddBox(2, new Vector3(0.55f, top, d - 0.18f), new Vector3(0.75f, top + 0.06f, d + 0.04f));
+            b.AddBox(2, new Vector3(0.55f, top + 0.06f, d - 0.06f), new Vector3(0.75f, top + 0.18f, d - 0.02f));
+            b.AddBox(2, new Vector3(0.55f, top + 0.06f, d + 0.0f), new Vector3(0.75f, top + 0.18f, d + 0.04f));
+            b.AddTube(1, new Vector3(0.65f, top + 0.1f, d + 0.04f), new Vector3(0.65f, top + 0.1f, d + 0.2f), 0.012f, 0.012f, 6);
+            b.AddBox(1, new Vector3(0.58f, top + 0.08f, d + 0.18f), new Vector3(0.72f, top + 0.12f, d + 0.21f));
+            b.AddBox(2, new Vector3(-0.7f, top, -0.1f), new Vector3(-0.38f, top + 0.12f, 0.16f));
+            return b.Build("Workbench");
+        }
+
+        /// <summary>
+        /// A supply crate: a long olive box with dark corner bands, two latches and handles at the
+        /// ends, 1.1 x 0.62 x 0.66 m on the origin. Submeshes: 0 paint, 1 bands and latches.
+        /// </summary>
+        public static Mesh SupplyCrate()
+        {
+            var b = new FlatMeshBuilder(2) { UvScale = 0.8f };
+            const float x = 0.55f, h = 0.62f, z = 0.33f, t = 0.035f;
+            b.AddBox(0, new Vector3(-x + t, 0.02f, -z + t), new Vector3(x - t, h - 0.02f, z - t));
+            // The lid's seam and its overhang.
+            b.AddBox(0, new Vector3(-x + 0.01f, h - 0.14f, -z + 0.01f), new Vector3(x - 0.01f, h, z - 0.01f));
+            b.AddBox(1, new Vector3(-x + 0.012f, h - 0.155f, -z + 0.012f), new Vector3(x - 0.012f, h - 0.14f, z - 0.012f));
+            // Corner bands.
+            foreach (float sx in new[] { -1f, 1f })
+            foreach (float sz in new[] { -1f, 1f })
+                b.AddBox(1, new Vector3(sx * x - (sx > 0 ? t * 2f : 0f), 0f, sz * z - (sz > 0 ? t * 2f : 0f)),
+                    new Vector3(sx * x + (sx < 0 ? t * 2f : 0f), h, sz * z + (sz < 0 ? t * 2f : 0f)));
+            b.AddBox(1, new Vector3(-x, 0f, -z), new Vector3(x, 0.04f, z));
+            // Latches on the front, handles at the ends.
+            foreach (float lx in new[] { -0.3f, 0.3f })
+            {
+                b.AddBox(1, new Vector3(lx - 0.045f, h - 0.22f, z - 0.005f), new Vector3(lx + 0.045f, h - 0.08f, z + 0.02f));
+                b.AddBox(1, new Vector3(lx - 0.02f, h - 0.26f, z), new Vector3(lx + 0.02f, h - 0.21f, z + 0.03f));
+            }
+            foreach (float sx in new[] { -1f, 1f })
+                b.AddTube(1, new Vector3(sx * (x + 0.035f), h * 0.62f, -0.13f), new Vector3(sx * (x + 0.035f), h * 0.62f, 0.13f), 0.015f, 0.015f, 6);
+            // A stencilled band across the lid.
+            b.AddBox(1, new Vector3(-0.12f, h, -z + 0.03f), new Vector3(0.12f, h + 0.004f, z - 0.03f));
+            return b.Build("SupplyCrate");
+        }
+
+        /// <summary>Scrap: bent plates, a bolt and a cog's worth of rusty odds and ends.</summary>
+        public static Mesh ScrapPile()
+        {
+            var b = new FlatMeshBuilder(2) { UvScale = 0.2f };
+            var random = new System.Random(77);
+            for (int i = 0; i < 5; i++)
+            {
+                float a = i * 1.3f;
+                var at = new Vector3(Mathf.Cos(a) * 0.06f * (1 + i % 2), 0.02f + i * 0.016f, Mathf.Sin(a) * 0.06f * (1 + i % 2));
+                b.AddRock(i % 2, at, new Vector3(Rand(random, 0.07f, 0.11f), Rand(random, 0.01f, 0.02f), Rand(random, 0.05f, 0.08f)), random);
+            }
+            b.AddTube(1, new Vector3(-0.09f, 0.05f, 0.05f), new Vector3(0.05f, 0.07f, 0.1f), 0.014f, 0.014f, 6);
+            b.AddCylinder(1, new Vector3(-0.09f, 0.04f, 0.05f), 0.026f, 0.026f, 0.025f, 6, 0f);
+            return b.Build("ScrapPile");
+        }
+
+        /// <summary>Gears: a big cog and a small one meshing, lying flat.</summary>
+        public static Mesh Gears()
+        {
+            var b = new FlatMeshBuilder(1) { UvScale = 0.2f };
+            void Cog(Vector3 centre, float radius, int teeth, float spin)
+            {
+                const float thick = 0.03f;
+                b.AddCylinder(0, centre, radius, radius, thick, 18, 0f);
+                for (int i = 0; i < teeth; i++)
+                {
+                    float a0 = (i + spin) * Mathf.PI * 2f / teeth, half = Mathf.PI / teeth * 0.45f;
+                    float r0 = radius - 0.004f, r1 = radius + 0.022f;
+                    b.AddHex(0, (ix, iy, iz) =>
+                    {
+                        float a = a0 + (ix == 0 ? -half : half) * (iz == 0 ? 1f : 0.7f);
+                        float r = iz == 0 ? r0 : r1;
+                        return centre + new Vector3(Mathf.Sin(a) * r, iy == 0 ? 0f : thick, Mathf.Cos(a) * r);
+                    });
+                }
+                b.AddCylinder(0, centre + new Vector3(0f, thick, 0f), radius * 0.3f, radius * 0.3f, 0.012f, 10, 0f);
+            }
+            Cog(new Vector3(-0.04f, 0f, 0f), 0.11f, 14, 0f);
+            Cog(new Vector3(0.115f, 0f, 0.05f), 0.055f, 8, 0.5f);
+            return b.Build("Gears");
+        }
+
+        /// <summary>A coil spring standing on its end.</summary>
+        public static Mesh MetalSpring()
+        {
+            var b = new FlatMeshBuilder(1) { UvScale = 0.2f };
+            const int turns = 6, steps = 10;
+            const float radius = 0.055f, height = 0.26f, wire = 0.009f;
+            Vector3 At(int i)
+            {
+                float t = i / (float)(turns * steps);
+                float a = t * turns * Mathf.PI * 2f;
+                return new Vector3(Mathf.Cos(a) * radius, wire + t * (height - 2f * wire), Mathf.Sin(a) * radius);
+            }
+            for (int i = 0; i < turns * steps; i++) b.AddTube(0, At(i), At(i + 1), wire, wire, 5);
+            return b.Build("MetalSpring", 60f);
+        }
+
+        /// <summary>A length of metal pipe with a threaded collar at each end.</summary>
+        public static Mesh MetalPipe()
+        {
+            var b = new FlatMeshBuilder(1) { UvScale = 0.3f };
+            const float half = 0.2f, r = 0.032f;
+            b.AddTube(0, new Vector3(-half, r, 0f), new Vector3(half, r, 0f), r, r, 12);
+            foreach (float x in new[] { -half, half - 0.05f })
+                b.AddTube(0, new Vector3(x, r, 0f), new Vector3(x + 0.05f, r, 0f), r + 0.008f, r + 0.008f, 12);
+            return b.Build("MetalPipe", 40f);
+        }
+
         /// <summary>Lumps of charcoal.</summary>
         public static Mesh CharcoalLumps()
         {
@@ -1520,6 +1657,21 @@ namespace Oxfall.Game.World
             // About eight planks per 1.6 m tile of the planks texture.
             var b = new FlatMeshBuilder(1) { UvScale = 1.6f };
             foreach (var box in boxes) b.AddBox(0, box.min, box.max);
+            return b.Build(name);
+        }
+
+        /// <summary>
+        /// One flat-shaded mesh of boxes each turned about its own middle (a monument's walls and
+        /// slabs). Textures tile by the metre, the same on every block.
+        /// </summary>
+        public static Mesh Blocks(string name, IEnumerable<(Vector3 Centre, Quaternion Rotation, Vector3 Size)> blocks)
+        {
+            var b = new FlatMeshBuilder(1) { UvScale = 2.4f };
+            foreach (var (centre, rotation, size) in blocks)
+            {
+                var half = size * 0.5f;
+                b.AddHex(0, (ix, iy, iz) => centre + rotation * new Vector3(ix == 0 ? -half.x : half.x, iy == 0 ? -half.y : half.y, iz == 0 ? -half.z : half.z));
+            }
             return b.Build(name);
         }
 

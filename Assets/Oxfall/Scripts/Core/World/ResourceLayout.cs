@@ -53,7 +53,7 @@ namespace Oxfall.Core.World
                 float x = -IslandGround.HalfSize + (gx + 0.15f + 0.7f * dice.Next()) * Cell;
                 float z = -IslandGround.HalfSize + (gz + 0.15f + 0.7f * dice.Next()) * Cell;
                 float h = ground.Height(x, z);
-                if (h < 1.3f || ground.PondBank(x, z) > 0f) continue;
+                if (h < 1.3f || ground.PondBank(x, z) > 0f || Monuments.Inside(ground, x, z)) continue;
 
                 float flatness = ground.Flatness(x, z);
                 float forest = ground.Forest(x, z);
@@ -93,6 +93,8 @@ namespace Oxfall.Core.World
                 else if ((roll -= sulfurChance) < 0f)
                     spawns.Add(new NodeSpawn(id, ResourceNodeType.Sulfur, x, h, z, yaw, 1.1f + dice.Next() * 0.7f, variant, false));
             }
+            // The ruins' crates and barrels, after every cell's own.
+            Monuments.AddNodes(ground, spawns);
             return spawns;
         }
 

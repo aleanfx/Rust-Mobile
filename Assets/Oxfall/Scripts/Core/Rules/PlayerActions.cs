@@ -49,6 +49,8 @@ namespace Oxfall.Core.Rules
         NeedsFloor,
         /// <summary>Above the highest storey a building may have.</summary>
         TooHigh,
+        /// <summary>Made only near a workbench.</summary>
+        NeedsWorkbench,
     }
 
     /// <summary>
@@ -110,16 +112,26 @@ namespace Oxfall.Core.Rules
             return s.Inventory.Split(slot) >= 0 ? ActionResult.Ok : ActionResult.NoSpace;
         }
 
-        public static ActionResult Craft(Survivor s, Recipe recipe)
+        /// <summary>Queues a recipe; one made at a workbench only near one (pass the settlement and where the player is).</summary>
+        public static ActionResult Craft(Survivor s, Recipe recipe, Settlement settlement = null, float x = 0f, float y = 0f, float z = 0f)
         {
             if (recipe == null) return ActionResult.Invalid;
             if (s.Vitals.IsDead) return ActionResult.Dead;
+            if (recipe.NeedsWorkbench && (settlement == null || !NearWorkbench(settlement, x, y, z))) return ActionResult.NeedsWorkbench;
             switch (s.Crafting.Enqueue(recipe))
             {
                 case CraftingQueue.EnqueueResult.Queued: return ActionResult.Ok;
                 case CraftingQueue.EnqueueResult.QueueFull: return ActionResult.QueueFull;
                 default: return ActionResult.NotEnoughResources;
             }
+        }
+
+        /// <summary>Whether a workbench stands within reach of (x, y, z).</summary>
+        public static bool NearWorkbench(Settlement settlement, float x, float y, float z)
+        {
+            foreach (var d in settlement.Deployables)
+                if (d.Kind == DeployableKind.Workbench && Near(x, y, z, d.X, d.Y, d.Z, Deployables.WorkbenchReach)) return true;
+            return false;
         }
 
         public static ActionResult CancelCraft(Survivor s, int index)

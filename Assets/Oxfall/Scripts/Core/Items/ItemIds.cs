@@ -60,5 +60,10 @@ namespace Oxfall.Core.Items
         public const string PistolBullet = "pistol_bullet";
         public const string Bandage = "bandage";
         public const string MedicalSyringe = "medical_syringe";
+        public const string Scrap = "scrap";
+        public const string Gears = "gears";
+        public const string MetalSpring = "metal_spring";
+        public const string MetalPipe = "metal_pipe";
+        public const string Workbench = "workbench";
     }
 }

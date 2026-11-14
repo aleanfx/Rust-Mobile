@@ -149,6 +149,8 @@ namespace Oxfall.Game.World
         {
             if (h < 2.0f || h > 20f) return 0f;
             if (_ponds.Count > 0 && PondBank(x, z) > 0.2f) return 0f;
+            // Nothing grows through the ruins' concrete.
+            if (Oxfall.Core.World.Monuments.Inside(Ground, x, z, 0.5f)) return 0f;
             float slope = Mathf.Abs(Height(x + 1f, z) - h) + Mathf.Abs(Height(x, z + 1f) - h);
             float n = Fbm(x * 0.05f + _colourOffset.x, z * 0.05f + _colourOffset.y, 3);
             float amount = Mathf.InverseLerp(2.0f, 2.8f, h)

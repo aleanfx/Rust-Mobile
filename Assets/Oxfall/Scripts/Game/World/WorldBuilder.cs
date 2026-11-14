@@ -48,6 +48,7 @@ namespace Oxfall.Game.World
             materials.SetSeaDepth(TerrainBuilder.BuildDepthMap(world.Shape), IslandShape.WorldSize,
                 TerrainBuilder.DepthMapRange);
             PlaceResources(world, materials, seed);
+            BuildMonuments(world, materials);
             FindSpawn(world, seed);
             return world;
         }
@@ -145,6 +146,7 @@ namespace Oxfall.Game.World
             var hemps = new Mesh[2];
             for (int i = 0; i < hemps.Length; i++) hemps[i] = MeshFactory.Hemp(shapes);
             var barrel = MeshFactory.Barrel();
+            var crate = MeshFactory.SupplyCrate();
             // Sulfur rocks from a random source of their own, so the other shapes stay as they were.
             var sulfurShapes = new System.Random(seed * 31 + 7);
             var sulfurRocks = new Mesh[3];
@@ -238,6 +240,16 @@ namespace Oxfall.Game.World
                         AddView(world, go, spawn.Id, ResourceNodeType.Barrel);
                         break;
                     }
+                    case ResourceNodeType.Crate:
+                    {
+                        var go = MakeNode("Crate", crate, new[] { materials.CratePaint, materials.Steel },
+                            position, yaw, Vector3.one, parent);
+                        var box = go.AddComponent<BoxCollider>();
+                        box.center = new Vector3(0f, 0.31f, 0f);
+                        box.size = new Vector3(1.12f, 0.62f, 0.68f);
+                        AddView(world, go, spawn.Id, ResourceNodeType.Crate);
+                        break;
+                    }
                     case ResourceNodeType.Sulfur:
                     {
                         float sc = spawn.Scale;
@@ -251,6 +263,44 @@ namespace Oxfall.Game.World
             }
 
             Debug.Log($"[Oxfall] Placed {world.Nodes.Count} resource nodes.");
+        }
+
+        /// <summary>
+        /// The ruins (see <see cref="Monuments"/>): each one's blocks drawn as one mesh per material,
+        /// a box collider for every block.
+        /// </summary>
+        private static void BuildMonuments(WorldInstance world, MaterialLibrary materials)
+        {
+            var parent = new GameObject("Monuments").transform;
+            parent.SetParent(world.Root, false);
+            foreach (var m in Monuments.Find(world.Shape.Ground))
+            {
+                var root = new GameObject(m.Name).transform;
+                root.SetParent(parent, false);
+                root.position = new Vector3(m.X, m.Y, m.Z);
+                var byLook = new Dictionary<PropLook, List<(Vector3, Quaternion, Vector3)>>();
+                foreach (var prop in Monuments.Props(m))
+                {
+                    var centre = new Vector3(prop.X - m.X, prop.Y - m.Y, prop.Z - m.Z);
+                    var rotation = Quaternion.Euler(0f, prop.Yaw, 0f);
+                    var size = new Vector3(prop.SizeX, prop.SizeY, prop.SizeZ);
+                    if (!byLook.TryGetValue(prop.Look, out var list)) byLook[prop.Look] = list = new List<(Vector3, Quaternion, Vector3)>();
+                    list.Add((centre, rotation, size));
+                    var block = new GameObject("Block");
+                    block.transform.SetParent(root, false);
+                    block.transform.localPosition = centre;
+                    block.transform.localRotation = rotation;
+                    block.AddComponent<BoxCollider>().size = size;
+                }
+                foreach (var pair in byLook)
+                {
+                    var look = new GameObject(pair.Key.ToString());
+                    look.transform.SetParent(root, false);
+                    look.AddComponent<MeshFilter>().sharedMesh = MeshFactory.Blocks(m.Name + " " + pair.Key, pair.Value);
+                    look.AddComponent<MeshRenderer>().sharedMaterial = pair.Key == PropLook.Concrete ? materials.Concrete
+                        : pair.Key == PropLook.Steel ? materials.Steel : materials.BarrelPaint[1];
+                }
+            }
         }
 
         private static GameObject MakeNode(string name, Mesh mesh, Material[] materials, Vector3 position, float yaw,

@@ -165,6 +165,36 @@ namespace Oxfall.Game.Items
                     Materials = new[] { m.Planks, m.Bark, m.Metal },
                     IconRotation = Tilt(-14f, 205f),
                 },
+                [ItemIds.Workbench] = new ItemModel
+                {
+                    Mesh = MeshFactory.Workbench(),
+                    Materials = new[] { m.Planks, m.Steel, m.Metal },
+                    IconRotation = Tilt(-18f, 200f),
+                },
+                [ItemIds.Scrap] = new ItemModel
+                {
+                    Mesh = MeshFactory.ScrapPile(),
+                    Materials = new[] { m.BarrelRust, m.Metal },
+                    IconRotation = Tilt(-38f, 20f),
+                },
+                [ItemIds.Gears] = new ItemModel
+                {
+                    Mesh = MeshFactory.Gears(),
+                    Materials = new[] { m.Steel },
+                    IconRotation = Tilt(-55f, 15f),
+                },
+                [ItemIds.MetalSpring] = new ItemModel
+                {
+                    Mesh = MeshFactory.MetalSpring(),
+                    Materials = new[] { m.Steel },
+                    IconRotation = Tilt(-20f, 0f),
+                },
+                [ItemIds.MetalPipe] = new ItemModel
+                {
+                    Mesh = MeshFactory.MetalPipe(),
+                    Materials = new[] { m.Metal },
+                    IconRotation = Tilt(-25f, 35f),
+                },
                 [ItemIds.MetalFragments] = new ItemModel
                 {
                     Mesh = MeshFactory.MetalScraps(),

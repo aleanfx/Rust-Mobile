@@ -275,7 +275,9 @@ namespace Oxfall.Game.Net
 
         public ActionResult Craft(Recipe recipe)
         {
-            if (!Online) return PlayerActions.Craft(_survivor, recipe);
+            var p = _player.position;
+            if (!Online) return PlayerActions.Craft(_survivor, recipe, _settlement, p.x, p.y, p.z);
+            if (recipe.NeedsWorkbench && !PlayerActions.NearWorkbench(_settlement, p.x, p.y, p.z)) return ActionResult.NeedsWorkbench;
             if (_survivor.Crafting.Jobs.Count >= CraftingQueue.MaxJobs) return ActionResult.QueueFull;
             if (!recipe.CanAfford(Inventory)) return ActionResult.NotEnoughResources;
             _net.SendAct(ActKind.Craft, recipe: recipe.Id);
@@ -423,6 +425,7 @@ namespace Oxfall.Game.Net
                 case ActionResult.NeedsWall: return "El techo necesita una pared";
                 case ActionResult.NeedsFloor: return "Necesita un piso debajo (un techo en el piso de abajo)";
                 case ActionResult.TooHigh: return $"Máximo {BuildingGrid.MaxLevel + 1} pisos";
+                case ActionResult.NeedsWorkbench: return "Hace falta una mesa de trabajo cerca";
                 case ActionResult.NeedsDoorway: return "Apunta a un marco de puerta vacío";
                 case ActionResult.NoPiece: return "Ya no está ahí";
                 case ActionResult.MaxTier: return "Ya está al nivel máximo";

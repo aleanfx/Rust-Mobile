@@ -272,6 +272,11 @@ namespace Oxfall.Game
             _crafting.Completed += Crafted;
             _crafting.Overflow = (itemId, amount) => _hud.ShowToast("Inventario lleno");
             _hud.BuildCraftPanel(_recipes, _catalog, _inventory, _crafting, TryCraft);
+            _hud.NearWorkbench = () =>
+            {
+                var p = _player.transform.position;
+                return PlayerActions.NearWorkbench(_settlement, p.x, p.y, p.z);
+            };
 
             // Building: the Core grid holds what stands where and BuildingViews draws it. The plan in
             // hand places twig pieces, the hammer upgrades and demolishes them, a door in hand hangs it.
@@ -355,6 +360,8 @@ namespace Oxfall.Game
             _interactor.DoorUsed += () => audio.Play(SoundCue.Wood);
             _interactor.OpenBox += OpenBox;
             _interactor.OpenCupboard += OpenCupboard;
+            _interactor.OpenCrate += crate => _gatherer.Open(crate);
+            _interactor.UseWorkbench += () => _hud.OpenCraftPanel(1);
             _interactor.EnterCode += OpenKeypad;
             _interactor.ManageLock += OpenKeypad;
             _hud.UseTapped += _interactor.Use;
@@ -1039,6 +1046,9 @@ namespace Oxfall.Game
         private void RefreshMap()
         {
             _mapPins.Clear();
+            // The ruins first, so the player's own pins draw over them.
+            foreach (var m in Oxfall.Core.World.Monuments.Find(_world.Shape.Ground))
+                _mapPins.Add(new MapUi.Pin(new Vector3(m.X, m.Y, m.Z), Icons.Ruins, MapUi.RuinsColour, m.Name));
             int owner = _actions.Owner;
             foreach (var d in _settlement.Deployables)
             {
@@ -1237,6 +1247,9 @@ namespace Oxfall.Game
                 case "nearest-ore": FaceNearest(ResourceNodeType.MetalOre); break;
                 case "nearest-hemp": FaceNearest(ResourceNodeType.Hemp); break;
                 case "nearest-barrel": FaceNearest(ResourceNodeType.Barrel); break;
+                case "nearest-crate": FaceNearest(ResourceNodeType.Crate); break;
+                case "workbench": HoldItem(ItemIds.Workbench); break;
+                case "to-ruins": ToRuins(); break;
                 case "nearest-sulfur": FaceNearest(ResourceNodeType.Sulfur); break;
                 case "satchel": HoldItem(ItemIds.SatchelCharge); break;
                 case "revolver": HoldItem(ItemIds.Revolver); break;
@@ -1255,6 +1268,7 @@ namespace Oxfall.Game
                 case "quality-high": SetQuality(QualityTier.High); break;
                 case "craft-hatchet": TryCraft(_recipes.Get("stone_hatchet")); break;
                 case "craft-pickaxe": TryCraft(_recipes.Get("stone_pickaxe")); break;
+                case "craft-revolver": TryCraft(_recipes.Get("revolver")); break;
                 case "craft-panel": _hud.ToggleCraftPanel(); break;
                 case "craft-tab-1": _hud.CraftTab(0); break;
                 case "craft-tab-2": _hud.CraftTab(1); break;
@@ -1278,6 +1292,12 @@ namespace Oxfall.Game
                     break;
                 case "give-guns":
                     ServerWorld.GiveTestKit(_inventory, 2);
+                    break;
+                case "give-metal" when _actions.Online:
+                    _net.SendAct(ActKind.DevGive, 3);
+                    break;
+                case "give-metal":
+                    ServerWorld.GiveTestKit(_inventory, 3);
                     break;
                 case "give":
                     _inventory.Add(ItemIds.Wood, 1000);
@@ -1309,6 +1329,7 @@ namespace Oxfall.Game
                 case "face-box": FaceDeployable(Nearest(DeployableKind.StorageBox)); break;
                 case "face-furnace": FaceDeployable(Nearest(DeployableKind.Furnace)); break;
                 case "face-cupboard": FaceDeployable(Nearest(DeployableKind.ToolCupboard)); break;
+                case "face-workbench": FaceDeployable(Nearest(DeployableKind.Workbench)); break;
                 case "face-bag": FaceDeployable(Nearest(DeployableKind.Bag)); break;
                 case "open-bag": OpenBox(Nearest(DeployableKind.Bag)); break;
                 case "open-fire": OpenBox(Nearest(DeployableKind.Campfire)); break;
@@ -1679,6 +1700,27 @@ namespace Oxfall.Game
             Debug.Log($"[Oxfall] View in the forest at {best}");
         }
 
+        /// <summary>For tests: to the middle of the nearest ruins, on their pad, looking at their nearest crate.</summary>
+        private void ToRuins()
+        {
+            var here = _player.transform.position;
+            Oxfall.Core.World.Monument? best = null;
+            foreach (var m in Oxfall.Core.World.Monuments.Find(_world.Shape.Ground))
+                if (best == null || (new Vector2(m.X - here.x, m.Z - here.z)).sqrMagnitude < (new Vector2(best.Value.X - here.x, best.Value.Z - here.z)).sqrMagnitude)
+                    best = m;
+            if (best == null) return;
+            var ruins = best.Value;
+            var at = new Vector3(ruins.X, ruins.Y + 0.2f, ruins.Z);
+            ResourceNodeView crate = null;
+            foreach (var node in _world.Nodes)
+                if (node.Node.Type == ResourceNodeType.Crate
+                    && (crate == null || (node.transform.position - at).sqrMagnitude < (crate.transform.position - at).sqrMagnitude))
+                    crate = node;
+            var to = crate != null ? crate.transform.position - at : Vector3.forward;
+            _player.Teleport(at, Mathf.Atan2(to.x, to.z) * Mathf.Rad2Deg, 8f);
+            Debug.Log($"[Oxfall] At the ruins '{ruins.Name}' ({ruins.Kind}) {at}");
+        }
+
         private void FaceNearest(ResourceNodeType type)
         {
             ResourceNodeView best = null;
@@ -1702,7 +1744,8 @@ namespace Oxfall.Game
             if (away.sqrMagnitude < 0.01f) away = Vector3.back;
             away = away.normalized;
             var feet = best.transform.position + away * 2.0f;
-            feet.y = _world.Shape.Height(feet.x, feet.z) + 0.05f;
+            // On the ground, or on a monument's pad where a crate stands on one.
+            feet.y = Mathf.Max(_world.Shape.Height(feet.x, feet.z), best.transform.position.y) + 0.05f;
 
             var toTarget = target - (feet + Vector3.up * PlayerController.EyeHeight);
             float yaw = Mathf.Atan2(toTarget.x, toTarget.z) * Mathf.Rad2Deg;

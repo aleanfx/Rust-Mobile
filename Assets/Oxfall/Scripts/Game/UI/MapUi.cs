@@ -101,10 +101,11 @@ namespace Oxfall.Game.UI
             UiFactory.AddImage(bar, null, UiTheme.Accent);
             var where = UiFactory.NewRect("Where", _root, left, left, new Vector2(60f, 270f), new Vector2(320f, 40f));
             _where = UiFactory.AddText(where, "", 28, TextAnchor.MiddleLeft, UiTheme.TextMuted, true);
-            AddLegend(_root, left, new Vector2(60f, 190f), Icons.Pointer, UiTheme.Accent, "Tú");
-            AddLegend(_root, left, new Vector2(60f, 140f), Icons.Bed, new Color(0.55f, 0.78f, 1f), "Saco de dormir");
-            AddLegend(_root, left, new Vector2(60f, 90f), Icons.Home, new Color(1f, 0.82f, 0.4f), "Tu base");
-            AddLegend(_root, left, new Vector2(60f, 40f), Icons.Close, UiTheme.Bad, "Donde moriste");
+            AddLegend(_root, left, new Vector2(60f, 200f), Icons.Pointer, UiTheme.Accent, "Tú");
+            AddLegend(_root, left, new Vector2(60f, 155f), Icons.Bed, new Color(0.55f, 0.78f, 1f), "Saco de dormir");
+            AddLegend(_root, left, new Vector2(60f, 110f), Icons.Home, new Color(1f, 0.82f, 0.4f), "Tu base");
+            AddLegend(_root, left, new Vector2(60f, 65f), Icons.Ruins, RuinsColour, "Ruinas: botín");
+            AddLegend(_root, left, new Vector2(60f, 20f), Icons.Close, UiTheme.Bad, "Donde moriste");
             var hint = UiFactory.NewRect("Hint", _root, new Vector2(0.5f, 0f), centre, new Vector2(0f, 16f), new Vector2(600f, 30f));
             UiFactory.AddText(hint, "Toca para cerrar", 22, TextAnchor.MiddleCenter, UiTheme.TextFaint);
             var close = UiFactory.NewRect("Close", _root, new Vector2(1f, 1f), new Vector2(1f, 1f), new Vector2(-24f, -20f), new Vector2(64f, 64f));
@@ -113,6 +114,9 @@ namespace Oxfall.Game.UI
 
             _root.gameObject.SetActive(false);
         }
+
+        /// <summary>The ruins' pins: weathered concrete, pale against the green.</summary>
+        public static readonly Color RuinsColour = new Color(0.86f, 0.84f, 0.78f);
 
         private static void AddLegend(RectTransform parent, Vector2 anchor, Vector2 at, Sprite icon, Color colour, string text)
         {
@@ -187,6 +191,8 @@ namespace Oxfall.Game.UI
                             c = Color.Lerp(c, wood, Mathf.InverseLerp(0.46f, 0.62f, forest));
                         }
                         c = Color.Lerp(c, rock, Mathf.Clamp01((slope - 0.45f) * 2.5f) + Mathf.Clamp01((h - 17f) / 5f));
+                        // The ruins' concrete pads.
+                        if (Oxfall.Core.World.Monuments.Inside(_shape.Ground, wx, wz, -2.5f)) c = new Color(0.66f, 0.65f, 0.61f);
                     }
                     c *= shade;
                     // The grid: thin dark lines.

@@ -33,6 +33,14 @@ namespace Oxfall.Game.UI
         /// <summary>The panel's tabs, like the PC game's categories: tools, weapons, clothing, the base, and things to set down.</summary>
         private static readonly string[] TabNames = { "ÚTILES", "ARMAS", "ROPA", "BASE", "OBJETOS" };
 
+        /// <summary>Whether a workbench is near the player now (its recipes can be made only then).</summary>
+        public System.Func<bool> NearWorkbench;
+
+        /// <summary>Asked once per redraw: whether a workbench is near.</summary>
+        private bool _bench;
+
+        private bool Makeable(Recipe recipe) => recipe.CanAfford(_inventory) && (!recipe.NeedsWorkbench || _bench);
+
         /// <summary>Which tab an item is made under.</summary>
         public static int TabOf(string itemId)
         {
@@ -70,6 +78,7 @@ namespace Oxfall.Game.UI
                 case ItemIds.SheetMetalDoor:
                 case ItemIds.CodeLock:
                 case ItemIds.ToolCupboard:
+                case ItemIds.Workbench:
                     return 3;
                 default:
                     return 4;
@@ -319,6 +328,7 @@ namespace Oxfall.Game.UI
         public void Refresh()
         {
             if (!IsOpen) return;
+            _bench = NearWorkbench?.Invoke() ?? false;
             for (int t = 0; t < _tabs.Length; t++)
             {
                 var tab = _tabs[t];
@@ -328,13 +338,13 @@ namespace Oxfall.Game.UI
                 tab.Underline.enabled = on;
                 int can = 0;
                 foreach (var tile in _tiles)
-                    if (tile.Tab == t && tile.Recipe.CanAfford(_inventory)) can++;
+                    if (tile.Tab == t && Makeable(tile.Recipe)) can++;
                 tab.Badge.gameObject.SetActive(can > 0);
                 tab.BadgeText.text = can.ToString();
             }
             foreach (var tile in _tiles)
             {
-                bool can = tile.Recipe.CanAfford(_inventory);
+                bool can = Makeable(tile.Recipe);
                 bool chosen = tile.Recipe == _selected;
                 var icon = ItemIcons.Get(tile.Recipe.OutputItemId);
                 if (tile.Icon.sprite != icon) tile.Icon.sprite = icon;
@@ -352,7 +362,9 @@ namespace Oxfall.Game.UI
             _bigIcon.enabled = big != null;
             _bigName.text = big == null ? def.DisplayName : "";
             _name.text = def.DisplayName + (_selected.OutputAmount > 1 ? " x" + _selected.OutputAmount : "");
-            _description.text = def.Description;
+            _description.text = _selected.NeedsWorkbench
+                ? def.Description + (_bench ? "\nMesa de trabajo cerca: se puede fabricar." : "\nSolo cerca de una mesa de trabajo.")
+                : def.Description;
             _time.text = $"{_selected.CraftSeconds:0} s";
 
             for (int i = 0; i < _rows.Length; i++)
@@ -373,10 +385,12 @@ namespace Oxfall.Game.UI
             }
 
             bool afford = _selected.CanAfford(_inventory);
+            bool bench = !_selected.NeedsWorkbench || _bench;
             bool full = _queue.Jobs.Count >= CraftingQueue.MaxJobs;
-            _craftButton.color = afford && !full ? UiTheme.Accent : UiTheme.Slot;
-            _craftLabel.text = full ? "COLA LLENA" : afford ? "FABRICAR" : "FALTAN MATERIALES";
-            _craftLabel.color = afford && !full ? Color.white : UiTheme.TextMuted;
+            bool ready = afford && bench && !full;
+            _craftButton.color = ready ? UiTheme.Accent : UiTheme.Slot;
+            _craftLabel.text = full ? "COLA LLENA" : !bench ? "NECESITA MESA DE TRABAJO" : afford ? "FABRICAR" : "FALTAN MATERIALES";
+            _craftLabel.color = ready ? Color.white : UiTheme.TextMuted;
         }
 
         /// <summary>Every frame: the queue's progress, in the panel or on the chip.</summary>

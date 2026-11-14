@@ -27,6 +27,11 @@ stone_wall diff nor_gl
 medieval_blocks_02 diff nor_gl
 stone_brick_wall_001 diff nor_gl
 
+# The ruins' concrete: the first that downloads is used (ArtSetup).
+concrete_wall_008 diff nor_gl
+concrete_floor_worn_001 diff nor_gl
+concrete_wall_006 diff nor_gl
+
 # Leaves and needles: cut-outs (colour + alpha) from Poly Haven tree models.
 # Format: model <asset id> <texture prefix>
 model fir_sapling twigs

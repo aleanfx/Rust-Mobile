@@ -92,7 +92,8 @@ namespace Oxfall.Core.Tests
             {
                 Assert.GreaterOrEqual(s.Y, 1.3f);
                 Assert.AreEqual(0f, g.PondBank(s.X, s.Z));
-                Assert.AreEqual(g.Height(s.X, s.Z), s.Y);
+                // The ruins' crates and barrels stand on their monument's pad, not the ground.
+                if (s.Id < Monuments.FirstNodeId) Assert.AreEqual(g.Height(s.X, s.Z), s.Y);
             }
         }
 
@@ -101,6 +102,7 @@ namespace Oxfall.Core.Tests
         {
             foreach (var s in Layout)
             {
+                if (s.Id >= Monuments.FirstNodeId) continue;
                 int cell = s.Id - 1;
                 int gx = cell % ResourceLayout.Cells, gz = cell / ResourceLayout.Cells;
                 Assert.That(s.X, Is.InRange(-IslandGround.HalfSize + gx * ResourceLayout.Cell, -IslandGround.HalfSize + (gx + 1) * ResourceLayout.Cell));

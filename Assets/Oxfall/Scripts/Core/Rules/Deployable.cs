@@ -14,6 +14,9 @@ namespace Oxfall.Core.Rules
 
         /// <summary>What a player had on them when they died, left where they fell (no item makes one).</summary>
         Bag = 6,
+
+        /// <summary>Near it, guns, metal tools and explosives can be made.</summary>
+        Workbench = 7,
     }
 
     /// <summary>One thing set down: what it is, where it stands, which way it faces, and who put it there.</summary>
@@ -55,6 +58,9 @@ namespace Oxfall.Core.Rules
         /// <summary>How long a dead player's bag lies there before it rots away (sooner once emptied).</summary>
         public const float DeathBagSeconds = 600f;
 
+        /// <summary>How near a workbench (in metres, from its middle) its recipes can be made.</summary>
+        public const float WorkbenchReach = 4f;
+
         public static bool IsKnown(DeployableKind kind) => Enum.IsDefined(typeof(DeployableKind), kind);
 
         /// <summary>The item that becomes this deployable when set down (and comes back when it is picked up).</summary>
@@ -67,6 +73,7 @@ namespace Oxfall.Core.Rules
                 case DeployableKind.Furnace: return ItemIds.Furnace;
                 case DeployableKind.SleepingBag: return ItemIds.SleepingBag;
                 case DeployableKind.ToolCupboard: return ItemIds.ToolCupboard;
+                case DeployableKind.Workbench: return ItemIds.Workbench;
                 // Nothing is made into a bag, and a bag is not picked up.
                 case DeployableKind.Bag: return null;
                 default: throw new ArgumentOutOfRangeException(nameof(kind));
@@ -83,6 +90,7 @@ namespace Oxfall.Core.Rules
                 case ItemIds.Furnace: kind = DeployableKind.Furnace; return true;
                 case ItemIds.SleepingBag: kind = DeployableKind.SleepingBag; return true;
                 case ItemIds.ToolCupboard: kind = DeployableKind.ToolCupboard; return true;
+                case ItemIds.Workbench: kind = DeployableKind.Workbench; return true;
                 default: kind = default; return false;
             }
         }
@@ -113,6 +121,7 @@ namespace Oxfall.Core.Rules
                 case DeployableKind.SleepingBag: return 0.55f;
                 case DeployableKind.ToolCupboard: return 0.4f;
                 case DeployableKind.Bag: return 0.35f;
+                case DeployableKind.Workbench: return 0.8f;
                 default: return 0.5f;
             }
         }
@@ -131,6 +140,7 @@ namespace Oxfall.Core.Rules
                 case DeployableKind.Furnace: return 300f;
                 case DeployableKind.SleepingBag: return 50f;
                 case DeployableKind.ToolCupboard: return 150f;
+                case DeployableKind.Workbench: return 300f;
                 default: return 0f;
             }
         }
@@ -144,6 +154,7 @@ namespace Oxfall.Core.Rules
                 case DeployableKind.Furnace: return "Horno";
                 case DeployableKind.SleepingBag: return "Saco de dormir";
                 case DeployableKind.ToolCupboard: return "Armario";
+                case DeployableKind.Workbench: return "Mesa de trabajo";
                 default: return "Objeto";
             }
         }

@@ -215,6 +215,12 @@ namespace Oxfall.Game.UI
             Mathf.Max(Polygon(p, new Vector2(-0.6f, -0.62f), new Vector2(0.6f, -0.62f), new Vector2(0.6f, 0.12f), new Vector2(0f, 0.7f), new Vector2(-0.6f, 0.12f)),
                 -RoundBox(p, new Vector2(0f, -0.38f), new Vector2(0.15f, 0.26f), 0.04f)));
 
+        /// <summary>A broken wall: two blocks of a ruin, the top one cracked off at a slant.</summary>
+        public static Sprite Ruins => Get("ruins", p =>
+            Min(Polygon(p, new Vector2(-0.7f, -0.62f), new Vector2(0.7f, -0.62f), new Vector2(0.7f, 0.05f), new Vector2(0.2f, 0.32f), new Vector2(-0.1f, 0.12f),
+                    new Vector2(-0.38f, 0.5f), new Vector2(-0.7f, 0.5f)),
+                RoundBox(p, new Vector2(0.48f, 0.5f), new Vector2(0.14f, 0.12f), 0.03f)));
+
         public static Sprite Close => Get("close", p =>
             Mathf.Min(Segment(p, new Vector2(-0.5f, -0.5f), new Vector2(0.5f, 0.5f), Stroke),
                 Segment(p, new Vector2(-0.5f, 0.5f), new Vector2(0.5f, -0.5f), Stroke)));

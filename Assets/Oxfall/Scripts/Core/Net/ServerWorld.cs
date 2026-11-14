@@ -299,7 +299,8 @@ namespace Oxfall.Core.Net
                 case ActKind.Wear: return PlayerActions.Wear(s, a);
                 case ActKind.Split: return PlayerActions.Split(s, a);
                 case ActKind.Craft:
-                    return Recipes.TryGet(recipeId ?? "", out var recipe) ? PlayerActions.Craft(s, recipe) : ActionResult.Invalid;
+                    return Recipes.TryGet(recipeId ?? "", out var recipe)
+                        ? PlayerActions.Craft(s, recipe, Settlement, player.Pose.X, player.Pose.Y, player.Pose.Z) : ActionResult.Invalid;
                 case ActKind.CancelCraft: return PlayerActions.CancelCraft(s, a);
                 case ActKind.Eat: return PlayerActions.Eat(s, a);
                 case ActKind.Drink: return PlayerActions.Drink(s, Ground, player.Pose.X, player.Pose.Y, player.Pose.Z);
@@ -359,6 +360,19 @@ namespace Oxfall.Core.Net
         /// </summary>
         public static void GiveTestKit(Inventory inventory, int kit = 0)
         {
+            if (kit == 3)
+            {
+                // The metal age: a workbench and what its recipes need.
+                inventory.Add(ItemIds.Workbench, 1);
+                inventory.Add(ItemIds.Scrap, 120);
+                inventory.Add(ItemIds.Gears, 3);
+                inventory.Add(ItemIds.MetalSpring, 2);
+                inventory.Add(ItemIds.MetalPipe, 2);
+                inventory.Add(ItemIds.MetalFragments, 400);
+                inventory.Add(ItemIds.Wood, 1000);
+                inventory.Add(ItemIds.Cloth, 60);
+                return;
+            }
             if (kit == 2)
             {
                 inventory.Add(ItemIds.Blunderbuss, 1);

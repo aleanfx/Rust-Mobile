@@ -33,6 +33,9 @@ namespace Oxfall.Editor
             // The first of these stone block photos that downloaded (see tools/art/polyhaven.txt).
             foreach (var id in new[] { "castle_wall_slates", "stone_wall", "medieval_blocks_02", "stone_brick_wall_001" })
                 if (Load(id, "diff") != null) { MakeLit("OxfallStoneWall", id, new Color(0.95f, 0.93f, 0.90f), 0.1f); break; }
+            // The ruins' concrete: the first of these photos that downloaded.
+            foreach (var id in new[] { "concrete_wall_008", "concrete_floor_worn_001", "concrete_wall_006", "concrete_wall_004" })
+                if (Load(id, "diff") != null) { MakeLit("OxfallConcrete", id, new Color(0.95f, 0.94f, 0.92f), 0.08f); break; }
             MakeGround();
             MakeWater();
             MakeCutout("OxfallFoliage", "jacaranda_tree/jacaranda_tree_leaves.png", 0.1f, 0.15f);

@@ -15,6 +15,8 @@ namespace Oxfall.Core.Gathering
         Barrel,
         /// <summary>A boulder veined with yellow: sulfur ore, for gunpowder.</summary>
         Sulfur,
+        /// <summary>A supply crate in the ruins: opened by hand, it gives what was inside (see <see cref="LootTable.Crate"/>).</summary>
+        Crate,
     }
 
     public readonly struct Yield
@@ -40,6 +42,7 @@ namespace Oxfall.Core.Gathering
                 case ResourceNodeType.BerryBush: return 4;
                 case ResourceNodeType.Barrel: return 3;
                 case ResourceNodeType.Sulfur: return 240;
+                case ResourceNodeType.Crate: return 1;
                 default: throw new ArgumentOutOfRangeException(nameof(type));
             }
         }
@@ -56,6 +59,8 @@ namespace Oxfall.Core.Gathering
                 case ResourceNodeType.BerryBush: return 150f;
                 case ResourceNodeType.Barrel: return 600f;
                 case ResourceNodeType.Sulfur: return 480f;
+                // Restocked every quarter of an hour: worth coming back to, not worth camping.
+                case ResourceNodeType.Crate: return 900f;
                 default: throw new ArgumentOutOfRangeException(nameof(type));
             }
         }
@@ -98,7 +103,8 @@ namespace Oxfall.Core.Gathering
                     }
                 case ResourceNodeType.Hemp:
                 case ResourceNodeType.BerryBush:
-                    return Capacity(type); // picked by hand in one go, any tool or none
+                case ResourceNodeType.Crate:
+                    return Capacity(type); // picked (or opened) by hand in one go, any tool or none
                 case ResourceNodeType.Barrel:
                     // Three blows with anything hard; metal tools in two. Not with bare hands, a torch or a bow.
                     switch (tool)
@@ -130,6 +136,7 @@ namespace Oxfall.Core.Gathering
                 case ResourceNodeType.BerryBush: return ItemIds.Berries;
                 case ResourceNodeType.Barrel: return ItemIds.MetalFragments;
                 case ResourceNodeType.Sulfur: return ItemIds.SulfurOre;
+                case ResourceNodeType.Crate: return ItemIds.Scrap;
                 default: throw new ArgumentOutOfRangeException(nameof(type));
             }
         }
@@ -174,6 +181,8 @@ namespace Oxfall.Core.Gathering
             if (IsDepleted) RespawnTimer = GatherTable.RespawnSeconds(Type);
             if (Type == ResourceNodeType.Barrel)
                 return IsDepleted ? LootTable.Barrel(random ?? new Random(Id * 7919 + System.Environment.TickCount)) : (IReadOnlyList<Yield>)Array.Empty<Yield>();
+            if (Type == ResourceNodeType.Crate)
+                return LootTable.Crate(random ?? new Random(Id * 7919 + System.Environment.TickCount));
 
             var result = new List<Yield>(2) { new Yield(GatherTable.MainItem(Type), amount) };
             // Metal ore comes wrapped in stone.

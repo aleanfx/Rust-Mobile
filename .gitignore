@@ -29,3 +29,4 @@ TestResults/
 
 # A local server run saves its island here.
 *.sav
+*.sav.old

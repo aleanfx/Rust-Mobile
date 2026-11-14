@@ -117,6 +117,7 @@ namespace Oxfall.Game.Construction
                 case DeployableKind.StorageBox: return "Caja colocada: tócala con ABRIR";
                 case DeployableKind.Furnace: return "Horno colocado: ábrelo, mete madera y mineral";
                 case DeployableKind.SleepingBag: return "Saco colocado: al morir podrás despertar aquí";
+                case DeployableKind.Workbench: return "Mesa colocada: cerca de ella fabricas armas y herramientas de metal";
                 case DeployableKind.ToolCupboard: return "Armario colocado: solo los autorizados construyen cerca";
                 default: return "Colocado";
             }
