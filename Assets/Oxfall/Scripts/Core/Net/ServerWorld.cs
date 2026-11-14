@@ -32,7 +32,7 @@ namespace Oxfall.Core.Net
     /// as the game lays them out, what players have built, and each survivor's belongings. Every
     /// action goes through <see cref="PlayerActions"/>, the same rules the game runs alone.
     /// </summary>
-    public sealed class ServerWorld
+    public sealed partial class ServerWorld
     {
         /// <summary>How far a player can reach a node (the game's reach, plus room for lag).</summary>
         public const float HitReach = 6f;
@@ -120,16 +120,18 @@ namespace Oxfall.Core.Net
                 return null;
             }
 
-            if (record == null)
-            {
-                record = new SurvivorRecord { Token = token, Owner = _nextOwner++, Survivor = new Survivor(Catalog), Pose = pose };
-                var r = record;
-                r.Survivor.Crafting.Completed += (recipe, lost) => r.Crafted.Add((recipe.Id, lost));
-                _records.Add(token, record);
-            }
+            if (record == null) record = AddRecord(token, _nextOwner++, pose);
             record.Name = player.Name;
             record.PlayerId = player.Id;
             _online[player.Id] = record;
+            return record;
+        }
+
+        private SurvivorRecord AddRecord(string token, int owner, Pose pose)
+        {
+            var record = new SurvivorRecord { Token = token, Owner = owner, Survivor = new Survivor(Catalog), Pose = pose };
+            record.Survivor.Crafting.Completed += (recipe, lost) => record.Crafted.Add((recipe.Id, lost));
+            _records.Add(token, record);
             return record;
         }
 

@@ -69,6 +69,9 @@ namespace Oxfall.Core.Rules
             return true;
         }
 
+        /// <summary>Every piece someone in particular built, with who (for saving).</summary>
+        public IEnumerable<KeyValuePair<PieceRef, int>> Owners => _owners;
+
         /// <summary>Who built a piece (0: nobody in particular, as in a game played alone).</summary>
         public int OwnerOf(PieceRef piece) => _owners.TryGetValue(piece, out int owner) ? owner : 0;
 

@@ -422,3 +422,98 @@ namespace Oxfall.Core.Tests
         }
     }
 }
+
+namespace Oxfall.Core.Tests
+{
+    using System;
+    using NUnit.Framework;
+    using Oxfall.Core.Building;
+    using Oxfall.Core.Items;
+    using Oxfall.Core.Net;
+    using Oxfall.Core.Rules;
+    using Oxfall.Core.World;
+
+    public class WorldSaveTests
+    {
+        private const string Token = "cccccccccccccccccccccccccccccccc";
+
+        [Test]
+        public void ASavedIslandComesBackAsItWas()
+        {
+            var world = new ServerWorld(20261113) { DevMode = true };
+            var record = world.Join(Protocol.Version, "Ale", Token, 0f, out var player, out _, out _);
+            ServerWorld.GiveTestKit(record.Survivor.Inventory);
+            record.Survivor.Inventory.Move(0, 20);
+            world.Act(player.Id, ActKind.Craft, 0, 0, "torch");
+            record.Survivor.Vitals.Set(80f, 123f, 45f);
+
+            // A floor where the player can reach, and a campfire.
+            var p = player.Pose;
+            Cell cell = default;
+            bool found = false;
+            for (int r = 0; r <= 4 && !found; r++)
+            for (int dz = -r; dz <= r && !found; dz++)
+            for (int dx = -r; dx <= r && !found; dx++)
+            {
+                if (Math.Max(Math.Abs(dx), Math.Abs(dz)) != r) continue;
+                cell = BuildingGrid.CellAt(p.X + dx * 3f, p.Z + dz * 3f);
+                found = world.Build(player.Id, BuildOp.Foundation(cell, 0f), out _) == ActionResult.Ok;
+            }
+            Assert.IsTrue(found, "somewhere to build near the beach");
+            // Stand on the floor to do the rest.
+            world.Settlement.Grid.TryGetFoundationTop(cell, out float top);
+            world.Players.Place(player.Id, new Pose((cell.X + 0.5f) * 3f, top, (cell.Z + 0.5f) * 3f, 0f), 0.5f);
+            p = player.Pose;
+            Assert.AreEqual(ActionResult.Ok, world.Build(player.Id, BuildOp.Edge(cell.North, PieceType.Doorway), out _));
+            Assert.AreEqual(ActionResult.Ok, world.Build(player.Id, BuildOp.Door(cell.North), out _));
+            Assert.AreEqual(ActionResult.Ok, world.Build(player.Id, BuildOp.PlaceCampfire(new Campfire(0, p.X, top, p.Z, 0f)), out _));
+            var tree = System.Linq.Enumerable.First(ResourceLayout.Generate(world.Ground), s => s.Type == Gathering.ResourceNodeType.Tree);
+            world.Players.Place(player.Id, new Pose(tree.X + 1f, tree.Y, tree.Z, 0f), 1f);
+            world.Hit(player.Id, tree.Id, ToolKind.Hatchet, 2f, out _);
+
+            var bytes = world.Save();
+            var loaded = new ServerWorld(20261113);
+            Assert.IsTrue(loaded.Load(bytes, out var why), why);
+
+            Assert.AreEqual(world.Settlement.Grid.PieceCount, loaded.Settlement.Grid.PieceCount);
+            Assert.IsTrue(loaded.Settlement.Grid.HasDoor(cell.North));
+            Assert.AreEqual(1, loaded.Settlement.CampfireCount);
+            Assert.AreEqual(record.Owner, loaded.Settlement.OwnerOf(PieceRef.Foundation(cell)), "who built it is kept");
+            loaded.TryGetNode(tree.Id, out var node, out _, out _);
+            world.TryGetNode(tree.Id, out var original, out _, out _);
+            Assert.AreEqual(original.Remaining, node.Remaining, "the chopped tree stays chopped");
+
+            var back = loaded.Join(Protocol.Version, "Ale", Token, 0f, out var again, out _, out _);
+            var s = back.Survivor;
+            for (int i = 0; i < s.Inventory.SlotCount; i++) Assert.AreEqual(record.Survivor.Inventory[i], s.Inventory[i], "slot " + i);
+            Assert.AreEqual(1, s.Crafting.Jobs.Count);
+            Assert.AreEqual(80f, s.Vitals.Health);
+            Assert.AreEqual(new Pose(tree.X + 1f, tree.Y, tree.Z, 0f), again.Pose, "where they stood when saved");
+
+            var newcomer = loaded.Join(Protocol.Version, "Bea", "dddddddddddddddddddddddddddddddd", 0f, out _, out _, out _);
+            Assert.AreNotEqual(back.Owner, newcomer.Owner, "owner ids are not handed out twice");
+        }
+
+        [Test]
+        public void AnotherWipesSaveIsNotLoaded()
+        {
+            var bytes = new ServerWorld(1).Save();
+            Assert.IsFalse(new ServerWorld(2).Load(bytes, out var why));
+            StringAssert.Contains("seed", why);
+            Assert.IsFalse(new ServerWorld(1).Load(new byte[] { 1, 2, 3 }, out _));
+            Assert.IsFalse(new ServerWorld(1).Load(new byte[] { (byte)'O', (byte)'X', (byte)'S', (byte)'V', 1, 0 }, out why));
+        }
+
+        [Test]
+        public void TheWipeIsOnThursdayEvening()
+        {
+            var thursday = new DateTime(2026, 11, 12, 19, 0, 0, DateTimeKind.Utc);
+            Assert.AreEqual(DayOfWeek.Thursday, thursday.DayOfWeek);
+            Assert.AreEqual(thursday, WipeSchedule.LastWipe(new DateTime(2026, 11, 14, 1, 0, 0, DateTimeKind.Utc)));
+            Assert.AreEqual(thursday, WipeSchedule.LastWipe(thursday));
+            Assert.AreEqual(thursday.AddDays(-7), WipeSchedule.LastWipe(thursday.AddMinutes(-1)));
+            Assert.AreEqual(thursday.AddDays(7), WipeSchedule.NextWipe(thursday.AddHours(30)));
+            Assert.AreEqual(20261112, WipeSchedule.SeedFor(thursday));
+        }
+    }
+}

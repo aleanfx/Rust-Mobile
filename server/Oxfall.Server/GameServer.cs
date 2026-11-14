@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Diagnostics;
+using System.IO;
 using System.Net.WebSockets;
 using System.Threading;
 using System.Threading.Channels;
@@ -26,8 +27,12 @@ namespace Oxfall.Server
         private const int MaxActionsPerSecond = 40;
         /// <summary>Build changes per message when describing the whole settlement to a newcomer.</summary>
         private const int OpsPerMessage = 200;
+        /// <summary>How often the island is saved (and once more when the server stops).</summary>
+        private const float SaveInterval = 60f;
 
         private readonly ServerWorld _world;
+        private readonly string _savePath;
+        private readonly object _saveLock = new object();
         private readonly ServerState _state;
         private readonly object _lock = new object();
         private readonly Dictionary<ushort, Session> _sessions = new Dictionary<ushort, Session>();
@@ -35,13 +40,65 @@ namespace Oxfall.Server
         private readonly ILogger _log;
         private readonly NetWriter _flushWriter = new NetWriter(1024);
 
-        public GameServer(int seed, bool devMode, ILogger log)
+        /// <param name="savePath">Where the island is saved; null keeps nothing between runs.</param>
+        public GameServer(int seed, bool devMode, string savePath, ILogger log)
         {
-            _world = new ServerWorld(seed) { DevMode = devMode };
-            _state = _world.Players;
             _log = log;
-            _log.LogInformation("Island {Seed}: {Nodes} trees, rocks and plants{Dev}", seed, _world.NodeCount,
+            _savePath = savePath;
+            _world = LoadOrCreate(seed, devMode);
+            _state = _world.Players;
+            _log.LogInformation("Island {Seed}: {Nodes} trees, rocks and plants, {Pieces} building pieces, {Survivors} survivors{Dev}",
+                seed, _world.NodeCount, _world.Settlement.Grid.PieceCount, _state.Count + CountRecords(),
                 devMode ? " (DEV MODE: teleports allowed, one beach for everyone)" : "");
+        }
+
+        private int CountRecords()
+        {
+            int n = 0;
+            foreach (var _ in _world.Records) n++;
+            return n;
+        }
+
+        /// <summary>The saved island if there is one for this seed; otherwise a fresh one (a wipe).</summary>
+        private ServerWorld LoadOrCreate(int seed, bool devMode)
+        {
+            if (!string.IsNullOrEmpty(_savePath) && File.Exists(_savePath))
+            {
+                var loaded = new ServerWorld(seed) { DevMode = devMode };
+                if (loaded.Load(File.ReadAllBytes(_savePath), out var why))
+                {
+                    _log.LogInformation("Loaded the island from {Path}", _savePath);
+                    return loaded;
+                }
+                // Kept aside rather than overwritten, in case it is wanted.
+                string aside = _savePath + ".old";
+                File.Copy(_savePath, aside, true);
+                _log.LogWarning("Not loading {Path} ({Why}): a fresh island this time; the old save is in {Aside}", _savePath, why, aside);
+            }
+            return new ServerWorld(seed) { DevMode = devMode };
+        }
+
+        /// <summary>Writes the island to disk now (safely: a new file, then swapped in).</summary>
+        public void SaveNow()
+        {
+            if (string.IsNullOrEmpty(_savePath)) return;
+            byte[] bytes;
+            lock (_lock) bytes = _world.Save();
+            lock (_saveLock)
+            {
+                try
+                {
+                    string dir = Path.GetDirectoryName(Path.GetFullPath(_savePath));
+                    if (!string.IsNullOrEmpty(dir)) Directory.CreateDirectory(dir);
+                    string temp = _savePath + ".tmp";
+                    File.WriteAllBytes(temp, bytes);
+                    File.Move(temp, _savePath, true);
+                }
+                catch (Exception e) when (e is IOException || e is UnauthorizedAccessException)
+                {
+                    _log.LogError("Could not save the island to {Path}: {Message}", _savePath, e.Message);
+                }
+            }
         }
 
         public int Seed => _state.Seed;
@@ -59,9 +116,14 @@ namespace Oxfall.Server
             var writer = new NetWriter(2048);
             var period = TimeSpan.FromSeconds(1.0 / Protocol.TickRate);
             using var timer = new PeriodicTimer(period);
-            float lastTick = Now, lastRespawn = Now;
+            float lastTick = Now, lastRespawn = Now, lastSave = Now;
             while (await timer.WaitForNextTickAsync(stop))
             {
+                if (Now - lastSave >= SaveInterval)
+                {
+                    lastSave = Now;
+                    _ = Task.Run(SaveNow);
+                }
                 lock (_lock)
                 {
                     float now = Now;
