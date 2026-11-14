@@ -240,7 +240,7 @@ namespace Oxfall.Core.Net
                     if (r == ActionResult.Ok) Players.Place(playerId, SpawnPose(), player.LastMoveTime);
                     return r;
                 }
-                case ActKind.Open: return PlayerActions.Open(Settlement, s, a, player.Pose.X, player.Pose.Y, player.Pose.Z);
+                case ActKind.Open: return PlayerActions.Open(Settlement, s, record.Owner, a, player.Pose.X, player.Pose.Y, player.Pose.Z);
                 case ActKind.Close: return PlayerActions.Close(s);
                 case ActKind.Take: return PlayerActions.Take(Settlement, s, a, b);
                 case ActKind.Put: return PlayerActions.Put(Settlement, s, a, b);
@@ -266,10 +266,15 @@ namespace Oxfall.Core.Net
             inventory.Add(ItemIds.Furnace, 1);
             inventory.Add(ItemIds.SleepingBag, 1);
             inventory.Add(ItemIds.ToolCupboard, 1);
+            inventory.Add(ItemIds.SheetMetalDoor, 1);
+            inventory.Add(ItemIds.CodeLock, 2);
+            inventory.Add(ItemIds.MetalHatchet, 1);
+            inventory.Add(ItemIds.MetalPickaxe, 1);
             inventory.Add(ItemIds.Wood, 1500);
             inventory.Add(ItemIds.Stone, 700);
             inventory.Add(ItemIds.MetalOre, 240);
             inventory.Add(ItemIds.Cloth, 40);
+            inventory.Add(ItemIds.MetalFragments, 600);
         }
 
         /// <summary>Something a player builds or does to a building; <paramref name="done"/> is to be told to all.</summary>
@@ -305,6 +310,8 @@ namespace Oxfall.Core.Net
                 {
                     float dx = player.Pose.X - box.X, dz = player.Pose.Z - box.Z, reach = PlayerActions.UseReach + 2f;
                     if (dx * dx + dz * dz > reach * reach || Math.Abs(player.Pose.Y - box.Y) > reach) s.Looting = 0;
+                    // Locked with a code this player does not know (a new code, or locked again): out.
+                    else if (!Settlement.CanPass(LockTarget.On(box.Id), record.Owner)) s.Looting = 0;
                 }
             }
         }

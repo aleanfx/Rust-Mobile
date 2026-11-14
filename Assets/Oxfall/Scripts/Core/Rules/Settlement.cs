@@ -33,6 +33,7 @@ namespace Oxfall.Core.Rules
         private readonly Dictionary<int, HashSet<int>> _authorized = new Dictionary<int, HashSet<int>>();
         private readonly Dictionary<int, float> _bagReady = new Dictionary<int, float>();
         private readonly Dictionary<PieceRef, int> _owners = new Dictionary<PieceRef, int>();
+        private readonly Dictionary<LockTarget, CodeLockState> _locks = new Dictionary<LockTarget, CodeLockState>();
         private readonly List<int> _scratch = new List<int>();
         private int _nextId = 1;
 
@@ -43,6 +44,8 @@ namespace Oxfall.Core.Rules
             Grid = new BuildingGrid();
             // A piece that falls takes its owner record with it.
             Grid.PieceRemoved += (piece, tier) => _owners.Remove(piece);
+            // A lock goes with the door it is on.
+            Grid.DoorRemoved += edge => RemoveLock(LockTarget.Door(edge));
         }
 
         public IslandGround Ground { get; }
@@ -84,6 +87,7 @@ namespace Oxfall.Core.Rules
             _lit.Remove(id);
             _authorized.Remove(id);
             _bagReady.Remove(id);
+            RemoveLock(LockTarget.On(id));
             DeployableRemoved?.Invoke(id);
             return true;
         }
@@ -171,6 +175,86 @@ namespace Oxfall.Core.Rules
                 if (d.Kind == DeployableKind.SleepingBag && d.Owner == owner) yield return d;
         }
 
+        // ---- Code locks
+
+        /// <summary>A lock was put on, taken off, locked or unlocked, or someone entered its code.</summary>
+        public event Action<LockTarget> LockChanged;
+
+        /// <summary>A lock was taken off (or went with its door or box), with whoever had put it on.</summary>
+        public event Action<LockTarget, int> LockRemoved;
+
+        public IEnumerable<KeyValuePair<LockTarget, CodeLockState>> Locks => _locks;
+
+        public bool HasLock(LockTarget target) => _locks.ContainsKey(target);
+
+        public bool TryGetLock(LockTarget target, out CodeLockState state) => _locks.TryGetValue(target, out state);
+
+        /// <summary>Whether a lock can go on this: a door that hangs, or a box or tool cupboard.</summary>
+        public bool IsLockable(LockTarget target) => target.IsDoor
+            ? Grid.HasDoor(target.Edge)
+            : _deployables.TryGetValue(target.Id, out var d) && CodeLocks.Lockable(d.Kind);
+
+        /// <summary>
+        /// Whether this player can get through: no lock, an open one, or one they know the code of.
+        /// </summary>
+        public bool CanPass(LockTarget target, int owner) =>
+            !_locks.TryGetValue(target, out var l) || !l.Locked || l.Authorized.Contains(owner);
+
+        /// <summary>Puts a lock on, open and with no code yet. False if there is one already or nothing to lock.</summary>
+        public bool AddLock(LockTarget target, int owner)
+        {
+            if (_locks.ContainsKey(target) || !IsLockable(target)) return false;
+            _locks.Add(target, new CodeLockState { Owner = owner });
+            LockChanged?.Invoke(target);
+            return true;
+        }
+
+        public bool RemoveLock(LockTarget target)
+        {
+            if (!_locks.TryGetValue(target, out var l)) return false;
+            _locks.Remove(target);
+            LockRemoved?.Invoke(target, l.Owner);
+            LockChanged?.Invoke(target);
+            return true;
+        }
+
+        /// <summary>
+        /// A new code (or <see cref="CodeLocks.Hidden"/> on a copy): the lock locks, and only whoever
+        /// set it knows it now, as in the PC game.
+        /// </summary>
+        public void SetCode(LockTarget target, int code, int setter)
+        {
+            if (!_locks.TryGetValue(target, out var l)) return;
+            l.Code = code;
+            l.Locked = true;
+            l.Authorized.Clear();
+            l.Authorized.Add(setter);
+            LockChanged?.Invoke(target);
+        }
+
+        /// <summary>Whether this is the lock's code (never, on a copy that does not know it).</summary>
+        public bool CodeMatches(LockTarget target, int code) =>
+            _locks.TryGetValue(target, out var l) && CodeLocks.IsValidCode(l.Code) && l.Code == code;
+
+        /// <summary>Someone entered the right code: they get through from now on.</summary>
+        public void AuthorizeLock(LockTarget target, int owner)
+        {
+            if (_locks.TryGetValue(target, out var l) && l.Authorized.Add(owner)) LockChanged?.Invoke(target);
+        }
+
+        public void SetLocked(LockTarget target, bool locked)
+        {
+            if (!_locks.TryGetValue(target, out var l) || l.Locked == locked) return;
+            l.Locked = locked;
+            LockChanged?.Invoke(target);
+        }
+
+        /// <summary>Puts a saved code back (the settlement as described carries only hidden ones).</summary>
+        public void RestoreCode(LockTarget target, int code)
+        {
+            if (_locks.TryGetValue(target, out var l) && CodeLocks.IsValidCode(code)) l.Code = code;
+        }
+
         // ---- Building pieces
 
         /// <summary>Every piece someone in particular built, with who (for saving).</summary>
@@ -247,6 +331,8 @@ namespace Oxfall.Core.Rules
             foreach (var piece in rest) Grid.Remove(piece);
             var all = new List<int>(_deployables.Keys);
             foreach (int id in all) Remove(id);
+            var locks = new List<LockTarget>(_locks.Keys);
+            foreach (var target in locks) RemoveLock(target);
             _owners.Clear();
             _nextId = 1;
         }

@@ -58,11 +58,35 @@ namespace Oxfall.Core.Gathering
             switch (type)
             {
                 case ResourceNodeType.Tree:
-                    return tool == ToolKind.Hatchet ? 30 : tool == ToolKind.Rock ? 15 : tool == ToolKind.Pickaxe ? 10 : 0;
+                    switch (tool)
+                    {
+                        case ToolKind.MetalHatchet: return 50;
+                        case ToolKind.Hatchet: return 30;
+                        case ToolKind.MetalPickaxe: return 15;
+                        case ToolKind.Rock: return 15;
+                        case ToolKind.Pickaxe: return 10;
+                        default: return 0;
+                    }
                 case ResourceNodeType.Stone:
-                    return tool == ToolKind.Pickaxe ? 40 : tool == ToolKind.Rock ? 20 : tool == ToolKind.Hatchet ? 10 : 0;
+                    switch (tool)
+                    {
+                        case ToolKind.MetalPickaxe: return 65;
+                        case ToolKind.Pickaxe: return 40;
+                        case ToolKind.Rock: return 20;
+                        case ToolKind.MetalHatchet: return 15;
+                        case ToolKind.Hatchet: return 10;
+                        default: return 0;
+                    }
                 case ResourceNodeType.MetalOre:
-                    return tool == ToolKind.Pickaxe ? 24 : tool == ToolKind.Rock ? 10 : tool == ToolKind.Hatchet ? 5 : 0;
+                    switch (tool)
+                    {
+                        case ToolKind.MetalPickaxe: return 40;
+                        case ToolKind.Pickaxe: return 24;
+                        case ToolKind.Rock: return 10;
+                        case ToolKind.MetalHatchet: return 8;
+                        case ToolKind.Hatchet: return 5;
+                        default: return 0;
+                    }
                 case ResourceNodeType.Hemp:
                 case ResourceNodeType.BerryBush:
                     return Capacity(type); // picked by hand in one go, any tool or none

@@ -99,6 +99,14 @@ namespace Oxfall.Core.Crafting
                 new Ingredient(ItemIds.Stone, 200), new Ingredient(ItemIds.Wood, 100)),
             new Recipe("tool_cupboard", ItemIds.ToolCupboard, 1, 20f,
                 new Ingredient(ItemIds.Wood, 500)),
+            new Recipe("metal_hatchet", ItemIds.MetalHatchet, 1, 15f,
+                new Ingredient(ItemIds.Wood, 100), new Ingredient(ItemIds.MetalFragments, 75)),
+            new Recipe("metal_pickaxe", ItemIds.MetalPickaxe, 1, 15f,
+                new Ingredient(ItemIds.Wood, 100), new Ingredient(ItemIds.MetalFragments, 125)),
+            new Recipe("sheet_metal_door", ItemIds.SheetMetalDoor, 1, 20f,
+                new Ingredient(ItemIds.MetalFragments, 150)),
+            new Recipe("code_lock", ItemIds.CodeLock, 1, 10f,
+                new Ingredient(ItemIds.MetalFragments, 100)),
         });
     }
 }

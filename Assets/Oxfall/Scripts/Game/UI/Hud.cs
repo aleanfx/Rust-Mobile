@@ -66,6 +66,7 @@ namespace Oxfall.Game.UI
         public RectTransform CraftButton { get; private set; }
         public RectTransform PieceButton { get; private set; }
         public RectTransform UseButton { get; private set; }
+        public RectTransform LockButton { get; private set; }
 
         /// <summary>The area clear of notches and rounded corners; everything on screen hangs from it.</summary>
         public RectTransform SafeArea => _safeArea;
@@ -81,6 +82,7 @@ namespace Oxfall.Game.UI
 
         public event System.Action PieceTapped;
         public event System.Action UseTapped;
+        public event System.Action LockTapped;
         public event System.Action CraftPanelOpened;
         /// <summary>A graphics level was chosen in settings: 0 low, 1 medium, 2 high.</summary>
         public event System.Action<int> QualityChosen;
@@ -206,6 +208,16 @@ namespace Oxfall.Game.UI
             TapTargets.Add(new TapTarget { Rect = UseButton, OnTap = () => UseTapped?.Invoke() });
             UseButton.gameObject.SetActive(false);
 
+            // Above use, on a code lock the player knows: its keypad (lock, unlock, new code, take off).
+            LockButton = UiFactory.NewRect("Lock", _safeArea, bottomRight, centre, new Vector2(-660f, 392f), new Vector2(116f, 116f));
+            UiFactory.AddImage(LockButton, UiFactory.Circle, UiTheme.Button);
+            AddRing(LockButton, 116f);
+            _lockIcon = UiFactory.AddIcon(LockButton, Icons.Lock, new Vector2(0f, 10f), 46f, UiTheme.Text);
+            var lockLabel = UiFactory.NewRect("Label", LockButton, centre, centre, new Vector2(0f, -32f), new Vector2(116f, 26f));
+            UiFactory.AddText(lockLabel, "CANDADO", 18, TextAnchor.MiddleCenter, UiTheme.TextMuted, true);
+            TapTargets.Add(new TapTarget { Rect = LockButton, OnTap = () => LockTapped?.Invoke() });
+            LockButton.gameObject.SetActive(false);
+
             BuildSettings();
         }
 
@@ -289,6 +301,18 @@ namespace Oxfall.Game.UI
         }
 
         private Image _useIcon;
+        private Image _lockIcon;
+
+        /// <summary>The lock button, shown on a lock the player may manage, its pictogram locked or open.</summary>
+        public void SetLockButton(bool show, bool locked)
+        {
+            if (LockButton.gameObject.activeSelf != show) LockButton.gameObject.SetActive(show);
+            if (!show) return;
+            var sprite = locked ? Icons.Lock : Icons.Unlock;
+            if (_lockIcon.sprite != sprite) _lockIcon.sprite = sprite;
+            var colour = locked ? UiTheme.Good : UiTheme.Accent;
+            if (_lockIcon.color != colour) _lockIcon.color = colour;
+        }
 
         /// <summary>A line under the crosshair about what is aimed at; empty or null hides it.</summary>
         public void SetAimInfo(string text)

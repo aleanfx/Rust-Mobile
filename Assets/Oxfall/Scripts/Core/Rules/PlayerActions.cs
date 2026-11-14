@@ -37,6 +37,9 @@ namespace Oxfall.Core.Rules
         NotReady,
         TooClose,
         NotOpen,
+        Locked,
+        WrongCode,
+        NoLock,
     }
 
     /// <summary>
@@ -172,11 +175,12 @@ namespace Oxfall.Core.Rules
         // ---- Boxes and furnaces
 
         /// <summary>Opens a box or furnace within reach: from now on its slots can be moved to and from.</summary>
-        public static ActionResult Open(Settlement settlement, Survivor s, int id, float x, float y, float z)
+        public static ActionResult Open(Settlement settlement, Survivor s, int owner, int id, float x, float y, float z)
         {
             if (s.Vitals.IsDead) return ActionResult.Dead;
             if (!settlement.TryGet(id, out var d) || settlement.Container(id) == null) return ActionResult.NoPiece;
             if (!Near(x, y, z, d.X, d.Y, d.Z, UseReach)) return ActionResult.TooFar;
+            if (!settlement.CanPass(LockTarget.On(id), owner)) return ActionResult.Locked;
             s.Looting = id;
             return ActionResult.Ok;
         }
@@ -305,14 +309,17 @@ namespace Oxfall.Core.Rules
                     {
                         foreach (var item in BuildCosts.Refund(fallen.Type, tier)) s.Inventory.Add(item.ItemId, item.Amount);
                     }
-                    void ReturnDoor(Edge e) => s.Inventory.Add(ItemIds.WoodenDoor, 1);
+                    void ReturnDoor(Edge e) => s.Inventory.Add(DoorKinds.ItemOf(grid.DoorKindOf(e)), 1);
+                    void ReturnLock(LockTarget t, int lockOwner) => s.Inventory.Add(ItemIds.CodeLock, 1);
                     grid.PieceRemoved += Refund;
                     grid.DoorRemoved += ReturnDoor;
+                    settlement.LockRemoved += ReturnLock;
                     try { grid.Remove(piece); }
                     finally
                     {
                         grid.PieceRemoved -= Refund;
                         grid.DoorRemoved -= ReturnDoor;
+                        settlement.LockRemoved -= ReturnLock;
                     }
                     done = BuildOp.Remove(piece);
                     return ActionResult.Ok;
@@ -324,10 +331,12 @@ namespace Oxfall.Core.Rules
                     if (can != PlaceResult.Ok) return From(can);
                     if (!Near(x, y, z, EdgePoint(grid, edge), UseReach)) return ActionResult.TooFar;
                     if (!Privileged(settlement, owner, EdgePoint(grid, edge))) return ActionResult.BuildingBlocked;
-                    if (!s.Inventory.Has(ItemIds.WoodenDoor, 1)) return ActionResult.NotEnoughResources;
-                    grid.PlaceDoor(edge);
-                    s.Inventory.Remove(ItemIds.WoodenDoor, 1);
-                    done = BuildOp.Door(edge);
+                    if (!DoorKinds.IsKnown(op.DoorKind)) return ActionResult.Invalid;
+                    string item = DoorKinds.ItemOf(op.DoorKind);
+                    if (!s.Inventory.Has(item, 1)) return ActionResult.NotEnoughResources;
+                    grid.PlaceDoor(edge, op.DoorKind);
+                    s.Inventory.Remove(item, 1);
+                    done = BuildOp.Door(edge, op.DoorKind);
                     return ActionResult.Ok;
                 }
                 case BuildOpKind.ToggleDoor:
@@ -335,6 +344,7 @@ namespace Oxfall.Core.Rules
                     var edge = op.EdgeAt;
                     if (!grid.HasDoor(edge)) return ActionResult.NoDoor;
                     if (!Near(x, y, z, EdgePoint(grid, edge), UseReach)) return ActionResult.TooFar;
+                    if (!settlement.CanPass(LockTarget.Door(edge), owner)) return ActionResult.Locked;
                     grid.ToggleDoor(edge);
                     done = BuildOp.ToggleDoor(edge, grid.IsDoorOpen(edge));
                     return ActionResult.Ok;
@@ -356,12 +366,17 @@ namespace Oxfall.Core.Rules
                     if (!settlement.TryGet(op.Id, out var d)) return ActionResult.NoPiece;
                     if (d.Owner != 0 && d.Owner != owner) return ActionResult.NotYours;
                     if (!Near(x, y, z, d.X, d.Y, d.Z, UseReach)) return ActionResult.TooFar;
+                    var target = LockTarget.On(d.Id);
+                    if (!settlement.CanPass(target, owner)) return ActionResult.Locked;
                     var box = settlement.Container(d.Id);
                     if ((box != null && !box.IsEmpty) || settlement.IsLit(d.Id)) return ActionResult.NotEmpty;
                     string item = Deployables.ItemOf(d.Kind);
-                    if (s.Inventory.SpaceFor(item) < 1) return ActionResult.NoSpace;
+                    bool locked = settlement.HasLock(target);
+                    if (s.Inventory.SpaceFor(item) < 1 || (locked && FreeSlots(s.Inventory) < 2)) return ActionResult.NoSpace;
                     settlement.Remove(d.Id);
                     s.Inventory.Add(item, 1);
+                    // Its lock comes off with it.
+                    if (locked) s.Inventory.Add(ItemIds.CodeLock, 1);
                     done = BuildOp.Pickup(d.Id);
                     return ActionResult.Ok;
                 }
@@ -380,6 +395,7 @@ namespace Oxfall.Core.Rules
                     if (!settlement.TryGet(op.Id, out var d)) return ActionResult.NoPiece;
                     if (d.Kind != DeployableKind.ToolCupboard) return ActionResult.Invalid;
                     if (!Near(x, y, z, d.X, d.Y, d.Z, UseReach)) return ActionResult.TooFar;
+                    if (!settlement.CanPass(LockTarget.On(d.Id), owner)) return ActionResult.Locked;
                     settlement.Authorize(d.Id, owner);
                     done = BuildOp.Authorize(d.Id, owner);
                     return ActionResult.Ok;
@@ -389,14 +405,101 @@ namespace Oxfall.Core.Rules
                     if (!settlement.TryGet(op.Id, out var d)) return ActionResult.NoPiece;
                     if (d.Kind != DeployableKind.ToolCupboard) return ActionResult.Invalid;
                     if (!Near(x, y, z, d.X, d.Y, d.Z, UseReach)) return ActionResult.TooFar;
+                    if (!settlement.CanPass(LockTarget.On(d.Id), owner)) return ActionResult.Locked;
                     if (!settlement.IsAuthorized(d.Id, owner)) return ActionResult.NotYours;
                     settlement.ClearAuthorized(d.Id);
                     done = BuildOp.ClearAuthorized(d.Id);
                     return ActionResult.Ok;
                 }
+                case BuildOpKind.PlaceLock:
+                case BuildOpKind.SetCode:
+                case BuildOpKind.EnterCode:
+                case BuildOpKind.SetLocked:
+                case BuildOpKind.RemoveLock:
+                    return Lock(settlement, s, owner, op, x, y, z, out done);
+                default:
+                    // LockAuthorize and the like are the server's word, never a player's.
+                    return ActionResult.Invalid;
+            }
+        }
+
+        // ---- Code locks
+
+        /// <summary>
+        /// Code locks: putting one on (within reach, where the player may build), choosing its code
+        /// (which locks it), trying a code (a wrong one shocks), locking and unlocking, and taking it off.
+        /// </summary>
+        private static ActionResult Lock(Settlement settlement, Survivor s, int owner, BuildOp op, float x, float y, float z,
+            out BuildOp done)
+        {
+            done = op;
+            var target = op.Lock;
+            if (!settlement.IsLockable(target)) return target.IsDoor ? ActionResult.NoDoor : ActionResult.NoPiece;
+            var at = LockPoint(settlement, target);
+            if (!Near(x, y, z, at, UseReach)) return ActionResult.TooFar;
+            if (op.Kind == BuildOpKind.PlaceLock)
+            {
+                if (settlement.HasLock(target)) return ActionResult.Occupied;
+                if (!Privileged(settlement, owner, at)) return ActionResult.BuildingBlocked;
+                if (!s.Inventory.Has(ItemIds.CodeLock, 1)) return ActionResult.NotEnoughResources;
+                s.Inventory.Remove(ItemIds.CodeLock, 1);
+                settlement.AddLock(target, owner);
+                done = BuildOp.PlaceLock(target, owner);
+                return ActionResult.Ok;
+            }
+
+            if (!settlement.TryGetLock(target, out var l)) return ActionResult.NoLock;
+            switch (op.Kind)
+            {
+                case BuildOpKind.SetCode:
+                    if (!CodeLocks.IsValidCode(op.Code)) return ActionResult.Invalid;
+                    if (!l.CanManage(owner)) return ActionResult.Locked;
+                    settlement.SetCode(target, op.Code, owner);
+                    // Everyone else learns that it is locked, and by whom, but never the code.
+                    done = BuildOp.SetCode(target, CodeLocks.Hidden, owner);
+                    return ActionResult.Ok;
+                case BuildOpKind.EnterCode:
+                    if (!l.HasCode) return ActionResult.NoLock;
+                    if (!settlement.CodeMatches(target, op.Code))
+                    {
+                        s.Vitals.Damage(CodeLocks.WrongCodeShock);
+                        return ActionResult.WrongCode;
+                    }
+                    settlement.AuthorizeLock(target, owner);
+                    done = BuildOp.LockAuthorize(target, owner);
+                    return ActionResult.Ok;
+                case BuildOpKind.SetLocked:
+                    if (!l.CanManage(owner)) return ActionResult.Locked;
+                    if (op.Open && !l.HasCode) return ActionResult.NoLock;
+                    settlement.SetLocked(target, op.Open);
+                    done = BuildOp.SetLocked(target, op.Open);
+                    return ActionResult.Ok;
+                case BuildOpKind.RemoveLock:
+                    if (!l.CanManage(owner)) return ActionResult.Locked;
+                    if (s.Inventory.SpaceFor(ItemIds.CodeLock) < 1) return ActionResult.NoSpace;
+                    settlement.RemoveLock(target);
+                    s.Inventory.Add(ItemIds.CodeLock, 1);
+                    done = BuildOp.RemoveLock(target);
+                    return ActionResult.Ok;
                 default:
                     return ActionResult.Invalid;
             }
+        }
+
+        /// <summary>Where a lock sits, for reach checks: on the door, or on the box or cupboard.</summary>
+        public static (float X, float Y, float Z) LockPoint(Settlement settlement, LockTarget target)
+        {
+            if (target.IsDoor) return EdgePoint(settlement.Grid, target.Edge);
+            settlement.TryGet(target.Id, out var d);
+            return (d.X, d.Y, d.Z);
+        }
+
+        private static int FreeSlots(Inventory inventory)
+        {
+            int free = 0;
+            for (int i = 0; i < inventory.SlotCount; i++)
+                if (inventory[i].IsEmpty) free++;
+            return free;
         }
 
         /// <summary>

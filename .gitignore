@@ -26,3 +26,6 @@ TestResults/
 .vscode/
 .idea/
 /.keystore/
+
+# A local server run saves its island here.
+*.sav

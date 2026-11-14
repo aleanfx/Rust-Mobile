@@ -20,6 +20,12 @@ namespace Oxfall.Core.Rules
         Light = 10,
         Authorize = 11,
         ClearAuthorized = 12,
+        PlaceLock = 13,
+        SetCode = 14,
+        EnterCode = 15,
+        LockAuthorize = 16,
+        SetLocked = 17,
+        RemoveLock = 18,
     }
 
     /// <summary>
@@ -42,9 +48,13 @@ namespace Oxfall.Core.Rules
         /// <summary>The thing set down (Deploy), or the one acted on: its id, and for Authorize who.</summary>
         public readonly Deployable Deployed;
 
+        /// <summary>A lock's code (SetCode, EnterCode), or what a door is made of (Door).</summary>
+        public readonly int Code;
+
         private BuildOp(BuildOpKind kind, PieceType type, int x, int z, EdgeAxis axis, BuildingTier tier = BuildingTier.Twig,
-            bool open = false, float top = 0f, Deployable deployed = default)
+            bool open = false, float top = 0f, Deployable deployed = default, int code = 0)
         {
+            Code = code;
             Kind = kind;
             Type = type;
             X = x;
@@ -68,7 +78,10 @@ namespace Oxfall.Core.Rules
 
         public static BuildOp Remove(PieceRef piece) => OnPiece(BuildOpKind.Remove, piece, BuildingTier.Twig);
 
-        public static BuildOp Door(Edge edge) => new BuildOp(BuildOpKind.Door, PieceType.Doorway, edge.X, edge.Z, edge.Axis);
+        public static BuildOp Door(Edge edge, DoorKind kind = DoorKind.Wood) =>
+            new BuildOp(BuildOpKind.Door, PieceType.Doorway, edge.X, edge.Z, edge.Axis, code: (int)kind);
+
+        public DoorKind DoorKind => (DoorKind)Code;
 
         public static BuildOp ToggleDoor(Edge edge, bool open) =>
             new BuildOp(BuildOpKind.ToggleDoor, PieceType.Doorway, edge.X, edge.Z, edge.Axis, open: open);
@@ -91,6 +104,38 @@ namespace Oxfall.Core.Rules
         /// <summary>Empties a tool cupboard's list.</summary>
         public static BuildOp ClearAuthorized(int cupboard) => OnDeployable(BuildOpKind.ClearAuthorized, cupboard);
 
+        // ---- Code locks (on a door: the edge; on a box or cupboard: its id)
+
+        /// <summary>Puts a code lock on (asking, the server fills in whose it is).</summary>
+        public static BuildOp PlaceLock(LockTarget target, int owner = 0) => OnLock(BuildOpKind.PlaceLock, target, owner: owner);
+
+        /// <summary>
+        /// Sets the code and locks. The server tells everyone else <see cref="CodeLocks.Hidden"/> in
+        /// place of the code, with who set it.
+        /// </summary>
+        public static BuildOp SetCode(LockTarget target, int code, int owner = 0) => OnLock(BuildOpKind.SetCode, target, code, owner);
+
+        /// <summary>Tries a code (sent to the server only; it answers with <see cref="LockAuthorize"/>).</summary>
+        public static BuildOp EnterCode(LockTarget target, int code) => OnLock(BuildOpKind.EnterCode, target, code);
+
+        /// <summary>Someone got the code right.</summary>
+        public static BuildOp LockAuthorize(LockTarget target, int owner) => OnLock(BuildOpKind.LockAuthorize, target, owner: owner);
+
+        public static BuildOp SetLocked(LockTarget target, bool locked) => OnLock(BuildOpKind.SetLocked, target, open: locked);
+
+        /// <summary>Takes a lock off (it goes back in the inventory).</summary>
+        public static BuildOp RemoveLock(LockTarget target) => OnLock(BuildOpKind.RemoveLock, target);
+
+        private static BuildOp OnLock(BuildOpKind kind, LockTarget target, int code = 0, int owner = 0, bool open = false) => target.IsDoor
+            ? new BuildOp(kind, PieceType.Doorway, target.Edge.X, target.Edge.Z, target.Edge.Axis, open: open,
+                deployed: Target(0).WithOwner(owner), code: code)
+            : new BuildOp(kind, PieceType.Foundation, 0, 0, default, open: open, deployed: Target(target.Id).WithOwner(owner), code: code);
+
+        /// <summary>What a lock op is about.</summary>
+        public LockTarget Lock => Type == PieceType.Doorway ? LockTarget.Door(EdgeAt) : LockTarget.On(Id);
+
+        public bool IsLockOp => Kind >= BuildOpKind.PlaceLock && Kind <= BuildOpKind.RemoveLock;
+
         private static BuildOp OnDeployable(BuildOpKind kind, int id) =>
             new BuildOp(kind, PieceType.Foundation, 0, 0, default, deployed: Target(id));
 
@@ -110,9 +155,9 @@ namespace Oxfall.Core.Rules
             ? PieceRef.OnEdge(EdgeAt, Type)
             : Type == PieceType.Roof ? PieceRef.Roof(Cell) : PieceRef.Foundation(Cell);
 
-        public BuildOp WithTop(float top) => new BuildOp(Kind, Type, X, Z, Axis, Tier, Open, top, Deployed);
-        public BuildOp WithTier(BuildingTier tier) => new BuildOp(Kind, Type, X, Z, Axis, tier, Open, Top, Deployed);
-        public BuildOp WithOpen(bool open) => new BuildOp(Kind, Type, X, Z, Axis, Tier, open, Top, Deployed);
+        public BuildOp WithTop(float top) => new BuildOp(Kind, Type, X, Z, Axis, Tier, Open, top, Deployed, Code);
+        public BuildOp WithTier(BuildingTier tier) => new BuildOp(Kind, Type, X, Z, Axis, tier, Open, Top, Deployed, Code);
+        public BuildOp WithOpen(bool open) => new BuildOp(Kind, Type, X, Z, Axis, Tier, open, Top, Deployed, Code);
 
         public override string ToString()
         {
@@ -123,6 +168,13 @@ namespace Oxfall.Core.Rules
                 case BuildOpKind.Light: return $"Light {Id} {(Open ? "on" : "off")}";
                 case BuildOpKind.Authorize: return $"Authorize {Deployed.Owner} on {Id}";
                 case BuildOpKind.ClearAuthorized: return "ClearAuthorized " + Id;
+                case BuildOpKind.Door: return $"Door {DoorKind} {EdgeAt}";
+                case BuildOpKind.PlaceLock: return $"PlaceLock {Lock} by {Deployed.Owner}";
+                case BuildOpKind.SetCode: return $"SetCode {Lock} by {Deployed.Owner}";
+                case BuildOpKind.EnterCode: return $"EnterCode {Lock}";
+                case BuildOpKind.LockAuthorize: return $"LockAuthorize {Deployed.Owner} on {Lock}";
+                case BuildOpKind.SetLocked: return $"SetLocked {Lock} {(Open ? "locked" : "open")}";
+                case BuildOpKind.RemoveLock: return $"RemoveLock {Lock}";
                 default: return $"{Kind} {Type} ({X},{Z}{(PieceRef.IsEdgeType(Type) ? "," + Axis : "")})";
             }
         }
@@ -163,6 +215,7 @@ namespace Oxfall.Core.Rules
                     w.Int(Z);
                     w.Byte((byte)Axis);
                     w.Bool(Open);
+                    if (Kind == BuildOpKind.Door) w.Byte((byte)DoorKind);
                     break;
                 case BuildOpKind.Deploy:
                     w.Int(Deployed.Id);
@@ -184,6 +237,27 @@ namespace Oxfall.Core.Rules
                 case BuildOpKind.Authorize:
                     w.Int(Id);
                     w.Int(Deployed.Owner);
+                    break;
+                case BuildOpKind.PlaceLock:
+                case BuildOpKind.LockAuthorize:
+                    WriteLock(w);
+                    w.Int(Deployed.Owner);
+                    break;
+                case BuildOpKind.SetCode:
+                    WriteLock(w);
+                    w.Int(Code);
+                    w.Int(Deployed.Owner);
+                    break;
+                case BuildOpKind.EnterCode:
+                    WriteLock(w);
+                    w.Int(Code);
+                    break;
+                case BuildOpKind.SetLocked:
+                    WriteLock(w);
+                    w.Bool(Open);
+                    break;
+                case BuildOpKind.RemoveLock:
+                    WriteLock(w);
                     break;
                 default:
                     throw new InvalidOperationException("Unknown build op " + Kind);
@@ -226,7 +300,10 @@ namespace Oxfall.Core.Rules
                 {
                     var edge = new Edge(Coordinate(r), Coordinate(r), ReadAxis(r));
                     bool open = r.Bool();
-                    return kind == BuildOpKind.Door ? Door(edge) : ToggleDoor(edge, open);
+                    if (kind == BuildOpKind.ToggleDoor) return ToggleDoor(edge, open);
+                    var door = (DoorKind)r.Byte();
+                    if (!DoorKinds.IsKnown(door)) throw new ProtocolException("Unknown door.");
+                    return Door(edge, door);
                 }
                 case BuildOpKind.Deploy:
                 {
@@ -251,10 +328,55 @@ namespace Oxfall.Core.Rules
                     int id = r.Int();
                     return Authorize(id, r.Int());
                 }
+                case BuildOpKind.PlaceLock:
+                {
+                    var target = ReadLock(r);
+                    return PlaceLock(target, r.Int());
+                }
+                case BuildOpKind.LockAuthorize:
+                {
+                    var target = ReadLock(r);
+                    return LockAuthorize(target, r.Int());
+                }
+                case BuildOpKind.SetCode:
+                {
+                    var target = ReadLock(r);
+                    int code = r.Int();
+                    return SetCode(target, code, r.Int());
+                }
+                case BuildOpKind.EnterCode:
+                {
+                    var target = ReadLock(r);
+                    return EnterCode(target, r.Int());
+                }
+                case BuildOpKind.SetLocked:
+                {
+                    var target = ReadLock(r);
+                    return SetLocked(target, r.Bool());
+                }
+                case BuildOpKind.RemoveLock:
+                    return RemoveLock(ReadLock(r));
                 default:
                     throw new ProtocolException("Unknown build op " + (byte)kind + ".");
             }
         }
+
+        private void WriteLock(NetWriter w)
+        {
+            var target = Lock;
+            w.Bool(target.IsDoor);
+            if (target.IsDoor)
+            {
+                w.Int(target.Edge.X);
+                w.Int(target.Edge.Z);
+                w.Byte((byte)target.Edge.Axis);
+            }
+            else w.Int(target.Id);
+        }
+
+        private static LockTarget ReadLock(NetReader r) => r.Bool()
+            ? LockTarget.Door(new Edge(Coordinate(r), Coordinate(r), ReadAxis(r)))
+            : LockTarget.On(r.Int());
 
         private static int Coordinate(NetReader r)
         {
@@ -301,7 +423,7 @@ namespace Oxfall.Core.Rules
                 case BuildOpKind.Roof: return grid.PlaceRoof(op.Cell) == PlaceResult.Ok;
                 case BuildOpKind.Upgrade: return grid.Upgrade(Stored(grid, op.Piece), op.Tier) == PlaceResult.Ok;
                 case BuildOpKind.Remove: return grid.Remove(Stored(grid, op.Piece));
-                case BuildOpKind.Door: return grid.PlaceDoor(op.EdgeAt) == PlaceResult.Ok;
+                case BuildOpKind.Door: return grid.PlaceDoor(op.EdgeAt, op.DoorKind) == PlaceResult.Ok;
                 case BuildOpKind.ToggleDoor:
                     if (!grid.HasDoor(op.EdgeAt)) return false;
                     return grid.IsDoorOpen(op.EdgeAt) == op.Open || grid.ToggleDoor(op.EdgeAt);
@@ -322,6 +444,22 @@ namespace Oxfall.Core.Rules
                     if (!settlement.TryGet(op.Id, out _)) return false;
                     settlement.ClearAuthorized(op.Id);
                     return true;
+                case BuildOpKind.PlaceLock:
+                    return settlement.AddLock(op.Lock, op.Deployed.Owner);
+                case BuildOpKind.SetCode:
+                    if (!settlement.HasLock(op.Lock)) return false;
+                    settlement.SetCode(op.Lock, op.Code, op.Deployed.Owner);
+                    return true;
+                case BuildOpKind.LockAuthorize:
+                    if (!settlement.HasLock(op.Lock)) return false;
+                    settlement.AuthorizeLock(op.Lock, op.Deployed.Owner);
+                    return true;
+                case BuildOpKind.SetLocked:
+                    if (!settlement.HasLock(op.Lock)) return false;
+                    settlement.SetLocked(op.Lock, op.Open);
+                    return true;
+                case BuildOpKind.RemoveLock:
+                    return settlement.RemoveLock(op.Lock);
                 default:
                     return false;
             }
@@ -356,7 +494,7 @@ namespace Oxfall.Core.Rules
             ops.AddRange(upgrades);
             foreach (var d in grid.Doors)
             {
-                ops.Add(BuildOp.Door(d.Key));
+                ops.Add(BuildOp.Door(d.Key, grid.DoorKindOf(d.Key)));
                 if (d.Value) ops.Add(BuildOp.ToggleDoor(d.Key, true));
             }
             foreach (var d in settlement.Deployables)
@@ -367,6 +505,21 @@ namespace Oxfall.Core.Rules
                 // A cupboard starts with its owner on it; the list as it is now replaces that.
                 ops.Add(BuildOp.ClearAuthorized(d.Id));
                 foreach (int owner in settlement.AuthorizedOn(d.Id)) ops.Add(BuildOp.Authorize(d.Id, owner));
+            }
+            // Locks, with their codes hidden: who put each on, who knows its code, and whether it is locked.
+            foreach (var pair in settlement.Locks)
+            {
+                var l = pair.Value;
+                ops.Add(BuildOp.PlaceLock(pair.Key, l.Owner));
+                if (!l.HasCode) continue;
+                // Setting the code leaves only its setter on the list: any one of those on it will do.
+                bool first = true;
+                foreach (int owner in l.AuthorizedOwners)
+                {
+                    ops.Add(first ? BuildOp.SetCode(pair.Key, CodeLocks.Hidden, owner) : BuildOp.LockAuthorize(pair.Key, owner));
+                    first = false;
+                }
+                if (!l.Locked) ops.Add(BuildOp.SetLocked(pair.Key, false));
             }
             return ops;
         }

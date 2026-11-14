@@ -131,7 +131,7 @@ namespace Oxfall.Game.Net
         public ActionResult Open(int id)
         {
             var p = _player.position;
-            if (!Online) return PlayerActions.Open(_settlement, _survivor, id, p.x, p.y, p.z);
+            if (!Online) return PlayerActions.Open(_settlement, _survivor, 0, id, p.x, p.y, p.z);
             if (_settlement.Container(id) == null) return ActionResult.NoPiece;
             // The copy opens at once; what is inside arrives from the server a moment later.
             _survivor.Looting = id;
@@ -203,6 +203,9 @@ namespace Oxfall.Game.Net
                 case ActionResult.NotReady: return "El saco aún no está listo";
                 case ActionResult.TooClose: return "Está demasiado cerca de otra cosa";
                 case ActionResult.NotOpen: return "Ábrelo primero";
+                case ActionResult.Locked: return "Cerrado con candado";
+                case ActionResult.WrongCode: return $"Código incorrecto: descarga de {CodeLocks.WrongCodeShock:0} de vida";
+                case ActionResult.NoLock: return "No tiene candado con código";
                 default: return "No se puede";
             }
         }

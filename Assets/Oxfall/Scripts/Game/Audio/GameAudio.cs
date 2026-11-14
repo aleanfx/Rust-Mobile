@@ -15,6 +15,9 @@ namespace Oxfall.Game.Audio
         Place,
         Crafted,
         Tap,
+        KeyBeep,
+        Accepted,
+        Denied,
     }
 
     /// <summary>
@@ -96,6 +99,9 @@ namespace Oxfall.Game.Audio
                 case SoundCue.Place: Shot(_bank.Place, 0.9f, 0.05f); break;
                 case SoundCue.Crafted: Shot(_bank.Crafted, 0.6f, 0f); break;
                 case SoundCue.Tap: Shot(_bank.Tap, 0.5f, 0.05f); break;
+                case SoundCue.KeyBeep: Shot(_bank.KeyBeep, 0.6f, 0.03f); break;
+                case SoundCue.Accepted: Shot(_bank.Accepted, 0.7f, 0f); break;
+                case SoundCue.Denied: Shot(_bank.Denied, 0.85f, 0f); break;
             }
         }
 

@@ -20,6 +20,8 @@ namespace Oxfall.Core.Items
         Pickaxe,
         Torch,
         Hammer,
+        MetalHatchet,
+        MetalPickaxe,
     }
 
     /// <summary>

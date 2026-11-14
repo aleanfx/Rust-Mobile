@@ -65,7 +65,11 @@ namespace Oxfall.Core.Items
             new ItemDefinition(ItemIds.Torch, "Antorcha", ItemCategory.Tool, 1, ToolKind.Torch, skinnable: true,
                 description: "Alumbra de noche."),
             new ItemDefinition(ItemIds.Hammer, "Martillo", ItemCategory.Tool, 1, ToolKind.Hammer, skinnable: true,
-                description: "Apunta a lo que construiste y toca MEJORAR: ramas, madera, piedra. También demuele."),
+                description: "Apunta a lo que construiste y toca MEJORAR: ramas, madera, piedra, metal. También demuele."),
+            new ItemDefinition(ItemIds.MetalHatchet, "Hacha de metal", ItemCategory.Tool, 1, ToolKind.MetalHatchet, skinnable: true,
+                description: "Tala árboles mucho más rápido que la de piedra."),
+            new ItemDefinition(ItemIds.MetalPickaxe, "Pico de metal", ItemCategory.Tool, 1, ToolKind.MetalPickaxe, skinnable: true,
+                description: "Pica piedra y mineral mucho más rápido que el de piedra."),
 
             new ItemDefinition(ItemIds.BuildingPlan, "Plano de construcción", ItemCategory.Placeable, 1,
                 description: "Llévalo en la mano para construir."),
@@ -81,6 +85,10 @@ namespace Oxfall.Core.Items
                 description: "Al morir puedes despertar en él en vez de en la playa (cada 2 minutos)."),
             new ItemDefinition(ItemIds.ToolCupboard, "Armario de herramientas", ItemCategory.Placeable, 1,
                 description: "Nadie que no esté autorizado en él puede construir a su alrededor (24 m)."),
+            new ItemDefinition(ItemIds.SheetMetalDoor, "Puerta de chapa", ItemCategory.Placeable, 1,
+                description: "Una puerta de metal, mucho más dura que la de madera. Va en un marco de puerta."),
+            new ItemDefinition(ItemIds.CodeLock, "Candado de código", ItemCategory.Placeable, 1,
+                description: "Ponlo en una puerta, una caja o un armario y elige un código de 4 cifras: solo entra quien lo sepa."),
         });
     }
 }

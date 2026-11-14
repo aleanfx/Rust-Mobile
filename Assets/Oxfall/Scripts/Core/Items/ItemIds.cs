@@ -20,6 +20,8 @@ namespace Oxfall.Core.Items
         public const string StonePickaxe = "stone_pickaxe";
         public const string Torch = "torch";
         public const string Hammer = "hammer";
+        public const string MetalHatchet = "metal_hatchet";
+        public const string MetalPickaxe = "metal_pickaxe";
 
         // Placeables
         public const string BuildingPlan = "building_plan";
@@ -29,5 +31,7 @@ namespace Oxfall.Core.Items
         public const string Furnace = "furnace";
         public const string SleepingBag = "sleeping_bag";
         public const string ToolCupboard = "tool_cupboard";
+        public const string SheetMetalDoor = "sheet_metal_door";
+        public const string CodeLock = "code_lock";
     }
 }

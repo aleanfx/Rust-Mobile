@@ -110,7 +110,9 @@ namespace Oxfall.Game.UI
             _detail.text =
                 $"A {Deployables.PrivilegeRadius:0} m a su alrededor solo construyen los autorizados. " +
                 $"Autorizados ahora: {count}.\n\n" +
-                "Ponlo dentro de tu casa y cierra la puerta: quien lo alcance puede autorizarse.";
+                (_settlement.HasLock(LockTarget.On(_id))
+                    ? "Tiene candado: solo quien sepa el código llega hasta aquí."
+                    : "Ponlo dentro de tu casa y ponle un candado de código: si no, quien lo alcance puede autorizarse.");
             _authorize.gameObject.SetActive(!mine);
             _clear.gameObject.SetActive(mine);
         }

@@ -15,7 +15,7 @@ namespace Oxfall.Core.Net
     public sealed partial class ServerWorld
     {
         /// <summary>Raised whenever the save's layout changes; older saves are then not loaded.</summary>
-        public const ushort SaveVersion = 2;
+        public const ushort SaveVersion = 3;
 
         private static readonly byte[] Magic = { (byte)'O', (byte)'X', (byte)'S', (byte)'V' };
 
@@ -58,6 +58,17 @@ namespace Oxfall.Core.Net
             {
                 w.Int(id);
                 WriteSlots(w, Settlement.Container(id));
+            }
+
+            // The codes of code locks (the settlement as described hides them).
+            var codes = new List<KeyValuePair<LockTarget, CodeLockState>>();
+            foreach (var pair in Settlement.Locks)
+                if (CodeLocks.IsValidCode(pair.Value.Code)) codes.Add(pair);
+            w.Int(codes.Count);
+            foreach (var pair in codes)
+            {
+                BuildOp.RemoveLock(pair.Key).Write(w);
+                w.Int(pair.Value.Code);
             }
 
             w.Int(_nextOwner);
@@ -158,6 +169,13 @@ namespace Oxfall.Core.Net
                     var box = Settlement.Container(id);
                     ReadSlots(r, slots, box?.SlotCount ?? 0);
                     box?.SetSlots(slots);
+                }
+
+                int codeCount = r.Int();
+                for (int i = 0; i < codeCount; i++)
+                {
+                    var target = BuildOp.Read(r).Lock;
+                    Settlement.RestoreCode(target, r.Int());
                 }
 
                 _nextOwner = Math.Max(1, r.Int());

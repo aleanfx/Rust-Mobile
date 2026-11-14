@@ -83,11 +83,35 @@ namespace Oxfall.Core.Building
         Twig,
         Wood,
         Stone,
+        Metal,
+    }
+
+    /// <summary>What a door is made of. Sent and saved as numbers: only ever add at the end.</summary>
+    public enum DoorKind : byte
+    {
+        Wood = 1,
+        Metal = 2,
+    }
+
+    public static class DoorKinds
+    {
+        public static bool IsKnown(DoorKind kind) => kind == DoorKind.Wood || kind == DoorKind.Metal;
+
+        /// <summary>The item that hangs as this door (and comes back when it is taken down).</summary>
+        public static string ItemOf(DoorKind kind) => kind == DoorKind.Metal ? ItemIds.SheetMetalDoor : ItemIds.WoodenDoor;
+
+        public static bool TryKindOf(string itemId, out DoorKind kind)
+        {
+            kind = itemId == ItemIds.SheetMetalDoor ? DoorKind.Metal : DoorKind.Wood;
+            return itemId == ItemIds.WoodenDoor || itemId == ItemIds.SheetMetalDoor;
+        }
+
+        public static string Name(DoorKind kind) => kind == DoorKind.Metal ? "Puerta de chapa" : "Puerta de madera";
     }
 
     public static class BuildingTiers
     {
-        public const BuildingTier Highest = BuildingTier.Stone;
+        public const BuildingTier Highest = BuildingTier.Metal;
 
         public static float MaxHealth(BuildingTier tier)
         {
@@ -96,6 +120,7 @@ namespace Oxfall.Core.Building
                 case BuildingTier.Twig: return 10f;
                 case BuildingTier.Wood: return 250f;
                 case BuildingTier.Stone: return 500f;
+                case BuildingTier.Metal: return 1000f;
                 default: throw new ArgumentOutOfRangeException(nameof(tier));
             }
         }
@@ -107,6 +132,7 @@ namespace Oxfall.Core.Building
                 case BuildingTier.Twig: return "Ramas";
                 case BuildingTier.Wood: return "Madera";
                 case BuildingTier.Stone: return "Piedra";
+                case BuildingTier.Metal: return "Metal";
                 default: throw new ArgumentOutOfRangeException(nameof(tier));
             }
         }
@@ -164,6 +190,7 @@ namespace Oxfall.Core.Building
         private readonly HashSet<Cell> _roofs = new HashSet<Cell>();
         private readonly Dictionary<PieceRef, PieceState> _states = new Dictionary<PieceRef, PieceState>();
         private readonly Dictionary<Edge, bool> _doors = new Dictionary<Edge, bool>();
+        private readonly Dictionary<Edge, DoorKind> _doorKinds = new Dictionary<Edge, DoorKind>();
 
         private sealed class PieceState
         {
@@ -198,6 +225,9 @@ namespace Oxfall.Core.Building
         public bool HasRoof(Cell cell) => _roofs.Contains(cell);
         public bool HasDoor(Edge edge) => _doors.ContainsKey(edge);
         public bool IsDoorOpen(Edge edge) => _doors.TryGetValue(edge, out bool open) && open;
+
+        /// <summary>What the door in a doorway is made of (still known while <see cref="DoorRemoved"/> is raised).</summary>
+        public DoorKind DoorKindOf(Edge edge) => _doorKinds.TryGetValue(edge, out var kind) ? kind : DoorKind.Wood;
         public IEnumerable<KeyValuePair<Edge, bool>> Doors => _doors;
         public int PieceCount => _states.Count;
 
@@ -372,11 +402,12 @@ namespace Oxfall.Core.Building
         }
 
         /// <summary>Hangs a door in a doorway, closed.</summary>
-        public PlaceResult PlaceDoor(Edge edge)
+        public PlaceResult PlaceDoor(Edge edge, DoorKind kind = DoorKind.Wood)
         {
             var r = CanPlaceDoor(edge);
             if (r != PlaceResult.Ok) return r;
             _doors.Add(edge, false);
+            _doorKinds[edge] = kind;
             DoorPlaced?.Invoke(edge);
             return PlaceResult.Ok;
         }
@@ -394,6 +425,7 @@ namespace Oxfall.Core.Building
         {
             if (!_doors.Remove(edge)) return false;
             DoorRemoved?.Invoke(edge);
+            _doorKinds.Remove(edge);
             return true;
         }
 
@@ -452,6 +484,7 @@ namespace Oxfall.Core.Building
         public const int TwigWood = 50;
         public const int WoodUpgrade = 150;
         public const int StoneUpgrade = 200;
+        public const int MetalUpgrade = 200;
 
         /// <summary>The cost of placing a piece (as twig).</summary>
         public static IReadOnlyList<Ingredient> For(PieceType type)
@@ -474,6 +507,7 @@ namespace Oxfall.Core.Building
             {
                 case BuildingTier.Wood: return new[] { new Ingredient(ItemIds.Wood, WoodUpgrade) };
                 case BuildingTier.Stone: return new[] { new Ingredient(ItemIds.Stone, StoneUpgrade) };
+                case BuildingTier.Metal: return new[] { new Ingredient(ItemIds.MetalFragments, MetalUpgrade) };
                 default: throw new ArgumentOutOfRangeException(nameof(tier), "Twig is placed, not upgraded to.");
             }
         }

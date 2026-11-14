@@ -446,6 +446,40 @@ namespace Oxfall.Game.World
             return b.Build("Pickaxe", 55f);
         }
 
+        /// <summary>
+        /// A metal hatchet: a forged head with a flared blade and a squared poll on a wooden haft, the
+        /// grip wrapped. Submeshes: wood, steel, wrap.
+        /// </summary>
+        public static Mesh MetalHatchet()
+        {
+            var b = new FlatMeshBuilder(3) { UvScale = 0.25f };
+            b.AddTube(0, new Vector3(0f, -0.04f, 0f), new Vector3(0f, 0.53f, 0f), 0.017f, 0.015f, 8, 0);
+            b.AddBox(1, new Vector3(-0.028f, 0.405f, -0.022f), new Vector3(0.03f, 0.49f, 0.022f));
+            b.AddBox(1, new Vector3(-0.07f, 0.42f, -0.02f), new Vector3(-0.028f, 0.475f, 0.02f));
+            b.AddPrism(1, -0.012f, 0.012f, new Vector2(0.03f, 0.42f), new Vector2(0.11f, 0.39f), new Vector2(0.152f, 0.372f),
+                new Vector2(0.158f, 0.505f), new Vector2(0.11f, 0.488f), new Vector2(0.03f, 0.476f));
+            b.AddTube(2, new Vector3(0f, -0.03f, 0f), new Vector3(0f, 0.12f, 0f), 0.021f, 0.021f, 8, 2);
+            return b.Build("MetalHatchet", 40f);
+        }
+
+        /// <summary>
+        /// A metal pickaxe: a long curved steel pick, pointed both ways, through an eye on a wooden
+        /// haft, the grip wrapped. Submeshes: wood, steel, wrap.
+        /// </summary>
+        public static Mesh MetalPickaxe()
+        {
+            var b = new FlatMeshBuilder(3) { UvScale = 0.25f };
+            b.AddTube(0, new Vector3(0f, -0.04f, 0f), new Vector3(0f, 0.56f, 0f), 0.017f, 0.015f, 8, 0);
+            b.AddBox(1, new Vector3(-0.03f, 0.46f, -0.022f), new Vector3(0.03f, 0.53f, 0.022f));
+            // Each arm in two pieces, bending down towards its point.
+            b.AddTube(1, new Vector3(0.025f, 0.5f, 0f), new Vector3(0.12f, 0.485f, 0f), 0.019f, 0.013f, 6, 1);
+            b.AddTube(1, new Vector3(0.12f, 0.485f, 0f), new Vector3(0.215f, 0.445f, 0f), 0.013f, 0.003f, 6, 1);
+            b.AddTube(1, new Vector3(-0.025f, 0.5f, 0f), new Vector3(-0.11f, 0.487f, 0f), 0.019f, 0.014f, 6, 1);
+            b.AddTube(1, new Vector3(-0.11f, 0.487f, 0f), new Vector3(-0.19f, 0.455f, 0f), 0.014f, 0.006f, 6, 1);
+            b.AddTube(2, new Vector3(0f, -0.03f, 0f), new Vector3(0f, 0.12f, 0f), 0.021f, 0.021f, 8, 2);
+            return b.Build("MetalPickaxe", 40f);
+        }
+
         /// <summary>A torch: a stick with a wrap of charred cloth at the top. Submeshes: wood, cloth.</summary>
         public static Mesh Torch()
         {
@@ -557,6 +591,55 @@ namespace Oxfall.Game.World
                 b.AddBox(0, new Vector3(0.96f, 0.98f, z > 0f ? 0.07f : -0.13f), new Vector3(1.04f, 1.06f, z > 0f ? 0.13f : -0.07f));
             }
             return b.Build("Door");
+        }
+
+        /// <summary>
+        /// A sheet metal door, hinged at the origin like the plank one (1.16 m wide along +X, 2.17 m
+        /// tall): a corrugated panel in an iron frame with a brace, three hinges and a pull handle
+        /// each side. Submeshes: sheet metal, iron.
+        /// </summary>
+        public static Mesh MetalDoor()
+        {
+            var b = new FlatMeshBuilder(2) { UvScale = 1.6f };
+            b.AddBox(0, new Vector3(0.03f, 0.02f, -0.03f), new Vector3(1.13f, 2.14f, 0.03f));
+            // The frame round the edge, standing proud of the panel on both faces.
+            const float z = 0.05f;
+            b.AddBox(1, new Vector3(0.0f, 0f, -z), new Vector3(1.16f, 0.08f, z));
+            b.AddBox(1, new Vector3(0.0f, 2.09f, -z), new Vector3(1.16f, 2.17f, z));
+            b.AddBox(1, new Vector3(0.0f, 0f, -z), new Vector3(0.08f, 2.17f, z));
+            b.AddBox(1, new Vector3(1.08f, 0f, -z), new Vector3(1.16f, 2.17f, z));
+            b.AddBox(1, new Vector3(0.08f, 1.02f, -0.045f), new Vector3(1.08f, 1.1f, 0.045f));
+            foreach (float y in new[] { 0.25f, 1.06f, 1.88f })
+                b.AddBox(1, new Vector3(-0.025f, y - 0.07f, -0.035f), new Vector3(0.18f, y + 0.07f, 0.035f));
+            foreach (float side in new[] { 1f, -1f })
+            {
+                // A pull handle: two stand-offs and a bar.
+                float z0 = side * 0.05f, z1 = side * 0.11f;
+                b.AddBox(1, new Vector3(0.92f, 0.86f, Mathf.Min(z0, z1)), new Vector3(0.96f, 0.9f, Mathf.Max(z0, z1)));
+                b.AddBox(1, new Vector3(0.92f, 1.22f, Mathf.Min(z0, z1)), new Vector3(0.96f, 1.26f, Mathf.Max(z0, z1)));
+                b.AddTube(1, new Vector3(0.94f, 0.86f, side * 0.115f), new Vector3(0.94f, 1.26f, side * 0.115f), 0.018f, 0.018f, 6);
+            }
+            return b.Build("MetalDoor");
+        }
+
+        /// <summary>
+        /// A code lock: a small dark keypad with twelve keys, a light above them and a latch on its
+        /// side, its back on the origin and its face towards +Z. Submeshes: casing, keys, light.
+        /// </summary>
+        public static Mesh CodeLock()
+        {
+            var b = new FlatMeshBuilder(3);
+            b.AddBox(0, new Vector3(-0.055f, -0.085f, 0f), new Vector3(0.055f, 0.085f, 0.032f));
+            b.AddBox(0, new Vector3(-0.05f, -0.08f, 0.032f), new Vector3(0.05f, 0.05f, 0.036f));
+            for (int row = 0; row < 4; row++)
+            for (int col = 0; col < 3; col++)
+            {
+                float x = (col - 1) * 0.03f, y = 0.028f - row * 0.03f;
+                b.AddBox(1, new Vector3(x - 0.011f, y - 0.011f, 0.036f), new Vector3(x + 0.011f, y + 0.011f, 0.043f));
+            }
+            b.AddBox(2, new Vector3(-0.03f, 0.058f, 0.032f), new Vector3(0.03f, 0.072f, 0.04f));
+            b.AddBox(1, new Vector3(0.055f, -0.03f, 0.006f), new Vector3(0.078f, 0.03f, 0.026f));
+            return b.Build("CodeLock");
         }
 
         private static void Stick(FlatMeshBuilder b, float x0, float y0, float x1, float y1, float z, float radius) =>
@@ -1013,6 +1096,28 @@ namespace Oxfall.Game.World
                 else uv = new Vector2(p.x, p.y);
                 return uv / UvScale;
             }
+
+            /// <summary>
+            /// A flat shape in the XY plane (a convex outline, its corners counter-clockwise seen
+            /// from +Z) given thickness from z0 to z1.
+            /// </summary>
+            public void AddPrism(int submesh, float z0, float z1, params Vector2[] outline)
+            {
+                int n = outline.Length;
+                for (int i = 1; i < n - 1; i++)
+                {
+                    Triangle(submesh, V(outline[0], z1), V(outline[i], z1), V(outline[i + 1], z1));
+                    Triangle(submesh, V(outline[0], z0), V(outline[i + 1], z0), V(outline[i], z0));
+                }
+                for (int i = 0; i < n; i++)
+                {
+                    var a = outline[i];
+                    var c = outline[(i + 1) % n];
+                    Quad(submesh, V(a, z0), V(c, z0), V(c, z1), V(a, z1));
+                }
+            }
+
+            private static Vector3 V(Vector2 p, float z) => new Vector3(p.x, p.y, z);
 
             /// <summary>An axis-aligned box, every face wound to face outwards.</summary>
             public void AddBox(int submesh, Vector3 lo, Vector3 hi)

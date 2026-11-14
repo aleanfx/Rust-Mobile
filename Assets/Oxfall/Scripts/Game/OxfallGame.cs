@@ -50,6 +50,9 @@ namespace Oxfall.Game
         private DeployablePlacer _placer;
         private DeployableViews _deployables;
         private CupboardUi _cupboard;
+        private LockViews _lockViews;
+        private LockPlacer _lockPlacer;
+        private KeypadUi _keypad;
         private GameAudio _audio;
         private DayNight _dayNight;
         private Vitals _vitals;
@@ -97,6 +100,7 @@ namespace Oxfall.Game
         private TitleScreen _title;
         private bool _menuView;
         private float _menuAngle;
+        private float _gameFog, _gameFar;
 
         private void Start()
         {
@@ -149,7 +153,11 @@ namespace Oxfall.Game
 
             // The hotbar and the inventory panel; their icons are rendered from the item models.
             _inventoryUi = new InventoryUi(_hud, _inventory, _hotbar, _actions, _settlement);
-            controls.SlotKey += slot => _hotbar.Select(slot);
+            // The number keys type on an open keypad instead.
+            controls.SlotKey += slot =>
+            {
+                if (_keypad == null || !_keypad.IsOpen) _hotbar.Select(slot);
+            };
             controls.InventoryKey += _inventoryUi.Toggle;
             ItemIcons.Render(models, _world.Sun).Ready += () =>
             {
@@ -253,6 +261,20 @@ namespace Oxfall.Game
             _placer.Placed += () => audio.Play(SoundCue.Place);
             _cupboard = new CupboardUi(_hud, _settlement, _actions);
 
+            // Code locks: drawn on doors, boxes and cupboards; one in hand goes on with attack, and
+            // then its keypad opens to choose the code.
+            _lockViews = new LockViews(_settlement, _buildings, _deployables, materials);
+            _keypad = new KeypadUi(_hud, _settlement, _actions);
+            _keypad.Sound += audio.Play;
+            _lockPlacer = playerObject.AddComponent<LockPlacer>();
+            _lockPlacer.Init(_settlement, _lockViews, input, player.Head, _hud, materials);
+            _lockPlacer.Actions = _actions;
+            _lockPlacer.Placed += target =>
+            {
+                audio.Play(SoundCue.Place);
+                _keypad.ExpectNew(target);
+            };
+
             // The use button: doors, boxes, furnaces, cupboards.
             _interactor = playerObject.AddComponent<Interactor>();
             _interactor.Init(_settlement, player.Head, _hud);
@@ -260,7 +282,10 @@ namespace Oxfall.Game
             _interactor.DoorUsed += () => audio.Play(SoundCue.Wood);
             _interactor.OpenBox += OpenBox;
             _interactor.OpenCupboard += OpenCupboard;
+            _interactor.EnterCode += OpenKeypad;
+            _interactor.ManageLock += OpenKeypad;
             _hud.UseTapped += _interactor.Use;
+            _hud.LockTapped += _interactor.UseLock;
             // A box that goes (picked up, or gone from the server's island) closes.
             _settlement.DeployableRemoved += id =>
             {
@@ -306,6 +331,7 @@ namespace Oxfall.Game
                 _quietPickups = true;
                 _inventoryUi.CloseBox(false);
                 _cupboard.Close();
+                _keypad.Close();
                 _survivor.Looting = 0;
                 _inventory.Clear();
                 _crafting.Clear();
@@ -338,7 +364,13 @@ namespace Oxfall.Game
             };
             _net.ActionFailed += why =>
             {
-                _hud.ShowToast(GameActions.Explain(why));
+                // A wrong code shakes the keypad (it says so itself); anything else lets it be typed again.
+                if (why == ActionResult.WrongCode && _keypad.IsOpen) _keypad.Wrong();
+                else
+                {
+                    _keypad.Refused();
+                    _hud.ShowToast(GameActions.Explain(why));
+                }
                 Debug.Log("[Oxfall] The server refused: " + why);
             };
             _net.TimeOfDay += hours =>
@@ -395,6 +427,11 @@ namespace Oxfall.Game
             _gatherer.enabled = false;
             _camera.transform.SetParent(null, true);
             _menuView = true;
+            // The island from the air: thinner haze and a longer view than on foot, put back on entering.
+            _gameFog = RenderSettings.fogDensity;
+            _gameFar = _camera.farClipPlane;
+            RenderSettings.fogDensity = _gameFog * 0.5f;
+            _camera.farClipPlane = Mathf.Max(_gameFar, 480f);
             _dayNight.SetHour(17.4f);
             _title.NameChanged += name =>
             {
@@ -447,6 +484,8 @@ namespace Oxfall.Game
             if (_menuView)
             {
                 _menuView = false;
+                RenderSettings.fogDensity = _gameFog;
+                _camera.farClipPlane = _gameFar;
                 _camera.transform.SetParent(_player.Head, false);
                 _camera.transform.localPosition = Vector3.zero;
                 _camera.transform.localRotation = Quaternion.identity;
@@ -485,17 +524,20 @@ namespace Oxfall.Game
             bool plan = _hotbar.IsHolding(ItemIds.BuildingPlan);
             bool deploy = Deployables.TryKindOf(held?.Id, out var kind);
             bool hammer = _hotbar.IsHolding(ItemIds.Hammer);
-            bool door = _hotbar.IsHolding(ItemIds.WoodenDoor);
+            bool door = DoorKinds.TryKindOf(held?.Id, out var doorKind);
+            bool codeLock = _hotbar.IsHolding(ItemIds.CodeLock);
             if (!plan) _build.SetActive(false);
             if (!deploy) _placer.Hold(null);
             if (!hammer) _hammer.SetActive(false);
             if (!door) _doorPlacer.SetActive(false);
+            if (!codeLock) _lockPlacer.SetActive(false);
             if (plan) _build.SetActive(true);
             if (deploy) _placer.Hold(kind);
             if (hammer) { _hammer.SetActive(true); _hammer.Refresh(); }
-            if (door) _doorPlacer.SetActive(true);
+            if (door) _doorPlacer.SetActive(true, doorKind);
+            if (codeLock) _lockPlacer.SetActive(true);
             bool food = held?.Category == ItemCategory.Food;
-            _hud.SetAttackLabel(plan || deploy || door ? "COLOCAR" : hammer ? "MEJORAR" : food ? "COMER" : "GOLPEAR");
+            _hud.SetAttackLabel(plan || deploy || door || codeLock ? "COLOCAR" : hammer ? "MEJORAR" : food ? "COMER" : "GOLPEAR");
             _hud.SetAttackIcon(held != null ? ItemIcons.Get(held.Id) : null);
         }
 
@@ -603,6 +645,7 @@ namespace Oxfall.Game
             Debug.Log("[Oxfall] The player died.");
             _inventoryUi.Close();
             _cupboard.Close();
+            _keypad.Close();
             _hud.CloseCraftPanel();
             _player.enabled = false;
             _gatherer.enabled = false;
@@ -663,6 +706,7 @@ namespace Oxfall.Game
         private void OpenBox(int id)
         {
             _cupboard.Close();
+            _keypad.Close();
             var result = _actions.Open(id);
             if (result != ActionResult.Ok)
             {
@@ -677,8 +721,17 @@ namespace Oxfall.Game
         private void OpenCupboard(int id)
         {
             _inventoryUi.Close();
+            _keypad.Close();
             _cupboard.Open(id);
             Debug.Log("[Oxfall] Opened cupboard " + id);
+        }
+
+        /// <summary>A code lock's keypad: to type its code, choose one, or manage it.</summary>
+        private void OpenKeypad(LockTarget target)
+        {
+            _inventoryUi.Close();
+            _cupboard.Close();
+            _keypad.Open(target);
         }
 
         /// <summary>Once a second: what is open closes when the player has walked away from it.</summary>
@@ -689,6 +742,11 @@ namespace Oxfall.Game
             bool Far(int id) => !_settlement.TryGet(id, out var d) || (new Vector3(d.X, d.Y, d.Z) - here).sqrMagnitude > reach * reach;
             if (_inventoryUi.OpenBoxId != 0 && Far(_inventoryUi.OpenBoxId)) _inventoryUi.CloseBox(true);
             if (_cupboard.IsOpen && Far(_cupboard.OpenId)) _cupboard.Close();
+            if (_keypad.IsOpen)
+            {
+                var at = PlayerActions.LockPoint(_settlement, _keypad.Target);
+                if (!_settlement.HasLock(_keypad.Target) || (new Vector3(at.X, at.Y, at.Z) - here).sqrMagnitude > reach * reach) _keypad.Close();
+            }
         }
 
         /// <summary>For tests: the nearest thing of a kind set down, or 0.</summary>
@@ -789,6 +847,22 @@ namespace Oxfall.Game
                 case "build": HoldItem(ItemIds.BuildingPlan); break;
                 case "hammer": HoldItem(ItemIds.Hammer); break;
                 case "door": HoldItem(ItemIds.WoodenDoor); break;
+                case "metal-door": HoldItem(ItemIds.SheetMetalDoor); break;
+                case "metal-hatchet": HoldItem(ItemIds.MetalHatchet); break;
+                case "metal-pickaxe": HoldItem(ItemIds.MetalPickaxe); break;
+                case "code-lock": HoldItem(ItemIds.CodeLock); break;
+                case "place-lock": _lockPlacer.Place(); break;
+                case "lock-button": _interactor.UseLock(); break;
+                case "keypad-ok": _keypad.Confirm(); break;
+                case "keypad-toggle": _keypad.ToggleLocked(); break;
+                case "keypad-remove": _keypad.Remove(); break;
+                case "close-keypad": _keypad.Close(); break;
+                case "lock-stranger":
+                    // Every lock as if someone else had set its code: to try typing one alone.
+                    var locks = new System.Collections.Generic.List<LockTarget>();
+                    foreach (var pair in _settlement.Locks) locks.Add(pair.Key);
+                    foreach (var target in locks) _settlement.SetCode(target, 4321, 9999);
+                    break;
                 case "upgrade": _hammer.Upgrade(); break;
                 case "demolish": _hammer.Demolish(); break;
                 case "place-door": _doorPlacer.Place(); break;
@@ -799,6 +873,7 @@ namespace Oxfall.Game
                 case "aim-door": AimAtPiece(PieceType.Doorway, 1.1f); break;
                 case "upgrade-all-1": UpgradeAll(BuildingTier.Wood); break;
                 case "upgrade-all-2": UpgradeAll(BuildingTier.Stone); break;
+                case "upgrade-all-3": UpgradeAll(BuildingTier.Metal); break;
                 case "piece": _build.CyclePiece(); break;
                 case "place": _build.Place(); break;
                 case "inventory": _inventoryUi.Toggle(); break;
@@ -825,6 +900,8 @@ namespace Oxfall.Game
                               $"time={_dayNight.Cycle.Clock} health={_vitals.Health:0} food={_vitals.Food:0} water={_vitals.Water:0} " +
                               $"ponds={_world.Shape.Ponds.Count} berries={_inventory.Count(ItemIds.Berries)} " +
                               $"pieces={_buildings.Grid.PieceCount} views={_buildings.Count} doorLook={_interactor.LookingAtDoor} lookAt={_interactor.LookingAt} " +
+                              $"locks={_lockViews.Count} keypad={(_keypad.IsOpen ? _keypad.Current.ToString() : "closed")} " +
+                              $"metal={_inventory.Count(ItemIds.MetalFragments)} " +
                               $"pos={_player.transform.position} quality={GraphicsQuality.Name(_quality.Tier)} " +
                               $"screen={Screen.width}x{Screen.height} grass={_grass.BladeCount} " +
                               $"net={_net.State} id={_net.PlayerId} online={_net.OnlineCount} " +
@@ -840,6 +917,15 @@ namespace Oxfall.Game
                         _hotbar.Select(slot - 1);
                     else if (command.StartsWith("tap-") && int.TryParse(command.Substring(4), out int tap))
                         _inventoryUi.TapSlot(tap);
+                    // code-NNNN types a code on the open keypad and confirms it; key-N presses one key.
+                    else if (command.StartsWith("code-"))
+                        _keypad.Type(command.Substring(5));
+                    else if (command.StartsWith("key-") && int.TryParse(command.Substring(4), out int key))
+                        _keypad.Press(key);
+                    // turn-D turns the player D degrees where they stand.
+                    else if (command.StartsWith("turn-") && float.TryParse(command.Substring(5),
+                                 System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out float turn))
+                        _player.Teleport(_player.transform.position, _player.Yaw + turn, _player.Pitch);
                     // box-tap-N taps slot N of the open box.
                     else if (command.StartsWith("box-tap-") && int.TryParse(command.Substring(8), out int boxTap))
                         _inventoryUi.TapBoxSlot(boxTap);
@@ -888,7 +974,8 @@ namespace Oxfall.Game
             {
                 if (_inventory[slot].ItemId != id) continue;
                 _actions.MoveSlot(slot, Inventory.HotbarSize - 1);
-                _hotbar.Select(Inventory.HotbarSize - 1);
+                // Select would put away what is in hand if that slot is the one chosen already.
+                if (!_hotbar.SelectItem(id) && _hotbar.Selected != Inventory.HotbarSize - 1) _hotbar.Select(Inventory.HotbarSize - 1);
                 return;
             }
         }
@@ -1055,6 +1142,7 @@ namespace Oxfall.Game
             TickMenuView(Time.deltaTime);
             if (_title == null) TickVitals(Time.deltaTime);
             _vitalsUi?.Tick();
+            _keypad?.Tick(Time.unscaledDeltaTime);
             TickNet();
 
             // Trees and rocks grow back on their own timers; checking once a second is plenty.

@@ -214,6 +214,7 @@ namespace Oxfall.Game.Controls
             // E uses (doors), R presses the button above attack (next piece, demolish).
             if (UnityEngine.Input.GetKeyDown(KeyCode.E) && _hud.UseButton.gameObject.activeInHierarchy) PressTarget(_hud.UseButton);
             if (UnityEngine.Input.GetKeyDown(KeyCode.R) && _hud.PieceButton.gameObject.activeInHierarchy) PressTarget(_hud.PieceButton);
+            if (UnityEngine.Input.GetKeyDown(KeyCode.L) && _hud.LockButton.gameObject.activeInHierarchy) PressTarget(_hud.LockButton);
         }
 
         private void PressTarget(RectTransform rect)

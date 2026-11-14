@@ -88,6 +88,10 @@ namespace Oxfall.Core.Tests
             Assert.AreEqual(BuildingTier.Wood, done.Tier, "the next tier, whatever the client asked");
             Assert.AreEqual(5000 - BuildCosts.TwigWood - BuildCosts.WoodUpgrade, s.Inventory.Count(ItemIds.Wood));
             Build(w, s, BuildOp.Upgrade(piece, BuildingTier.Twig), x, y, z);
+            Assert.AreEqual(ActionResult.NotEnoughResources, Build(w, s, BuildOp.Upgrade(piece, BuildingTier.Twig), x, y, z),
+                "metal takes fragments");
+            s.Inventory.Add(ItemIds.MetalFragments, BuildCosts.MetalUpgrade);
+            Build(w, s, BuildOp.Upgrade(piece, BuildingTier.Twig), x, y, z);
             Assert.AreEqual(ActionResult.MaxTier, Build(w, s, BuildOp.Upgrade(piece, BuildingTier.Twig), x, y, z));
         }
 
@@ -261,8 +265,8 @@ namespace Oxfall.Core.Tests
             s.Inventory.Add(ItemIds.Wood, 300);
             int woodSlot = Enumerable.Range(0, s.Inventory.SlotCount).First(i => s.Inventory[i].ItemId == ItemIds.Wood);
             Assert.AreEqual(ActionResult.NotOpen, PlayerActions.Put(w, s, woodSlot, -1), "it has to be opened first");
-            Assert.AreEqual(ActionResult.TooFar, PlayerActions.Open(w, s, box, x + 40f, y, z));
-            Assert.AreEqual(ActionResult.Ok, PlayerActions.Open(w, s, box, x, y, z));
+            Assert.AreEqual(ActionResult.TooFar, PlayerActions.Open(w, s, 0, box, x + 40f, y, z));
+            Assert.AreEqual(ActionResult.Ok, PlayerActions.Open(w, s, 0, box, x, y, z));
             Assert.AreEqual(ActionResult.Ok, PlayerActions.Put(w, s, woodSlot, -1));
             Assert.AreEqual(300, w.Container(box).Count(ItemIds.Wood));
             Assert.AreEqual(0, s.Inventory.Count(ItemIds.Wood));
@@ -387,7 +391,7 @@ namespace Oxfall.Core.Tests
             var writer = new NetWriter();
             Assert.IsFalse(sync.Write(w, s, writer), "nothing open, nothing to say");
             w.Container(done.Id).Add(ItemIds.Stone, 50);
-            PlayerActions.Open(w, s, done.Id, x, y, z);
+            PlayerActions.Open(w, s, 0, done.Id, x, y, z);
             Assert.IsTrue(sync.Write(w, s, writer));
             var slots = new List<(int, ItemStack)>();
             var bytes = writer.ToArray();
@@ -426,6 +430,16 @@ namespace Oxfall.Core.Tests
                 BuildOp.Door(edge),
                 BuildOp.ToggleDoor(edge, true),
                 BuildOp.Deploy(new Deployable(12, DeployableKind.Campfire, 1.5f, 2.5f, -3.5f, 90f)),
+                BuildOp.Door(edge, DoorKind.Metal),
+                BuildOp.Upgrade(PieceRef.Foundation(new Cell(0, 0)), BuildingTier.Metal),
+                BuildOp.PlaceLock(LockTarget.Door(edge), 4),
+                BuildOp.PlaceLock(LockTarget.On(9), 4),
+                BuildOp.SetCode(LockTarget.Door(edge), 1234, 4),
+                BuildOp.SetCode(LockTarget.On(9), CodeLocks.Hidden, 4),
+                BuildOp.EnterCode(LockTarget.On(9), 42),
+                BuildOp.LockAuthorize(LockTarget.Door(edge), 8),
+                BuildOp.SetLocked(LockTarget.On(9), true),
+                BuildOp.RemoveLock(LockTarget.Door(edge)),
             };
             foreach (var op in ops)
             {
@@ -441,6 +455,9 @@ namespace Oxfall.Core.Tests
                 Assert.AreEqual(op.Open, back.Open);
                 Assert.AreEqual(op.Deployed.Id, back.Deployed.Id);
                 Assert.AreEqual(op.Deployed.Yaw, back.Deployed.Yaw);
+                Assert.AreEqual(op.Code, back.Code);
+                Assert.AreEqual(op.Deployed.Owner, back.Deployed.Owner);
+                if (op.IsLockOp) Assert.AreEqual(op.Lock, back.Lock);
             }
         }
 

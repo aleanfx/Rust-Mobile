@@ -34,6 +34,19 @@ namespace Oxfall.Game.Construction
 
         public BuildingGrid Grid => _grid;
         public Mesh DoorMesh { get; }
+        public Mesh MetalDoorMesh { get; }
+
+        public Mesh DoorMeshFor(DoorKind kind) => kind == DoorKind.Metal ? MetalDoorMesh : DoorMesh;
+
+        public Material[] DoorMaterialsFor(DoorKind kind) =>
+            kind == DoorKind.Metal ? new[] { _materials.SheetMetal, _materials.Metal } : new[] { _materials.Door };
+
+        /// <summary>The door hanging in a doorway (it swings: things on it go under it).</summary>
+        public bool TryGetDoor(Edge edge, out Transform door)
+        {
+            door = _doors.TryGetValue(edge, out var view) ? view.transform : null;
+            return door != null;
+        }
 
         /// <summary>Who opens doors: a door swings away from them.</summary>
         public Transform Viewer;
@@ -62,6 +75,7 @@ namespace Oxfall.Game.Construction
             _twig[(int)PieceType.Doorway] = MeshFactory.TwigWall(true);
             _twig[(int)PieceType.Roof] = MeshFactory.TwigRoof();
             DoorMesh = MeshFactory.Door();
+            MetalDoorMesh = MeshFactory.MetalDoor();
 
             grid.CellPieceAdded += (type, cell) => Spawn(type == PieceType.Roof ? PieceRef.Roof(cell) : PieceRef.Foundation(cell));
             grid.EdgePieceAdded += (type, edge) => Spawn(PieceRef.OnEdge(edge, type));
@@ -136,7 +150,7 @@ namespace Oxfall.Game.Construction
             Skin(piece, tier);
         }
 
-        /// <summary>Twig is sticks, wood is planks, stone is blocks. The colliders never change.</summary>
+        /// <summary>Twig is sticks, wood is planks, stone is blocks, metal is sheets. The colliders never change.</summary>
         private void Skin(PieceRef piece, BuildingTier tier)
         {
             if (!_pieces.TryGetValue(piece, out var go)) return;
@@ -144,7 +158,8 @@ namespace Oxfall.Game.Construction
             go.GetComponent<MeshFilter>().sharedMesh = tier == BuildingTier.Twig ? _twig[i] : _solid[i];
             var renderer = go.GetComponent<MeshRenderer>();
             renderer.sharedMaterial = tier == BuildingTier.Twig ? _materials.Twig
-                : tier == BuildingTier.Stone ? _materials.StoneWall : _materials.WoodWall;
+                : tier == BuildingTier.Stone ? _materials.StoneWall
+                : tier == BuildingTier.Metal ? _materials.SheetMetal : _materials.WoodWall;
             // Thin sticks cast thin, flickering shadows for little gain.
             renderer.shadowCastingMode = tier == BuildingTier.Twig && piece.Type != PieceType.Foundation
                 ? ShadowCastingMode.Off : ShadowCastingMode.On;
@@ -164,8 +179,9 @@ namespace Oxfall.Game.Construction
             var go = new GameObject("Door " + edge);
             go.transform.SetParent(_root, false);
             go.transform.SetPositionAndRotation(hinge, rotation);
-            go.AddComponent<MeshFilter>().sharedMesh = DoorMesh;
-            go.AddComponent<MeshRenderer>().sharedMaterial = _materials.Door;
+            var kind = _grid.DoorKindOf(edge);
+            go.AddComponent<MeshFilter>().sharedMesh = DoorMeshFor(kind);
+            go.AddComponent<MeshRenderer>().sharedMaterials = DoorMaterialsFor(kind);
             var collider = go.AddComponent<BoxCollider>();
             collider.center = new Vector3(0.58f, 1.08f, 0f);
             collider.size = new Vector3(1.14f, 2.16f, 0.1f);

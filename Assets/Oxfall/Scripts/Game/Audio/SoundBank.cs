@@ -23,6 +23,9 @@ namespace Oxfall.Game.Audio
         public AudioClip Eat { get; }
         public AudioClip Drink { get; }
         public AudioClip Tap { get; }
+        public AudioClip KeyBeep { get; }
+        public AudioClip Accepted { get; }
+        public AudioClip Denied { get; }
         public AudioClip FireLoop { get; }
         public AudioClip WindLoop { get; }
         public AudioClip WavesLoop { get; }
@@ -51,6 +54,14 @@ namespace Oxfall.Game.Audio
             Eat = Make("eat", 0.4f, (t, i) => Dark(0.5f) * (Env(t, 0.002f, 0.04f) + Env(t - 0.12f, 0.002f, 0.04f) + Env(t - 0.25f, 0.002f, 0.05f)) * 0.6f);
             Drink = Make("drink", 0.6f, (t, i) => Gulp(t) * 0.5f + Gulp(t - 0.28f) * 0.45f);
             Tap = Make("tap", 0.05f, (t, i) => Tone(t, 1500f) * Env(t, 0.001f, 0.012f) * 0.25f);
+            // The code lock: a short square-ish beep per key, two rising notes for a right code, and a
+            // low buzz with the crackle of the shock for a wrong one.
+            KeyBeep = Make("key beep", 0.07f, (t, i) => Mathf.Clamp(Tone(t, 2100f) * 2.2f, -1f, 1f) * Env(t, 0.001f, 0.02f) * 0.16f);
+            Accepted = Make("accepted", 0.32f, (t, i) =>
+                (Tone(t, 1320f) * Env(t, 0.002f, 0.05f) + Tone(t - 0.1f, 1760f) * Env(t - 0.1f, 0.002f, 0.09f)) * 0.22f);
+            Denied = Make("denied", 0.45f, (t, i) =>
+                Mathf.Clamp(Tone(t, 180f) * 3f, -1f, 1f) * Env(t, 0.004f, 0.16f) * 0.2f
+                + Noise() * Env(t, 0.001f, 0.05f) * (0.5f + 0.5f * Mathf.Sign(Tone(t, 37f))) * 0.3f);
             FireLoop = MakeLoop("fire", 3f, FireSample);
             WindLoop = MakeLoop("wind", 6f, WindSample);
             WavesLoop = MakeLoop("waves", 8f, WavesSample);

@@ -32,6 +32,10 @@ namespace Oxfall.Game.UI
         private float _wipeTimer;
         private TouchScreenKeyboard _keyboard;
 
+        // A tap that opens the browser's text box freezes the page; the phone's copy of that tap
+        // (as a mouse click) arrives after it closes and would open it again.
+        private float _tapLock;
+
         /// <summary>Play on the server.</summary>
         public event Action PlayOnline;
 
@@ -103,7 +107,7 @@ namespace Oxfall.Game.UI
             _playFill = play.GetComponent<Image>();
             var statusRect = UiFactory.NewRect("Status", safe, left, new Vector2(0f, 0.5f), new Vector2(124f, -70f), new Vector2(900f, 40f));
             _status = UiFactory.AddText(statusRect, serverInfo, 26, TextAnchor.MiddleLeft, UiTheme.TextMuted);
-            var errorRect = UiFactory.NewRect("Error", safe, left, new Vector2(0f, 0.5f), new Vector2(124f, -106f), new Vector2(900f, 40f));
+            var errorRect = UiFactory.NewRect("Error", safe, left, new Vector2(0f, 0.5f), new Vector2(124f, -70f), new Vector2(900f, 40f));
             _error = UiFactory.AddText(errorRect, "", 26, TextAnchor.MiddleLeft, UiTheme.Bad, true);
 
             Button(safe, "JUGAR SOLO", new Vector2(120f, -180f), new Vector2(620f, 96f), UiTheme.Panel, UiTheme.Text, 40,
@@ -160,15 +164,19 @@ namespace Oxfall.Game.UI
 
         public void ShowError(string message)
         {
-            _error.text = message ?? "";
             ShowConnecting(false);
+            _error.text = message ?? "";
+            // The error takes the server line's place until the next try.
+            _status.gameObject.SetActive(_error.text.Length == 0);
         }
 
         public void ShowConnecting(bool on, string text = "CONECTANDO…")
         {
             _connecting.gameObject.SetActive(on);
             _connectingText.text = text;
-            if (on) _error.text = "";
+            if (!on) return;
+            _error.text = "";
+            _status.gameObject.SetActive(true);
         }
 
         /// <summary>Fades away and is gone.</summary>
@@ -246,7 +254,7 @@ namespace Oxfall.Game.UI
                 _keyboard = null;
             }
 
-            if (TappedAt(out var point))
+            if (TappedAt(out var point) && Time.realtimeSinceStartup >= _tapLock)
             {
                 foreach (var (rect, onTap) in _buttons)
                 {
@@ -255,6 +263,7 @@ namespace Oxfall.Game.UI
                     if (_connecting.gameObject.activeSelf && !rect.IsChildOf(_connecting)) continue;
                     if (!RectTransformUtility.RectangleContainsScreenPoint(rect, point, null)) continue;
                     onTap();
+                    _tapLock = Time.realtimeSinceStartup + 0.4f;
                     break;
                 }
             }

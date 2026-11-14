@@ -28,10 +28,15 @@ namespace Oxfall.Game.Construction
         private Transform _head;
         private Hud _hud;
         private MeshRenderer _ghost;
+        private MeshFilter _ghostMesh;
+        private MaterialLibrary _materials;
         private Edge _edge;
         private bool _valid;
 
         public bool Active { get; private set; }
+
+        /// <summary>What the door in hand is made of.</summary>
+        public DoorKind Kind { get; private set; } = DoorKind.Wood;
 
         /// <summary>A door was hung.</summary>
         public event Action Placed;
@@ -48,8 +53,10 @@ namespace Oxfall.Game.Construction
             _head = head;
             _hud = hud;
 
+            _materials = materials;
             var ghost = new GameObject("Door ghost");
-            ghost.AddComponent<MeshFilter>().sharedMesh = views.DoorMesh;
+            _ghostMesh = ghost.AddComponent<MeshFilter>();
+            _ghostMesh.sharedMesh = views.DoorMesh;
             _ghost = ghost.AddComponent<MeshRenderer>();
             _ghost.sharedMaterial = materials.GhostOk;
             _ghost.shadowCastingMode = ShadowCastingMode.Off;
@@ -57,8 +64,16 @@ namespace Oxfall.Game.Construction
             ghost.SetActive(false);
         }
 
-        public void SetActive(bool on)
+        public void SetActive(bool on, DoorKind kind = DoorKind.Wood)
         {
+            if (on && kind != Kind)
+            {
+                Kind = kind;
+                _ghostMesh.sharedMesh = _views.DoorMeshFor(kind);
+                var ghosts = new Material[_views.DoorMaterialsFor(kind).Length];
+                for (int i = 0; i < ghosts.Length; i++) ghosts[i] = _materials.GhostOk;
+                _ghost.sharedMaterials = ghosts;
+            }
             if (on == Active) return;
             Active = on;
             if (!on)
@@ -85,14 +100,14 @@ namespace Oxfall.Game.Construction
                 _hud.ShowToast("Apunta a un marco de puerta vacío (constrúyelo con el plano)");
                 return;
             }
-            var result = Actions.Build(BuildOp.Door(_edge));
+            var result = Actions.Build(BuildOp.Door(_edge, Kind));
             if (result != ActionResult.Ok)
             {
                 _hud.ShowToast(GameActions.Explain(result));
                 return;
             }
             _hud.ShowToast("Puerta colocada: tócala con ABRIR");
-            Debug.Log($"[Oxfall] Door hung at {_edge}");
+            Debug.Log($"[Oxfall] {Kind} door hung at {_edge}");
             Placed?.Invoke();
         }
 

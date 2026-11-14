@@ -103,6 +103,36 @@ namespace Oxfall.Game.UI
             return Mathf.Max(Mathf.Min(ring, teeth), -Circle(p, Vector2.zero, 0.24f));
         });
 
+        /// <summary>A padlock, shut: a code lock that keeps you out.</summary>
+        public static Sprite Lock => Get("lock", p => Padlock(p, false));
+
+        /// <summary>A padlock with its shackle up: an open lock.</summary>
+        public static Sprite Unlock => Get("unlock", p => Padlock(p, true));
+
+        /// <summary>Nine keys of a keypad.</summary>
+        public static Sprite Keypad => Get("keypad", p =>
+        {
+            float d = float.MaxValue;
+            for (int y = -1; y <= 1; y++)
+            for (int x = -1; x <= 1; x++)
+                d = Mathf.Min(d, RoundBox(p, new Vector2(x * 0.52f, y * 0.52f), new Vector2(0.19f, 0.19f), 0.06f));
+            return d;
+        });
+
+        private static float Padlock(Vector2 p, bool open)
+        {
+            float body = RoundBox(p, new Vector2(0f, -0.3f), new Vector2(0.6f, 0.44f), 0.12f);
+            float keyhole = Mathf.Min(Circle(p, new Vector2(0f, -0.22f), 0.11f),
+                Segment(p, new Vector2(0f, -0.26f), new Vector2(0f, -0.48f), 0.05f));
+            // The shackle: an arch over the body (lifted and swung to one side when open).
+            var c = open ? new Vector2(0.28f, 0.42f) : new Vector2(0f, 0.22f);
+            float arch = Mathf.Abs(Circle(p, c, 0.34f)) - Stroke * 0.9f;
+            arch = Mathf.Max(arch, -(p.y - c.y));
+            float legs = Mathf.Min(Segment(p, new Vector2(c.x - 0.34f, c.y), new Vector2(c.x - 0.34f, open ? 0.08f : -0.1f), Stroke * 0.9f),
+                Segment(p, new Vector2(c.x + 0.34f, c.y), new Vector2(c.x + 0.34f, open ? c.y - 0.04f : -0.1f), Stroke * 0.9f));
+            return Mathf.Max(Mathf.Min(body, Mathf.Min(arch, legs)), -keyhole);
+        }
+
         public static Sprite Door => Get("door", p =>
             Mathf.Min(Mathf.Abs(RoundBox(p, new Vector2(0f, 0f), new Vector2(0.46f, 0.78f), 0.06f)) - Stroke * 0.8f,
                 Circle(p, new Vector2(0.22f, -0.02f), 0.1f)));

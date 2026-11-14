@@ -55,6 +55,29 @@ namespace Oxfall.Game.Items
                 [ItemIds.StoneHatchet] = Tool(MeshFactory.Hatchet(), new[] { m.Bark, m.Stone, m.Rope }),
                 [ItemIds.StonePickaxe] = Tool(MeshFactory.Pickaxe(), new[] { m.Bark, m.Stone, m.Rope }),
                 [ItemIds.Hammer] = Tool(MeshFactory.Hammer(), new[] { m.Bark, m.Stone, m.Rope }),
+                [ItemIds.MetalHatchet] = Tool(MeshFactory.MetalHatchet(), new[] { m.Bark, m.Steel, m.Rope }),
+                [ItemIds.MetalPickaxe] = Tool(MeshFactory.MetalPickaxe(), new[] { m.Bark, m.Steel, m.Rope }),
+                [ItemIds.SheetMetalDoor] = new ItemModel
+                {
+                    Mesh = MeshFactory.MetalDoor(),
+                    Materials = new[] { m.SheetMetal, m.Metal },
+                    ShowInHand = true,
+                    HandPosition = new Vector3(0.24f, -0.56f, 0.72f),
+                    HandRotation = Quaternion.Euler(0f, -28f, 0f),
+                    HandScale = 0.22f,
+                    IconRotation = Tilt(-10f, 25f),
+                },
+                [ItemIds.CodeLock] = new ItemModel
+                {
+                    Mesh = MeshFactory.CodeLock(),
+                    Materials = new[] { m.LockBody, m.LockKeys, m.LedRed },
+                    ShowInHand = true,
+                    // Held up a little right of centre, face on, like a phone.
+                    HandPosition = new Vector3(0.2f, -0.2f, 0.42f),
+                    HandRotation = Quaternion.Euler(-12f, 160f, 0f),
+                    HandScale = 1.1f,
+                    IconRotation = Tilt(-12f, 200f),
+                },
                 [ItemIds.WoodenDoor] = new ItemModel
                 {
                     Mesh = MeshFactory.Door(),

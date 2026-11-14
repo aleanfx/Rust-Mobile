@@ -23,6 +23,7 @@ namespace Oxfall.Game.Rendering
         private static readonly int BaseColor = Shader.PropertyToID("_BaseColor");
         private static readonly int BaseMap = Shader.PropertyToID("_BaseMap");
         private static readonly int Smoothness = Shader.PropertyToID("_Smoothness");
+        private static readonly int BumpMap = Shader.PropertyToID("_BumpMap");
         private static readonly int Metallic = Shader.PropertyToID("_Metallic");
         private static readonly int Cull = Shader.PropertyToID("_Cull");
         private static readonly int SplatMap = Shader.PropertyToID("_SplatMap");
@@ -68,6 +69,15 @@ namespace Oxfall.Game.Rendering
         public Material Metal { get; }
         /// <summary>The olive canvas of a sleeping bag.</summary>
         public Material Bedroll { get; }
+        /// <summary>Corrugated, riveted, rust-streaked sheet metal: the metal building tier and the sheet metal door.</summary>
+        public Material SheetMetal { get; }
+        /// <summary>Bright worn steel: the heads of metal tools.</summary>
+        public Material Steel { get; }
+        /// <summary>A code lock: its dark casing, its keys, and its light (red locked, green open).</summary>
+        public Material LockBody { get; }
+        public Material LockKeys { get; }
+        public Material LedRed { get; }
+        public Material LedGreen { get; }
         /// <summary>The glow of fire (Oxfall/Flame, additive); a plain orange if it isn't in the build.</summary>
         public Material Flame { get; }
         public Material Berries { get; }
@@ -162,6 +172,13 @@ namespace Oxfall.Game.Rendering
             Char = Make("Char", new Color(0.13f, 0.11f, 0.10f), 0.05f);
             Metal = Make("Metal", new Color(0.40f, 0.36f, 0.33f), 0.42f);
             Bedroll = Make("Bedroll", new Color(0.30f, 0.34f, 0.22f), 0.04f);
+            SheetMetal = MakeSheetMetal(StoneWall);
+            Steel = Make("Steel", new Color(0.60f, 0.61f, 0.62f), 0.62f);
+            Steel.SetFloat(Metallic, 0.35f);
+            LockBody = Make("Lock body", new Color(0.15f, 0.16f, 0.17f), 0.55f);
+            LockKeys = Make("Lock keys", new Color(0.58f, 0.59f, 0.57f), 0.4f);
+            LedRed = Make("Lock red", new Color(1f, 0.16f, 0.1f), 0.9f);
+            LedGreen = Make("Lock green", new Color(0.25f, 1f, 0.38f), 0.9f);
             Flame = Resources.Load<Material>("OxfallFlame") ?? Make("Flame", new Color(1f, 0.55f, 0.15f), 0f);
             Berries = Make("Berries", new Color(0.50f, 0.06f, 0.20f), 0.55f);
             Shirt = Make("Shirt", new Color(0.46f, 0.42f, 0.33f), 0.05f);
@@ -311,6 +328,136 @@ namespace Oxfall.Game.Rendering
             texture.SetPixels32(pixels);
             texture.Apply(true, true);
             return texture;
+        }
+
+        /// <summary>
+        /// Sheet metal made in code: corrugated sheets about 80 cm wide, overlapping, with rivets
+        /// along the seams and rust running down from them. Built on a normal-mapped material from
+        /// the editor setup when there is one, so its normal map is used.
+        /// </summary>
+        private Material MakeSheetMetal(Material normalMapped)
+        {
+            MakeSheetMetalTextures(out var albedo, out var normal);
+            bool textured = normalMapped.HasProperty(BaseMap) && normalMapped.GetTexture(BaseMap) != null;
+            var material = textured ? new Material(normalMapped) { name = "Sheet metal" } : Make("Sheet metal", Color.white, 0.3f);
+            material.SetTexture(BaseMap, albedo);
+            material.SetColor(BaseColor, Color.white);
+            if (material.HasProperty(BumpMap)) material.SetTexture(BumpMap, normal);
+            material.SetFloat(Smoothness, 0.34f);
+            material.SetFloat(Metallic, 0.25f);
+            return material;
+        }
+
+        /// <summary>One tile (1.6 m, as building pieces are mapped): two sheets across, two down.</summary>
+        private static void MakeSheetMetalTextures(out Texture2D albedo, out Texture2D normal)
+        {
+            const int size = 256;
+            const int ridges = 10;
+            const float rivetRadius = 3.2f;
+            var colours = new Color32[size * size];
+            var normals = new Color32[size * size];
+            var tints = new[] { 1f, 0.9f, 0.95f, 0.85f };
+            for (int y = 0; y < size; y++)
+            for (int x = 0; x < size; x++)
+            {
+                float u = (x + 0.5f) / size, v = (y + 0.5f) / size;
+                int sheet = (u < 0.5f ? 0 : 1) + (v < 0.5f ? 0 : 2);
+                // Corrugation across u: ridges and valleys.
+                float phase = u * ridges * 2f * Mathf.PI;
+                float nx = -Mathf.Cos(phase) * 0.55f, ny = 0f;
+                float valley = 0.5f - 0.5f * Mathf.Sin(phase);
+                // Each sheet's lower edge laps over the one below: a step across at v = 0 and 0.5,
+                // and a seam down at u = 0 and 0.5.
+                float above = Mathf.Repeat(v, 0.5f);
+                float step = Mathf.Min(above, 0.5f - above);
+                float seam = Mathf.Min(Mathf.Repeat(u, 0.5f), 0.5f - Mathf.Repeat(u, 0.5f));
+                if (step < 0.01f) ny = above < 0.25f ? 0.9f : -0.9f;
+                // Rivets on every other ridge crest, just above each step.
+                float rivet = 0f;
+                float crest = (Mathf.Round((u * ridges - 0.25f) / 2f) * 2f + 0.25f) / ridges;
+                float du = (u - crest) * size, dv = (above - 0.03f) * size;
+                float rd = Mathf.Sqrt(du * du + dv * dv);
+                if (rd < rivetRadius)
+                {
+                    rivet = 1f - rd / rivetRadius;
+                    nx = du / rivetRadius * 0.9f;
+                    ny = dv / rivetRadius * 0.9f;
+                }
+                // Rust: blotches, heavier just above each step where water sits, streaking down.
+                // Each sheet rusts its own way (sheets are separate, so no seam to hide between them).
+                float blotch = Fbm(u, v, 6, 6, 7 + sheet * 101);
+                float streak = Fbm(u, v, 40, 3, 13 + sheet * 7);
+                float wet = 1f - Mathf.Clamp01(above / 0.12f);
+                float rust = Mathf.Clamp01((blotch * 1.15f + streak * 0.45f + wet * 0.25f - 0.85f) * 2.4f);
+                float grain = Fbm(u, v, 64, 64, 3);
+                var steel = new Color(0.40f, 0.42f, 0.43f) * (tints[sheet] * (0.9f + 0.16f * grain));
+                var rustColour = Color.Lerp(new Color(0.42f, 0.22f, 0.10f), new Color(0.26f, 0.13f, 0.07f), grain);
+                var c = Color.Lerp(steel, rustColour, rust);
+                c *= 1f - 0.18f * valley + 0.15f * rivet;
+                if (step < 0.01f) c *= 0.7f;
+                if (seam < 0.006f) c *= 0.82f;
+                c.a = 1f;
+                colours[y * size + x] = c;
+                // Rust roughens the surface a little.
+                nx += (Fbm(u, v, 96, 96, 5) - 0.5f) * 0.6f * rust;
+                var n = new Vector3(nx, ny, 1f).normalized;
+                byte r = (byte)Mathf.RoundToInt((n.x * 0.5f + 0.5f) * 255f), g = (byte)Mathf.RoundToInt((n.y * 0.5f + 0.5f) * 255f);
+                // x in red and in alpha: read right whether the platform takes RGB or AG normal maps.
+                normals[y * size + x] = new Color32(r, g, (byte)Mathf.RoundToInt((n.z * 0.5f + 0.5f) * 255f), r);
+            }
+            albedo = new Texture2D(size, size, TextureFormat.RGBA32, true)
+            {
+                name = "Sheet metal", wrapMode = TextureWrapMode.Repeat, filterMode = FilterMode.Trilinear, anisoLevel = 4,
+            };
+            albedo.SetPixels32(colours);
+            albedo.Apply(true, true);
+            normal = new Texture2D(size, size, TextureFormat.RGBA32, true, true)
+            {
+                name = "Sheet metal normals", wrapMode = TextureWrapMode.Repeat, filterMode = FilterMode.Trilinear, anisoLevel = 4,
+            };
+            normal.SetPixels32(normals);
+            normal.Apply(true, true);
+        }
+
+        /// <summary>
+        /// Four octaves of value noise over the tile (u, v from 0 to 1), starting at fx by fy cells,
+        /// wrapping at the tile's edges so it repeats without a seam. 0 to 1.
+        /// </summary>
+        private static float Fbm(float u, float v, int fx, int fy, int seed)
+        {
+            float sum = 0f, amplitude = 0.5f, total = 0f;
+            for (int octave = 0; octave < 4; octave++)
+            {
+                sum += Noise(u * fx, v * fy, fx, fy, seed + octave * 31) * amplitude;
+                total += amplitude;
+                amplitude *= 0.5f;
+                fx *= 2;
+                fy *= 2;
+            }
+            return sum / total;
+        }
+
+        private static float Noise(float x, float y, int periodX, int periodY, int seed)
+        {
+            int x0 = Mathf.FloorToInt(x), y0 = Mathf.FloorToInt(y);
+            float fx = x - x0, fy = y - y0;
+            fx = fx * fx * (3f - 2f * fx);
+            fy = fy * fy * (3f - 2f * fy);
+            int xa = Wrap(x0, periodX), xb = Wrap(x0 + 1, periodX), ya = Wrap(y0, periodY), yb = Wrap(y0 + 1, periodY);
+            float a = Hash(xa, ya, seed), b = Hash(xb, ya, seed), c = Hash(xa, yb, seed), d = Hash(xb, yb, seed);
+            return Mathf.Lerp(Mathf.Lerp(a, b, fx), Mathf.Lerp(c, d, fx), fy);
+        }
+
+        private static int Wrap(int i, int period) => ((i % period) + period) % period;
+
+        private static float Hash(int x, int y, int seed)
+        {
+            unchecked
+            {
+                uint h = (uint)(x * 374761393 + y * 668265263 + seed * 1274126177);
+                h = (h ^ (h >> 13)) * 1274126177u;
+                return ((h ^ (h >> 16)) & 0xffffff) / (float)0xffffff;
+            }
         }
 
         private Material Make(string name, Color colour, float smoothness)

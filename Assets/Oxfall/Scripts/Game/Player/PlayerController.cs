@@ -52,6 +52,9 @@ namespace Oxfall.Game.Player
         }
 
         /// <summary>Moves the player instantly, facing the given way (pitch: positive looks down).</summary>
+        public float Yaw => _yaw;
+        public float Pitch => _pitch;
+
         public void Teleport(Vector3 feet, float yaw, float pitch)
         {
             _body.enabled = false;
