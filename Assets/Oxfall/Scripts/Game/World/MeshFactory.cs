@@ -524,6 +524,119 @@ namespace Oxfall.Game.World
             return b.Build("Survivor body", 60f);
         }
 
+        // ---- Clothing: laid flat for the inventory icons, and what is worn on the head.
+
+        /// <summary>Corners in counter-clockwise order seen from +Z, whichever way they were given.</summary>
+        private static Vector2[] Ccw(params Vector2[] points)
+        {
+            float area = 0f;
+            for (int i = 0, j = points.Length - 1; i < points.Length; j = i, i++)
+                area += (points[j].x - points[i].x) * (points[j].y + points[i].y);
+            if (area < 0f) System.Array.Reverse(points);
+            return points;
+        }
+
+        private static Vector2[] Mirror(Vector2[] points)
+        {
+            var mirrored = new Vector2[points.Length];
+            for (int i = 0; i < points.Length; i++) mirrored[i] = new Vector2(-points[i].x, points[i].y);
+            return Ccw(mirrored);
+        }
+
+        /// <summary>
+        /// A shirt laid flat, collar up (with <paramref name="sleeves"/>), or a vest open down the front
+        /// and laced. Submeshes: cloth or hide, stitching and lacing.
+        /// </summary>
+        public static Mesh Garment(bool sleeves, bool vest)
+        {
+            var b = new FlatMeshBuilder(2) { UvScale = 0.35f };
+            const float z0 = -0.018f, z1 = 0.018f;
+            if (vest)
+            {
+                var half = Ccw(new Vector2(0.025f, -0.31f), new Vector2(0.21f, -0.31f), new Vector2(0.22f, 0.2f),
+                    new Vector2(0.16f, 0.29f), new Vector2(0.08f, 0.29f), new Vector2(0.025f, 0.04f));
+                b.AddPrism(0, z0, z1, half);
+                b.AddPrism(0, z0, z1, Mirror(half));
+                for (int k = 0; k < 4; k++)
+                {
+                    float y = -0.2f + k * 0.075f;
+                    b.AddTube(1, new Vector3(-0.045f, y, z0 - 0.004f), new Vector3(0.045f, y + 0.03f, z0 - 0.004f), 0.006f, 0.006f, 5);
+                }
+            }
+            else
+            {
+                b.AddPrism(0, z0, z1, Ccw(new Vector2(-0.2f, -0.31f), new Vector2(0.2f, -0.31f), new Vector2(0.21f, 0.23f),
+                    new Vector2(0.07f, 0.28f), new Vector2(0f, 0.24f), new Vector2(-0.07f, 0.28f), new Vector2(-0.21f, 0.23f)));
+                if (sleeves)
+                {
+                    var sleeve = Ccw(new Vector2(0.19f, 0.03f), new Vector2(0.37f, 0.09f), new Vector2(0.31f, 0.27f), new Vector2(0.17f, 0.25f));
+                    b.AddPrism(0, z0 * 0.9f, z1 * 0.9f, sleeve);
+                    b.AddPrism(0, z0 * 0.9f, z1 * 0.9f, Mirror(sleeve));
+                }
+                // The neckline and hem stitched in a darker thread.
+                b.AddTube(1, new Vector3(-0.07f, 0.275f, z0 - 0.003f), new Vector3(0f, 0.235f, z0 - 0.003f), 0.007f, 0.007f, 5);
+                b.AddTube(1, new Vector3(0f, 0.235f, z0 - 0.003f), new Vector3(0.07f, 0.275f, z0 - 0.003f), 0.007f, 0.007f, 5);
+                b.AddTube(1, new Vector3(-0.19f, -0.29f, z0 - 0.003f), new Vector3(0.19f, -0.29f, z0 - 0.003f), 0.006f, 0.006f, 5);
+            }
+            return b.Build(vest ? "Vest" : sleeves ? "Shirt" : "Tunic", 20f);
+        }
+
+        /// <summary>Trousers laid flat, a cord through the waist. Submeshes: cloth or hide, cord.</summary>
+        public static Mesh Trousers()
+        {
+            var b = new FlatMeshBuilder(2) { UvScale = 0.35f };
+            const float z0 = -0.018f, z1 = 0.018f;
+            b.AddPrism(0, z0, z1, Ccw(new Vector2(-0.18f, 0.24f), new Vector2(0.18f, 0.24f), new Vector2(0.18f, 0.31f), new Vector2(-0.18f, 0.31f)));
+            var leg = Ccw(new Vector2(0.005f, 0.25f), new Vector2(0.18f, 0.25f), new Vector2(0.19f, -0.36f), new Vector2(0.03f, -0.36f));
+            b.AddPrism(0, z0, z1, leg);
+            b.AddPrism(0, z0, z1, Mirror(leg));
+            b.AddTube(1, new Vector3(-0.17f, 0.275f, z0 - 0.004f), new Vector3(0.17f, 0.275f, z0 - 0.004f), 0.008f, 0.008f, 5);
+            b.AddTube(1, new Vector3(0.02f, 0.275f, z0 - 0.004f), new Vector3(0.05f, 0.17f, z0 - 0.004f), 0.006f, 0.005f, 5);
+            return b.Build("Trousers", 20f);
+        }
+
+        /// <summary>A pair of hide boots side by side. Submeshes: hide, sole.</summary>
+        public static Mesh Boots()
+        {
+            var b = new FlatMeshBuilder(2) { UvScale = 0.3f };
+            foreach (float x in new[] { -0.09f, 0.1f })
+            {
+                float y = x < 0f ? 0.02f : 0f;
+                b.AddBox(0, new Vector3(x - 0.055f, y - 0.02f, -0.045f), new Vector3(x + 0.045f, y + 0.2f, 0.045f));
+                b.AddBox(0, new Vector3(x - 0.055f, y - 0.09f, -0.045f), new Vector3(x + 0.13f, y - 0.01f, 0.045f));
+                b.AddBox(1, new Vector3(x - 0.06f, y - 0.11f, -0.05f), new Vector3(x + 0.14f, y - 0.085f, 0.05f));
+                b.AddTube(1, new Vector3(x - 0.06f, y + 0.17f, -0.05f), new Vector3(x + 0.05f, y + 0.17f, -0.05f), 0.007f, 0.007f, 5);
+            }
+            return b.Build("Boots", 30f);
+        }
+
+        /// <summary>
+        /// Worn on a survivor's head (its centre about 1.64 m up): cloth wound round it, or a hide hood
+        /// over the head and neck, open at the face. Submeshes: cloth or hide, stitching.
+        /// </summary>
+        public static Mesh Headwear(bool hood)
+        {
+            var b = new FlatMeshBuilder(2) { UvScale = 0.3f };
+            var random = new System.Random(hood ? 41 : 43);
+            if (hood)
+            {
+                b.AddBlob(0, new Vector3(0f, 1.67f, -0.025f), new Vector3(0.13f, 0.15f, 0.125f), random, 0.05f);
+                b.AddTube(0, new Vector3(0f, 1.45f, -0.01f), new Vector3(0f, 1.58f, -0.015f), 0.13f, 0.11f, 9);
+                b.AddTube(1, new Vector3(-0.1f, 1.76f, 0.06f), new Vector3(0.1f, 1.76f, 0.06f), 0.012f, 0.012f, 5);
+            }
+            else
+            {
+                for (int k = 0; k < 3; k++)
+                {
+                    float y = 1.62f + k * 0.05f;
+                    b.AddTube(0, new Vector3(0f, y, 0.005f), new Vector3(0f, y + 0.055f, 0.0f), 0.122f - k * 0.008f, 0.118f - k * 0.012f, 10);
+                }
+                b.AddBlob(0, new Vector3(0f, 1.765f, -0.005f), new Vector3(0.095f, 0.035f, 0.1f), random, 0.08f);
+                b.AddBlob(1, new Vector3(0.08f, 1.68f, -0.09f), new Vector3(0.035f, 0.03f, 0.03f), random, 0.1f);
+            }
+            return b.Build(hood ? "Hood" : "Headwrap", 40f);
+        }
+
         /// <summary>One leg hanging from the hip at the origin. Submeshes: trousers, boot.</summary>
         public static Mesh SurvivorLeg()
         {

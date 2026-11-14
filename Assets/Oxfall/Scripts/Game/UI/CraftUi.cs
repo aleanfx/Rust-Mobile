@@ -30,8 +30,8 @@ namespace Oxfall.Game.UI
         private readonly TabView[] _tabs = new TabView[TabNames.Length];
         private int _tab;
 
-        /// <summary>The panel's tabs, like the PC game's categories: tools, weapons, the base, and things to set down.</summary>
-        private static readonly string[] TabNames = { "ÚTILES", "ARMAS", "BASE", "OBJETOS" };
+        /// <summary>The panel's tabs, like the PC game's categories: tools, weapons, clothing, the base, and things to set down.</summary>
+        private static readonly string[] TabNames = { "ÚTILES", "ARMAS", "ROPA", "BASE", "OBJETOS" };
 
         /// <summary>Which tab an item is made under.</summary>
         public static int TabOf(string itemId)
@@ -48,15 +48,23 @@ namespace Oxfall.Game.UI
                 case ItemIds.WoodenBow:
                 case ItemIds.Arrow:
                     return 1;
+                case ItemIds.BurlapHeadwrap:
+                case ItemIds.BurlapShirt:
+                case ItemIds.BurlapTrousers:
+                case ItemIds.HideHood:
+                case ItemIds.HideVest:
+                case ItemIds.HidePants:
+                case ItemIds.HideBoots:
+                    return 2;
                 case ItemIds.BuildingPlan:
                 case ItemIds.Hammer:
                 case ItemIds.WoodenDoor:
                 case ItemIds.SheetMetalDoor:
                 case ItemIds.CodeLock:
                 case ItemIds.ToolCupboard:
-                    return 2;
-                default:
                     return 3;
+                default:
+                    return 4;
             }
         }
 

@@ -98,6 +98,8 @@ namespace Oxfall.Game.Net
         private readonly List<AnimalSnap> _animals = new List<AnimalSnap>();
         private readonly List<SleeperSnap> _sleepers = new List<SleeperSnap>();
 
+        private readonly string[] _outfit = new string[Inventory.WearSlots];
+
         /// <summary>Everyone asleep on the island (sent whole whenever it changes).</summary>
         public event Action<List<SleeperSnap>> SleepersSeen;
 
@@ -405,6 +407,12 @@ namespace Oxfall.Game.Net
                     Messages.ReadHurt(reader, out ushort target, out ushort attacker, out int damage, out bool killed);
                     if (_players.TryGetValue(target, out var victim)) victim.Flinch();
                     Hurt?.Invoke(target, attacker, damage, killed);
+                    break;
+                }
+                case MessageType.Outfit:
+                {
+                    Messages.ReadOutfit(reader, out ushort who, _outfit);
+                    if (_players.TryGetValue(who, out var dressed)) dressed.SetOutfit(_outfit);
                     break;
                 }
                 case MessageType.Sleepers:

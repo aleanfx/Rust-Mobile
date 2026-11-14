@@ -78,6 +78,31 @@ namespace Oxfall.Game.UI
             return Mathf.Max(outer, -inner);
         });
 
+        // Clothing silhouettes for the empty wear slots.
+
+        /// <summary>A hood over a head.</summary>
+        public static Sprite Hood => Get("hood", p =>
+            Mathf.Max(Polygon(p, new Vector2(-0.56f, -0.62f), new Vector2(-0.6f, 0.05f), new Vector2(-0.36f, 0.55f), new Vector2(0f, 0.72f),
+                new Vector2(0.36f, 0.55f), new Vector2(0.6f, 0.05f), new Vector2(0.56f, -0.62f), new Vector2(0.22f, -0.7f), new Vector2(-0.22f, -0.7f)),
+                -RoundBox(p, new Vector2(0f, -0.06f), new Vector2(0.26f, 0.34f), 0.24f)));
+
+        /// <summary>A shirt with short sleeves.</summary>
+        public static Sprite Shirt => Get("shirt", p =>
+            Polygon(p, new Vector2(-0.4f, -0.72f), new Vector2(0.4f, -0.72f), new Vector2(0.4f, 0.12f), new Vector2(0.6f, -0.04f),
+                new Vector2(0.8f, 0.3f), new Vector2(0.42f, 0.66f), new Vector2(0.16f, 0.66f), new Vector2(0f, 0.5f),
+                new Vector2(-0.16f, 0.66f), new Vector2(-0.42f, 0.66f), new Vector2(-0.8f, 0.3f), new Vector2(-0.6f, -0.04f),
+                new Vector2(-0.4f, 0.12f)));
+
+        /// <summary>A pair of trousers.</summary>
+        public static Sprite Trousers => Get("trousers", p =>
+            Polygon(p, new Vector2(-0.42f, 0.7f), new Vector2(0.42f, 0.7f), new Vector2(0.5f, -0.76f), new Vector2(0.1f, -0.76f),
+                new Vector2(0f, 0.2f), new Vector2(-0.1f, -0.76f), new Vector2(-0.5f, -0.76f)));
+
+        /// <summary>A boot, toe to the right.</summary>
+        public static Sprite Boot => Get("boot", p =>
+            Polygon(p, new Vector2(-0.46f, 0.72f), new Vector2(0.06f, 0.72f), new Vector2(0.08f, -0.08f), new Vector2(0.56f, -0.26f),
+                new Vector2(0.7f, -0.5f), new Vector2(0.68f, -0.7f), new Vector2(-0.5f, -0.7f)));
+
         /// <summary>A sleeping bag with its pillow.</summary>
         public static Sprite Bed => Get("bed", p =>
             Mathf.Min(RoundBox(p, new Vector2(0.14f, -0.12f), new Vector2(0.62f, 0.26f), 0.14f),

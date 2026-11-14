@@ -4,7 +4,9 @@ using System.Collections.Generic;
 namespace Oxfall.Core.Items
 {
     /// <summary>
-    /// A fixed number of slots. The first <see cref="HotbarSize"/> slots are the hotbar.
+    /// A fixed number of slots. The first <see cref="HotbarSize"/> slots are the hotbar; a player's
+    /// last <see cref="WearSlots"/> are what they wear (head, chest, legs, feet), which only take
+    /// clothing for that part of the body and are never filled by picking things up.
     /// All changes go through methods that either complete fully or change nothing, so the
     /// server can apply a client's request and trust the result.
     /// </summary>
@@ -12,6 +14,10 @@ namespace Oxfall.Core.Items
     {
         public const int DefaultSlotCount = 30;
         public const int HotbarSize = 6;
+        public const int WearSlots = 4;
+
+        /// <summary>A player's: the hotbar and backpack, then the four wear slots.</summary>
+        public const int PlayerSlotCount = DefaultSlotCount + WearSlots;
 
         private readonly ItemStack[] _slots;
         private readonly ItemCatalog _catalog;
@@ -23,16 +29,52 @@ namespace Oxfall.Core.Items
         public ItemCatalog Catalog => _catalog;
 
         /// <param name="hasHotbar">A player's inventory (its first slots are the hotbar); a box's has none and fills from the top.</param>
-        public Inventory(ItemCatalog catalog, int slotCount = DefaultSlotCount, bool hasHotbar = true)
+        /// <param name="hasWear">A player's: its last <see cref="WearSlots"/> slots are worn clothing.</param>
+        public Inventory(ItemCatalog catalog, int slotCount = DefaultSlotCount, bool hasHotbar = true, bool hasWear = false)
         {
             if (hasHotbar && slotCount < HotbarSize) throw new ArgumentOutOfRangeException(nameof(slotCount), $"Need at least {HotbarSize} slots.");
+            if (hasWear && slotCount < HotbarSize + WearSlots) throw new ArgumentOutOfRangeException(nameof(slotCount));
             if (slotCount < 1) throw new ArgumentOutOfRangeException(nameof(slotCount));
             _catalog = catalog ?? throw new ArgumentNullException(nameof(catalog));
             _slots = new ItemStack[slotCount];
             HasHotbar = hasHotbar;
+            HasWear = hasWear;
+            CarrySlots = hasWear ? slotCount - WearSlots : slotCount;
         }
 
         public bool HasHotbar { get; }
+        public bool HasWear { get; }
+
+        /// <summary>The hotbar and backpack: every slot but the wear slots.</summary>
+        public int CarrySlots { get; }
+
+        public bool IsWearSlot(int slot) => HasWear && slot >= CarrySlots && slot < _slots.Length;
+
+        /// <summary>Which part of the body a slot dresses (None: not a wear slot).</summary>
+        public WearSlot WearOf(int slot) => IsWearSlot(slot) ? (WearSlot)(slot - CarrySlots + 1) : WearSlot.None;
+
+        /// <summary>The slot that dresses this part of the body, or -1.</summary>
+        public int SlotFor(WearSlot wear) => HasWear && wear != WearSlot.None ? CarrySlots + (int)wear - 1 : -1;
+
+        /// <summary>Whether this stack may lie in this slot: anything in a carry slot, only the right clothing in a wear slot.</summary>
+        public bool CanHold(int slot, ItemStack stack)
+        {
+            if (stack.IsEmpty || !IsWearSlot(slot)) return true;
+            return _catalog.TryGet(stack.ItemId, out var def) && def.Category == ItemCategory.Attire && def.Wear == WearOf(slot);
+        }
+
+        /// <summary>The share of each blow the worn clothing takes (0 to 0.8).</summary>
+        public float Protection
+        {
+            get
+            {
+                if (!HasWear) return 0f;
+                float total = 0f;
+                for (int i = CarrySlots; i < _slots.Length; i++)
+                    if (!_slots[i].IsEmpty && _catalog.TryGet(_slots[i].ItemId, out var def)) total += def.Protection;
+                return Math.Min(0.8f, total);
+            }
+        }
 
         public ItemStack this[int slot] => _slots[CheckSlot(slot)];
 
@@ -46,13 +88,22 @@ namespace Oxfall.Core.Items
 
         public bool Has(string itemId, int amount) => Count(itemId) >= amount;
 
+        /// <summary>How many are carried (not worn): what can be spent.</summary>
+        public int CountCarried(string itemId)
+        {
+            int total = 0;
+            for (int i = 0; i < CarrySlots; i++)
+                if (!_slots[i].IsEmpty && _slots[i].ItemId == itemId) total += _slots[i].Amount;
+            return total;
+        }
+
         /// <summary>How many of this item would fit right now.</summary>
         public int SpaceFor(string itemId, int skinId = 0)
         {
             var def = _catalog.Get(itemId);
             int space = 0;
             var probe = new ItemStack(itemId, 1, skinId);
-            for (int i = 0; i < _slots.Length; i++)
+            for (int i = 0; i < CarrySlots; i++)
             {
                 if (_slots[i].IsEmpty) space += def.MaxStack;
                 else if (_slots[i].CanMergeWith(probe)) space += def.MaxStack - _slots[i].Amount;
@@ -73,7 +124,7 @@ namespace Oxfall.Core.Items
             int remaining = amount;
             bool changed = false;
 
-            for (int i = 0; i < _slots.Length && remaining > 0; i++)
+            for (int i = 0; i < CarrySlots && remaining > 0; i++)
             {
                 if (!_slots[i].CanMergeWith(probe)) continue;
                 int room = def.MaxStack - _slots[i].Amount;
@@ -103,14 +154,14 @@ namespace Oxfall.Core.Items
         {
             if (amount < 0) throw new ArgumentOutOfRangeException(nameof(amount));
             if (amount == 0) return true;
-            if (Count(itemId) < amount) return false;
+            if (CountCarried(itemId) < amount) return false;
 
             int remaining = amount;
             int split = HasHotbar ? HotbarSize : 0;
             for (int pass = 0; pass < 2 && remaining > 0; pass++)
             {
                 int from = pass == 0 ? split : 0;
-                int to = pass == 0 ? _slots.Length : split;
+                int to = pass == 0 ? CarrySlots : split;
                 for (int i = to - 1; i >= from && remaining > 0; i--)
                 {
                     if (_slots[i].IsEmpty || _slots[i].ItemId != itemId) continue;
@@ -142,6 +193,8 @@ namespace Oxfall.Core.Items
             CheckSlot(from);
             CheckSlot(to);
             if (from == to || _slots[from].IsEmpty) return;
+            // Into a wear slot only the right clothing; a swap must suit both slots.
+            if (!CanHold(to, _slots[from]) || !CanHold(from, _slots[to])) return;
 
             if (_slots[to].CanMergeWith(_slots[from]))
             {
@@ -178,6 +231,7 @@ namespace Oxfall.Core.Items
             var moving = from._slots[fromSlot];
             if (moving.IsEmpty) return false;
             var there = to._slots[toSlot];
+            if (!to.CanHold(toSlot, moving) || !from.CanHold(fromSlot, there)) return false;
             if (there.CanMergeWith(moving))
             {
                 int put = Math.Min(to._catalog.Get(there.ItemId).MaxStack - there.Amount, moving.Amount);
@@ -234,8 +288,9 @@ namespace Oxfall.Core.Items
             CheckSlot(slot);
             var stack = _slots[slot];
             if (stack.IsEmpty) return false;
-            int from = IsHotbarSlot(slot) ? HotbarSize : 0;
-            int to = IsHotbarSlot(slot) ? _slots.Length : HotbarSize;
+            // Hotbar to backpack and back; taken off, clothing goes to the backpack.
+            int from = IsHotbarSlot(slot) || IsWearSlot(slot) ? HotbarSize : 0;
+            int to = IsHotbarSlot(slot) || IsWearSlot(slot) ? CarrySlots : HotbarSize;
             int max = _catalog.Get(stack.ItemId).MaxStack;
             int remaining = stack.Amount;
 
@@ -260,14 +315,30 @@ namespace Oxfall.Core.Items
             return true;
         }
 
+        /// <summary>
+        /// Puts on the clothing in a carry slot (swapping with what was worn there), or takes off what
+        /// is in a wear slot into the backpack. Returns true if anything moved.
+        /// </summary>
+        public bool Wear(int slot)
+        {
+            CheckSlot(slot);
+            if (_slots[slot].IsEmpty) return false;
+            if (IsWearSlot(slot)) return QuickMove(slot);
+            if (!_catalog.TryGet(_slots[slot].ItemId, out var def) || def.Category != ItemCategory.Attire) return false;
+            int to = SlotFor(def.Wear);
+            if (to < 0) return false;
+            Move(slot, to);
+            return !_slots[to].IsEmpty && _slots[to].ItemId == def.Id;
+        }
+
         /// <summary>Moves half of a stack (rounded down) into the first empty slot. Returns the new slot or -1.</summary>
         public int Split(int slot)
         {
             CheckSlot(slot);
             var stack = _slots[slot];
             if (stack.IsEmpty || stack.Amount < 2) return -1;
-            int target = Array.FindIndex(_slots, s => s.IsEmpty);
-            if (target < 0) return -1;
+            int target = Array.FindIndex(_slots, 0, CarrySlots, s => s.IsEmpty);
+            if (target < 0 || IsWearSlot(slot)) return -1;
             int half = stack.Amount / 2;
             _slots[slot] = stack.WithAmount(stack.Amount - half);
             _slots[target] = stack.WithAmount(half);
@@ -312,11 +383,11 @@ namespace Oxfall.Core.Items
             bool hotbarFirst = !HasHotbar || category != ItemCategory.Resource;
             if (hotbarFirst)
             {
-                for (int i = 0; i < _slots.Length; i++) yield return i;
+                for (int i = 0; i < CarrySlots; i++) yield return i;
             }
             else
             {
-                for (int i = HotbarSize; i < _slots.Length; i++) yield return i;
+                for (int i = HotbarSize; i < CarrySlots; i++) yield return i;
                 for (int i = 0; i < HotbarSize; i++) yield return i;
             }
         }

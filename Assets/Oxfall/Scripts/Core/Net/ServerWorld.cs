@@ -255,8 +255,7 @@ namespace Oxfall.Core.Net
             if (attacker.Pose.HorizontalDistance(target.Pose) > reach || Math.Abs(attacker.Pose.Y - target.Pose.Y) > 2.2f) return false;
 
             attacker.LastHitTime = now;
-            damage = Math.Min(Combat.MeleeDamage(tool), t.Survivor.Vitals.Health);
-            t.Survivor.Vitals.Damage(Combat.MeleeDamage(tool));
+            damage = t.Survivor.TakeHit(Combat.MeleeDamage(tool));
             killed = t.Survivor.Vitals.IsDead;
             return true;
         }
@@ -270,6 +269,7 @@ namespace Oxfall.Core.Net
             {
                 case ActKind.MoveSlot: return PlayerActions.MoveSlot(s, a, b);
                 case ActKind.QuickMove: return PlayerActions.QuickMove(s, a);
+                case ActKind.Wear: return PlayerActions.Wear(s, a);
                 case ActKind.Split: return PlayerActions.Split(s, a);
                 case ActKind.Craft:
                     return Recipes.TryGet(recipeId ?? "", out var recipe) ? PlayerActions.Craft(s, recipe) : ActionResult.Invalid;
@@ -346,10 +346,15 @@ namespace Oxfall.Core.Net
             inventory.Add(ItemIds.WoodenSpear, 1);
             inventory.Add(ItemIds.WoodenBow, 1);
             inventory.Add(ItemIds.Arrow, 30);
+            inventory.Add(ItemIds.HideHood, 1);
+            inventory.Add(ItemIds.HideVest, 1);
+            inventory.Add(ItemIds.HidePants, 1);
+            inventory.Add(ItemIds.HideBoots, 1);
             inventory.Add(ItemIds.Wood, 1500);
             inventory.Add(ItemIds.Stone, 700);
             inventory.Add(ItemIds.MetalOre, 240);
             inventory.Add(ItemIds.Cloth, 40);
+            inventory.Add(ItemIds.Leather, 40);
             inventory.Add(ItemIds.MetalFragments, 600);
         }
 

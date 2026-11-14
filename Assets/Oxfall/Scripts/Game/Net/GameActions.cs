@@ -134,6 +134,14 @@ namespace Oxfall.Game.Net
             return ActionResult.Ok;
         }
 
+        public ActionResult Wear(int slot)
+        {
+            if (!Online) return PlayerActions.Wear(_survivor, slot);
+            if (Inventory[slot].IsEmpty) return ActionResult.Invalid;
+            _net.SendAct(ActKind.Wear, slot);
+            return ActionResult.Ok;
+        }
+
         public ActionResult Split(int slot)
         {
             if (!Online) return PlayerActions.Split(_survivor, slot);

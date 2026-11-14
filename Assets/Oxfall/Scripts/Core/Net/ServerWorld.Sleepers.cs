@@ -75,10 +75,9 @@ namespace Oxfall.Core.Net
 
         private bool HurtSleeper(SurvivorRecord sleeper, float amount, string by, out float damage, out bool killed)
         {
-            var vitals = sleeper.Survivor.Vitals;
-            damage = Math.Min(amount, vitals.Health);
-            vitals.Damage(amount);
-            killed = vitals.IsDead;
+            // Asleep in their clothes: what they wear still takes its share.
+            damage = sleeper.Survivor.TakeHit(amount);
+            killed = sleeper.Survivor.Vitals.IsDead;
             if (killed)
             {
                 // The bag has already dropped where they lay (see DropBag); the body goes.

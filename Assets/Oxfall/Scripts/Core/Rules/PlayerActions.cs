@@ -71,6 +71,8 @@ namespace Oxfall.Core.Rules
         {
             if (s.Vitals.IsDead) return ActionResult.Dead;
             if (!IsSlot(s, from) || !IsSlot(s, to)) return ActionResult.Invalid;
+            // Only the right clothing goes into a wear slot (and a swap must suit both slots).
+            if (!s.Inventory.CanHold(to, s.Inventory[from]) || !s.Inventory.CanHold(from, s.Inventory[to])) return ActionResult.Invalid;
             s.Inventory.Move(from, to);
             return ActionResult.Ok;
         }
@@ -80,6 +82,16 @@ namespace Oxfall.Core.Rules
             if (s.Vitals.IsDead) return ActionResult.Dead;
             if (!IsSlot(s, slot)) return ActionResult.Invalid;
             return s.Inventory.QuickMove(slot) ? ActionResult.Ok : ActionResult.NoSpace;
+        }
+
+        /// <summary>Puts on (or takes off) the clothing in a slot. NoSpace: nowhere to put it once off.</summary>
+        public static ActionResult Wear(Survivor s, int slot)
+        {
+            if (s.Vitals.IsDead) return ActionResult.Dead;
+            if (!IsSlot(s, slot) || s.Inventory[slot].IsEmpty) return ActionResult.Invalid;
+            if (!s.Inventory.IsWearSlot(slot) && (!s.Inventory.Catalog.TryGet(s.Inventory[slot].ItemId, out var def) || def.Category != ItemCategory.Attire))
+                return ActionResult.Invalid;
+            return s.Inventory.Wear(slot) ? ActionResult.Ok : ActionResult.NoSpace;
         }
 
         public static ActionResult Split(Survivor s, int slot)

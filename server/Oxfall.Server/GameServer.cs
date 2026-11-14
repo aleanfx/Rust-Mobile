@@ -37,6 +37,7 @@ namespace Oxfall.Server
         private readonly ServerState _state;
         private readonly object _lock = new object();
         private readonly Dictionary<ushort, Session> _sessions = new Dictionary<ushort, Session>();
+        private readonly string[] _worn = new string[Inventory.WearSlots];
         private readonly Stopwatch _clock = Stopwatch.StartNew();
         private readonly ILogger _log;
         private readonly NetWriter _flushWriter = new NetWriter(1024);
@@ -184,6 +185,17 @@ namespace Oxfall.Server
                     }
                     Messages.Snapshot(writer, now, _state.Snapshot());
                     Broadcast(writer.ToArray());
+                    // Clothes put on or taken off, twice a second, for everyone to see.
+                    if (ticks % (Protocol.TickRate / 2) == 0)
+                        foreach (var session in _sessions.Values)
+                        {
+                            Messages.Worn(session.Record.Survivor.Inventory, _worn);
+                            string outfit = string.Join("|", _worn);
+                            if (outfit == session.LastOutfit) continue;
+                            session.LastOutfit = outfit;
+                            Messages.Outfit(writer, session.Id, _worn);
+                            Broadcast(writer.ToArray());
+                        }
                     // The animals near each player, five times a second (their phones walk them on in between).
                     if (ticks % (Protocol.TickRate / 5) == 0)
                         foreach (var session in _sessions.Values)
@@ -479,6 +491,12 @@ namespace Oxfall.Server
                 }
                 Messages.Joined(writer, player.Id, player.Name, player.Pose);
                 Broadcast(writer.ToArray());
+                // What everyone already here is wearing.
+                foreach (var other in _sessions.Values)
+                {
+                    Messages.Outfit(writer, other.Id, Messages.Worn(other.Record.Survivor.Inventory, _worn));
+                    connection.Send(writer.ToArray());
+                }
                 // Who sleeps where (this player no longer among them).
                 Messages.Sleepers(writer, _world.Sleepers);
                 connection.Send(writer.ToArray());
@@ -536,6 +554,8 @@ namespace Oxfall.Server
             public readonly LootSync Loot = new LootSync();
             public float LastCorrection = -1f;
             public float LastChat = -10f;
+            /// <summary>What everyone was last told this player wears (null: nothing told yet).</summary>
+            public string LastOutfit;
 
             public Session(ushort id, SurvivorRecord record, Connection connection)
             {

@@ -23,7 +23,7 @@ namespace Oxfall.Core.Net
         private float _vitalsAt = float.NegativeInfinity;
         private bool _jobsSent;
 
-        public SurvivorSync(int slotCount = Inventory.DefaultSlotCount) => _slots = new ItemStack[slotCount];
+        public SurvivorSync(int slotCount = Inventory.PlayerSlotCount) => _slots = new ItemStack[slotCount];
 
         /// <summary>Forgets what was sent, so everything goes again (a new connection).</summary>
         public void Reset()

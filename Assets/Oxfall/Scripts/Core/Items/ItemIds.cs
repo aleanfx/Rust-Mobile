@@ -39,5 +39,14 @@ namespace Oxfall.Core.Items
         public const string WoodenSpear = "wooden_spear";
         public const string WoodenBow = "wooden_bow";
         public const string Arrow = "arrow";
+
+        // Clothing
+        public const string BurlapHeadwrap = "burlap_headwrap";
+        public const string BurlapShirt = "burlap_shirt";
+        public const string BurlapTrousers = "burlap_trousers";
+        public const string HideHood = "hide_hood";
+        public const string HideVest = "hide_vest";
+        public const string HidePants = "hide_pants";
+        public const string HideBoots = "hide_boots";
     }
 }

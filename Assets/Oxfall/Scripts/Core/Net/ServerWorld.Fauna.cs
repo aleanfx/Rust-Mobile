@@ -34,8 +34,7 @@ namespace Oxfall.Core.Net
             {
                 if (!_online.TryGetValue((ushort)bite.Target, out var record) || record.Survivor.Vitals.IsDead) continue;
                 if (!Fauna.TryGet(bite.Animal, out var animal)) continue;
-                float damage = Math.Min(bite.Damage, record.Survivor.Vitals.Health);
-                record.Survivor.Vitals.Damage(bite.Damage);
+                float damage = record.Survivor.TakeHit(bite.Damage);
                 Bites.Add(((ushort)bite.Target, animal.Kind, damage, record.Survivor.Vitals.IsDead));
             }
         }

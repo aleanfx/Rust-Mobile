@@ -65,8 +65,7 @@ namespace Oxfall.Core.Net
                 if (!Players.TryGet(targetKey, out var target) || !target.Placed) return false;
                 if (!_online.TryGetValue(targetKey, out var t) || t.Survivor.Vitals.IsDead) return false;
                 if (Distance(shot.X, shot.Z, target.Pose.X, target.Pose.Z) > reach) return false;
-                damage = Math.Min(Combat.ArrowDamage, t.Survivor.Vitals.Health);
-                t.Survivor.Vitals.Damage(Combat.ArrowDamage);
+                damage = t.Survivor.TakeHit(Combat.ArrowDamage);
                 killed = t.Survivor.Vitals.IsDead;
                 return true;
             }

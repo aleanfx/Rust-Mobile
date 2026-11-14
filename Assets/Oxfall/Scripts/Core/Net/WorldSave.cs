@@ -188,7 +188,7 @@ namespace Oxfall.Core.Net
                     int owner = r.Int();
                     var pose = Pose.Read(r);
                     float health = r.Float(), food = r.Float(), water = r.Float();
-                    ReadSlots(r, slots, Inventory.DefaultSlotCount);
+                    ReadSlots(r, slots, Inventory.PlayerSlotCount);
                     jobs.Clear();
                     int jobCount = r.Byte();
                     for (int j = 0; j < jobCount; j++)

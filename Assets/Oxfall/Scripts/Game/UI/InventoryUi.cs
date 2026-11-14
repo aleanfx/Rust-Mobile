@@ -9,8 +9,9 @@ namespace Oxfall.Game.UI
 {
     /// <summary>
     /// The hotbar along the bottom of the screen (tap a slot to hold it, tap it again to empty the
-    /// hands) and the inventory panel behind the MOCHILA button: all 30 slots, where tapping one
-    /// item and then another slot moves it there. With a box or furnace open, its slots stand on
+    /// hands) and the inventory panel behind the MOCHILA button: the 30 slots carried and, down the
+    /// left, the four worn (head, chest, legs, feet) with how much they protect; tapping one item
+    /// and then another slot moves it there. With a box or furnace open, its slots stand on
     /// the right of the panel (as in the PC game's loot screen) and items move between the two the
     /// same way, or all at once with the big button. Moves go through <see cref="GameActions"/>:
     /// the shared rules alone, the server online.
@@ -78,7 +79,11 @@ namespace Oxfall.Game.UI
             public Image Icon;
             public Text Label;
             public Text Amount;
+            /// <summary>A wear slot's outline of what goes there, shown while it is empty.</summary>
+            public Image Placeholder;
         }
+
+        private Text _protection;
 
         public InventoryUi(Hud hud, Inventory inventory, Hotbar hotbar, GameActions actions, Settlement settlement)
         {
@@ -175,12 +180,19 @@ namespace Oxfall.Game.UI
             }
             else
             {
-                if (_pickedInBox) Report(_actions.Take(_picked, slot));
+                var moving = _pickedInBox ? _boxInventory[_picked] : _inventory[_picked];
+                if (!_inventory.CanHold(slot, moving)) _hud.ShowToast("Ahí va ropa para " + PartName(_inventory.WearOf(slot)));
+                else if (!_pickedInBox && !_inventory.CanHold(_picked, _inventory[slot]))
+                    _hud.ShowToast("Ahí va ropa para " + PartName(_inventory.WearOf(_picked)));
+                else if (_pickedInBox) Report(_actions.Take(_picked, slot));
                 else if (slot != _picked) _actions.MoveSlot(_picked, slot);
                 _picked = -1;
             }
             Refresh();
         }
+
+        private static string PartName(WearSlot wear) =>
+            wear == WearSlot.Head ? "la cabeza" : wear == WearSlot.Chest ? "el pecho" : wear == WearSlot.Legs ? "las piernas" : "los pies";
 
         /// <summary>Taps a slot of the open box: picks an item, or moves the picked one there.</summary>
         public void TapBoxSlot(int slot)
@@ -248,6 +260,9 @@ namespace Oxfall.Game.UI
                 var frame = i == _picked && !_pickedInBox ? Picked : i == _hotbar.Selected ? Held : Color.clear;
                 Draw(_grid[i], _inventory[i], frame);
             }
+            int armour = Mathf.RoundToInt(_inventory.Protection * 100f);
+            _protection.text = armour + "%";
+            _protection.color = armour > 0 ? UiTheme.Text : UiTheme.TextFaint;
             if (_box != 0) DrawBox();
             else DrawDetails();
         }
@@ -294,6 +309,7 @@ namespace Oxfall.Game.UI
         private void Draw(SlotView view, ItemStack stack, Color frame)
         {
             if (view.Frame.color != frame) view.Frame.color = frame;
+            if (view.Placeholder != null && view.Placeholder.enabled != stack.IsEmpty) view.Placeholder.enabled = stack.IsEmpty;
             var back = frame == Color.clear ? UiTheme.Slot : UiTheme.SlotHover;
             if (view.Back.color != back) view.Back.color = back;
             if (stack.IsEmpty)
@@ -331,13 +347,25 @@ namespace Oxfall.Game.UI
             var icon = ItemIcons.Get(stack.ItemId);
             _bigIcon.sprite = icon;
             _bigIcon.enabled = icon != null;
-            _detail.text = def.Description + "\n\nToca otra casilla para moverlo.";
-            _quickLabel.text = Inventory.IsHotbarSlot(_picked) ? "A LA MOCHILA" : "A LA BARRA";
+            bool attire = def.Category == ItemCategory.Attire;
+            bool worn = _inventory.IsWearSlot(_picked);
+            _detail.text = def.Description
+                           + (attire ? $"\n\nProtege {Mathf.RoundToInt(def.Protection * 100f)} % de cada golpe, flecha o mordisco." : "")
+                           + "\n\nToca otra casilla para moverlo.";
+            _quickLabel.text = worn ? "QUITAR" : attire ? "PONER" : Inventory.IsHotbarSlot(_picked) ? "A LA MOCHILA" : "A LA BARRA";
         }
 
         private void QuickMove()
         {
             if (_picked < 0) return;
+            // Clothing goes on (or comes off) rather than across.
+            if (_inventory.IsWearSlot(_picked) || (_inventory.Catalog.TryGet(_inventory[_picked].ItemId, out var def) && def.Category == ItemCategory.Attire))
+            {
+                if (_actions.Wear(_picked) == ActionResult.NoSpace) _hud.ShowToast("La mochila está llena");
+                _picked = -1;
+                Refresh();
+                return;
+            }
             if (_actions.QuickMove(_picked) == ActionResult.NoSpace)
                 _hud.ShowToast(Inventory.IsHotbarSlot(_picked) ? "La mochila está llena" : "La barra está llena");
             _picked = -1;
@@ -379,8 +407,10 @@ namespace Oxfall.Game.UI
             var half = new Vector2(0.5f, 0.5f);
             var topLeft = new Vector2(0f, 1f);
             const float left = 40f, top = -100f;
+            // The worn clothes down the left, then the backpack and hotbar, then the details.
+            float gridLeft = left + Pitch + 26f;
             float gridWidth = Columns * Pitch - Gap;
-            float detailsX = left + gridWidth + 40f;
+            float detailsX = gridLeft + gridWidth + 40f;
             const float detailsWidth = 372f;
 
             _panel = UiFactory.NewRect("Inventory panel", _hud.SafeArea, half, half, new Vector2(0f, 10f),
@@ -395,17 +425,35 @@ namespace Oxfall.Game.UI
             _hud.CloseButton(_panel, Close);
 
             // The backpack: four rows above the hotbar row.
-            int backpackRows = (_grid.Length - Inventory.HotbarSize) / Columns;
-            for (int i = Inventory.HotbarSize; i < _grid.Length; i++)
+            int backpackRows = (_inventory.CarrySlots - Inventory.HotbarSize) / Columns;
+            for (int i = Inventory.HotbarSize; i < _inventory.CarrySlots; i++)
             {
                 int row = (i - Inventory.HotbarSize) / Columns, column = (i - Inventory.HotbarSize) % Columns;
-                AddGridSlot(i, new Vector2(left + column * Pitch, top - row * Pitch));
+                AddGridSlot(i, new Vector2(gridLeft + column * Pitch, top - row * Pitch));
             }
             float barTop = top - backpackRows * Pitch - 34f;
-            var barLabel = UiFactory.NewRect("Hotbar label", _panel, topLeft, topLeft, new Vector2(left, barTop + 32f), new Vector2(gridWidth, 30f));
+            var barLabel = UiFactory.NewRect("Hotbar label", _panel, topLeft, topLeft, new Vector2(gridLeft, barTop + 32f), new Vector2(gridWidth, 30f));
             UiFactory.AddText(barLabel, "BARRA RÁPIDA", 22, TextAnchor.MiddleLeft, UiTheme.TextMuted, true);
             for (int i = 0; i < Inventory.HotbarSize; i++)
-                AddGridSlot(i, new Vector2(left + i * Pitch, barTop));
+                AddGridSlot(i, new Vector2(gridLeft + i * Pitch, barTop));
+
+            // What is worn, head to feet beside the backpack's rows, each empty one showing what goes
+            // there; under them, beside the hotbar, how much of a blow it all takes.
+            var wearLabel = UiFactory.NewRect("Wear label", _panel, topLeft, topLeft, new Vector2(left, top + 32f), new Vector2(SlotSize, 30f));
+            UiFactory.AddText(wearLabel, "ROPA", 22, TextAnchor.MiddleLeft, UiTheme.TextMuted, true);
+            var silhouettes = new[] { Icons.Hood, Icons.Shirt, Icons.Trousers, Icons.Boot };
+            for (int w = 0; w < Inventory.WearSlots; w++)
+            {
+                int slot = _inventory.SlotFor((WearSlot)(w + 1));
+                AddGridSlot(slot, new Vector2(left, top - w * Pitch));
+                _grid[slot].Placeholder = UiFactory.AddIcon(_grid[slot].Rect, silhouettes[w], Vector2.zero, 64f, UiTheme.TextFaint.WithAlpha(0.35f));
+                _grid[slot].Placeholder.transform.SetSiblingIndex(1);
+            }
+            var armour = UiFactory.NewRect("Protection", _panel, topLeft, topLeft, new Vector2(left, barTop), new Vector2(SlotSize, SlotSize));
+            UiFactory.AddImage(armour, UiFactory.Soft, UiTheme.Slot.WithAlpha(0.5f));
+            UiFactory.AddIcon(armour, Icons.Shield, new Vector2(0f, 22f), 46f, UiTheme.TextMuted);
+            var protection = UiFactory.NewRect("Value", armour, half, half, new Vector2(0f, -26f), new Vector2(SlotSize, 40f));
+            _protection = UiFactory.AddText(protection, "0%", 32, TextAnchor.MiddleCenter, UiTheme.Text, true);
 
             // Right: what the picked item is, and what can be done with it.
             var pane = UiFactory.NewRect("Details", _panel, topLeft, topLeft, new Vector2(detailsX - 20f, top + 10f), new Vector2(detailsWidth + 40f, 680f));

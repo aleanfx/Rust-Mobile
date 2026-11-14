@@ -1,3 +1,4 @@
+using Oxfall.Core.Items;
 using Oxfall.Core.Net;
 using Oxfall.Game.Rendering;
 using Oxfall.Game.World;
@@ -29,6 +30,10 @@ namespace Oxfall.Game.Net
         public bool Down { get; private set; }
 
         private readonly Transform _figure, _legL, _legR, _armL, _armR;
+        private readonly MaterialLibrary _materials;
+        private static Mesh _hood, _wrap;
+        private Transform _headwear;
+        private string _outfit = "";
         private readonly CapsuleCollider _capsule;
         private float _fall;
         private float _flinch;
@@ -40,6 +45,7 @@ namespace Oxfall.Game.Net
         {
             Id = id;
             Name = name;
+            _materials = materials;
             _body ??= MeshFactory.SurvivorBody();
             _leg ??= MeshFactory.SurvivorLeg();
             _arm ??= MeshFactory.SurvivorArm();
@@ -74,6 +80,49 @@ namespace Oxfall.Game.Net
             Down = down;
             _capsule.enabled = !down;
             if (!down) _fall = 0f;
+        }
+
+        /// <summary>
+        /// Dresses the figure in what the player wears (item ids, head to feet; empty for nothing): burlap
+        /// or hide on the chest and legs, hide boots, a headwrap or a hood.
+        /// </summary>
+        public void SetOutfit(string[] worn)
+        {
+            string outfit = string.Join("|", worn);
+            if (outfit == _outfit) return;
+            _outfit = outfit;
+            var m = _materials;
+            string head = worn.Length > 0 ? worn[0] : "", chest = worn.Length > 1 ? worn[1] : "";
+            string legs = worn.Length > 2 ? worn[2] : "", feet = worn.Length > 3 ? worn[3] : "";
+            var shirt = chest == ItemIds.BurlapShirt ? m.Cloth : chest == ItemIds.HideVest ? m.Leather : m.Shirt;
+            // A vest has no sleeves: the arms keep the shirt underneath.
+            var sleeves = chest == ItemIds.BurlapShirt ? m.Cloth : m.Shirt;
+            var trousers = legs == ItemIds.BurlapTrousers ? m.Cloth : legs == ItemIds.HidePants ? m.Leather : m.Trousers;
+            var boots = feet == ItemIds.HideBoots ? m.Leather : m.Char;
+            Dress(_figure.Find("Body"), shirt, m.Skin);
+            Dress(_armL, sleeves, m.Skin);
+            Dress(_armR, sleeves, m.Skin);
+            Dress(_legL, trousers, boots);
+            Dress(_legR, trousers, boots);
+
+            if (_headwear != null) Object.Destroy(_headwear.gameObject);
+            _headwear = null;
+            if (head == ItemIds.HideHood || head == ItemIds.BurlapHeadwrap)
+            {
+                bool hood = head == ItemIds.HideHood;
+                var mesh = hood ? (_hood ??= MeshFactory.Headwear(true)) : (_wrap ??= MeshFactory.Headwear(false));
+                _headwear = Part("Headwear", _figure, Vector3.zero, mesh, hood ? m.Leather : m.Cloth, m.Rope);
+            }
+        }
+
+        private static void Dress(Transform part, Material main, Material second)
+        {
+            if (part == null) return;
+            var r = part.GetComponent<MeshRenderer>();
+            var mats = r.sharedMaterials;
+            if (mats.Length > 0) mats[0] = main;
+            if (mats.Length > 1) mats[1] = second;
+            r.sharedMaterials = mats;
         }
 
         /// <summary>A blow landed: a quick jolt backwards.</summary>

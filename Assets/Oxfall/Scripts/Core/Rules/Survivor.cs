@@ -1,3 +1,4 @@
+using System;
 using Oxfall.Core.Crafting;
 using Oxfall.Core.Items;
 using Oxfall.Core.Survival;
@@ -16,7 +17,7 @@ namespace Oxfall.Core.Rules
 
         public Survivor(ItemCatalog catalog)
         {
-            Inventory = new Inventory(catalog);
+            Inventory = new Inventory(catalog, Inventory.PlayerSlotCount, hasHotbar: true, hasWear: true);
             Crafting = new CraftingQueue(Inventory);
             Vitals = new Vitals();
             Vitals.Died += () => Looting = 0;
@@ -32,6 +33,19 @@ namespace Oxfall.Core.Rules
             Inventory.Clear();
             Inventory.Add(ItemIds.Rock, 1);
             Inventory.Add(ItemIds.Torch, 1);
+        }
+
+        /// <summary>
+        /// A blow, an arrow or a bite of <paramref name="amount"/>: what they wear takes its share, the
+        /// rest comes off their health. Returns the damage done.
+        /// </summary>
+        public float TakeHit(float amount)
+        {
+            if (Vitals.IsDead || amount <= 0f) return 0f;
+            float dealt = amount * (1f - Inventory.Protection);
+            float done = Math.Min(dealt, Vitals.Health);
+            Vitals.Damage(dealt);
+            return done;
         }
 
         /// <summary>Whether they carry something that works as this tool (bare hands always do).</summary>

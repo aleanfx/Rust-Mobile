@@ -97,7 +97,7 @@ namespace Oxfall.Core.Rules
                 // Meat to roast.
                 case DeployableKind.Campfire: return 4;
                 // Everything a player can carry.
-                case DeployableKind.Bag: return Inventory.DefaultSlotCount;
+                case DeployableKind.Bag: return Inventory.PlayerSlotCount;
                 default: return 0;
             }
         }

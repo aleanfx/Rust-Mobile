@@ -141,6 +141,8 @@ namespace Oxfall.Core.Net
         Sleepers = 32,
         /// <summary>A sleeper was hurt: whose body, by whom (id and name), how much, and whether it died.</summary>
         SleeperHit = 33,
+        /// <summary>What a player wears (head, chest, legs, feet; empty for nothing), whenever it changes.</summary>
+        Outfit = 34,
     }
 
     /// <summary>What a player does to their own belongings (inside an <see cref="MessageType.Act"/> message).</summary>
@@ -169,6 +171,8 @@ namespace Oxfall.Core.Net
         TakeAll = 15,
         /// <summary>Test servers only: an animal of kind a a few metres ahead of the player.</summary>
         DevSpawnAnimal = 16,
+        /// <summary>Puts on the clothing in slot a, or takes off what is worn in slot a.</summary>
+        Wear = 17,
     }
 
     /// <summary>Where a player stands and which way the body faces (degrees about up).</summary>
@@ -888,6 +892,41 @@ namespace Oxfall.Core.Net
             from = r.UShort();
             name = r.String();
             text = r.String();
+        }
+
+        // ---- Clothing
+
+        /// <summary>The item ids worn in each of an inventory's wear slots, head to feet ("" for none).</summary>
+        public static string[] Worn(Items.Inventory inventory, string[] into = null)
+        {
+            into = into ?? new string[Items.Inventory.WearSlots];
+            for (int i = 0; i < into.Length; i++)
+            {
+                int slot = inventory.SlotFor((Items.WearSlot)(i + 1));
+                into[i] = slot >= 0 && !inventory[slot].IsEmpty ? inventory[slot].ItemId : "";
+            }
+            return into;
+        }
+
+        public static void Outfit(NetWriter w, ushort playerId, string[] worn)
+        {
+            w.Reset();
+            w.Byte((byte)MessageType.Outfit);
+            w.UShort(playerId);
+            w.Byte((byte)worn.Length);
+            foreach (var id in worn) w.String(id ?? "", 64);
+        }
+
+        public static void ReadOutfit(NetReader r, out ushort playerId, string[] into)
+        {
+            playerId = r.UShort();
+            int n = r.Byte();
+            for (int i = 0; i < n; i++)
+            {
+                string id = r.String();
+                if (i < into.Length) into[i] = id;
+            }
+            for (int i = n; i < into.Length; i++) into[i] = "";
         }
 
         // ---- Sleepers

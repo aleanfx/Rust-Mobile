@@ -85,6 +85,22 @@ namespace Oxfall.Core.Items
             new ItemDefinition(ItemIds.Arrow, "Flecha", ItemCategory.Ammo, 64,
                 description: "Madera con punta de piedra. El arco las gasta una a una."),
 
+            // Clothing: tela basta para empezar, cuero de lo que se caza para aguantar más.
+            new ItemDefinition(ItemIds.BurlapHeadwrap, "Turbante de arpillera", ItemCategory.Attire, 1, skinnable: true,
+                description: "Tela basta enrollada a la cabeza.", wear: WearSlot.Head, protection: 0.04f),
+            new ItemDefinition(ItemIds.BurlapShirt, "Camisa de arpillera", ItemCategory.Attire, 1, skinnable: true,
+                description: "Mejor que nada contra golpes y flechas.", wear: WearSlot.Chest, protection: 0.06f),
+            new ItemDefinition(ItemIds.BurlapTrousers, "Pantalón de arpillera", ItemCategory.Attire, 1, skinnable: true,
+                description: "Tela basta atada con cuerda.", wear: WearSlot.Legs, protection: 0.05f),
+            new ItemDefinition(ItemIds.HideHood, "Capucha de cuero", ItemCategory.Attire, 1, skinnable: true,
+                description: "Cuero curtido sobre la cabeza y el cuello.", wear: WearSlot.Head, protection: 0.08f),
+            new ItemDefinition(ItemIds.HideVest, "Chaleco de cuero", ItemCategory.Attire, 1, skinnable: true,
+                description: "Cuero grueso sobre el pecho: aguanta bien mordiscos y flechas.", wear: WearSlot.Chest, protection: 0.14f),
+            new ItemDefinition(ItemIds.HidePants, "Pantalón de cuero", ItemCategory.Attire, 1, skinnable: true,
+                description: "Cuero en las piernas, cosido con tela.", wear: WearSlot.Legs, protection: 0.11f),
+            new ItemDefinition(ItemIds.HideBoots, "Botas de cuero", ItemCategory.Attire, 1, skinnable: true,
+                description: "Para no ir descalzo por las rocas.", wear: WearSlot.Feet, protection: 0.05f),
+
             new ItemDefinition(ItemIds.BuildingPlan, "Plano de construcción", ItemCategory.Placeable, 1,
                 description: "Llévalo en la mano para construir."),
             new ItemDefinition(ItemIds.Campfire, "Fogata", ItemCategory.Placeable, 5,

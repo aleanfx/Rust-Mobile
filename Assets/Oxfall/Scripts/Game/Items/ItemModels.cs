@@ -232,6 +232,14 @@ namespace Oxfall.Game.Items
                     Materials = new[] { m.Leather, m.Rope },
                     IconRotation = Tilt(-38f, 30f),
                 },
+                // Clothing, laid flat for its icon (never held in the hand).
+                [ItemIds.BurlapShirt] = Clothing(MeshFactory.Garment(true, false), m.Cloth, m.Rope),
+                [ItemIds.BurlapTrousers] = Clothing(MeshFactory.Trousers(), m.Cloth, m.Rope),
+                [ItemIds.BurlapHeadwrap] = Clothing(MeshFactory.Headwear(false), m.Cloth, m.Rope, Tilt(-15f, 30f)),
+                [ItemIds.HideVest] = Clothing(MeshFactory.Garment(false, true), m.Leather, m.Rope),
+                [ItemIds.HidePants] = Clothing(MeshFactory.Trousers(), m.Leather, m.Rope),
+                [ItemIds.HideHood] = Clothing(MeshFactory.Headwear(true), m.Leather, m.Rope, Tilt(-15f, 30f)),
+                [ItemIds.HideBoots] = Clothing(MeshFactory.Boots(), m.Leather, m.Char, Tilt(-12f, 20f)),
                 [ItemIds.RawMeat] = Meat(MeshFactory.MeatCut(), new[] { m.RawMeat, m.Bone }),
                 [ItemIds.CookedMeat] = Meat(MeshFactory.MeatCut(), new[] { m.CookedMeat, m.Bone }),
             };
@@ -239,6 +247,13 @@ namespace Oxfall.Game.Items
         }
 
         /// <summary>A cut of meat held out low on the right, ready to eat; lying flat, bone to the left, in its icon.</summary>
+        private static ItemModel Clothing(Mesh mesh, Material main, Material trim, Quaternion? pose = null) => new ItemModel
+        {
+            Mesh = mesh,
+            Materials = new[] { main, trim },
+            IconRotation = pose ?? Tilt(-8f, 12f),
+        };
+
         private static ItemModel Meat(Mesh mesh, Material[] materials) => new ItemModel
         {
             Mesh = mesh,

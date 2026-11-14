@@ -119,7 +119,9 @@ const stamp = () => ((Date.now() - t0) / 1000).toFixed(1).padStart(6);
   await cmd('craft-tab-2', 1200);
   await shot('10d-craft-weapons');
   await cmd('craft-tab-3', 800);
-  await shot('10e-craft-base');
+  await shot('10e-craft-clothes');
+  await cmd('craft-tab-4', 800);
+  await shot('10f-craft-base');
   await cmd('craft-panel', 800);
 
   // Raw meat on a campfire.

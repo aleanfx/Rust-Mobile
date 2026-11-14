@@ -10,6 +10,18 @@ namespace Oxfall.Core.Items
         Placeable,
         Food,
         Ammo,
+        /// <summary>Clothing and armour, worn in the four wear slots.</summary>
+        Attire,
+    }
+
+    /// <summary>Where on the body a piece of clothing goes (one of each at a time).</summary>
+    public enum WearSlot
+    {
+        None,
+        Head,
+        Chest,
+        Legs,
+        Feet,
     }
 
     /// <summary>What a tool is good at. Gathering yields depend on it.</summary>
@@ -48,9 +60,15 @@ namespace Oxfall.Core.Items
         /// <summary>What eating one gives back; nothing for anything that isn't food.</summary>
         public Nourishment Nourishment { get; }
 
+        /// <summary>For clothing: where it is worn.</summary>
+        public WearSlot Wear { get; }
+
+        /// <summary>For clothing: the share of each blow, arrow or bite it takes (0 to 1; worn pieces add up).</summary>
+        public float Protection { get; }
+
         public ItemDefinition(string id, string displayName, ItemCategory category, int maxStack,
             ToolKind tool = ToolKind.None, bool skinnable = false, string description = "",
-            Nourishment nourishment = default)
+            Nourishment nourishment = default, WearSlot wear = WearSlot.None, float protection = 0f)
         {
             if (string.IsNullOrWhiteSpace(id)) throw new ArgumentException("Item id is required.", nameof(id));
             if (maxStack < 1) throw new ArgumentOutOfRangeException(nameof(maxStack), "Max stack must be at least 1.");
@@ -62,6 +80,8 @@ namespace Oxfall.Core.Items
             Skinnable = skinnable;
             Description = description ?? "";
             Nourishment = nourishment;
+            Wear = wear;
+            Protection = protection;
         }
 
         public override string ToString() => Id;

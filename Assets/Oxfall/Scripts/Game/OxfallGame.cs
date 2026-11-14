@@ -842,10 +842,9 @@ namespace Oxfall.Game
                 foreach (var bite in _bites)
                 {
                     if (_vitals.IsDead || !_fauna.TryGet(bite.Animal, out var animal)) continue;
-                    int damage = Mathf.RoundToInt(Mathf.Min(bite.Damage, _vitals.Health));
-                    // Named before the blow lands, in case it is the last.
+                    // Named before the blow lands, in case it is the last; what they wear takes its share.
                     _killer = AnimalName(animal.Kind);
-                    _vitals.Damage(bite.Damage);
+                    int damage = Mathf.RoundToInt(_survivor.TakeHit(bite.Damage));
                     if (!_vitals.IsDead)
                     {
                         _killer = null;
@@ -1110,6 +1109,7 @@ namespace Oxfall.Game
                 case "craft-tab-2": _hud.CraftTab(1); break;
                 case "craft-tab-3": _hud.CraftTab(2); break;
                 case "craft-tab-4": _hud.CraftTab(3); break;
+                case "craft-tab-5": _hud.CraftTab(4); break;
                 case "bow": HoldItem(ItemIds.WoodenBow); break;
                 case "give" when _actions.Online:
                 case "give-all" when _actions.Online:
@@ -1124,6 +1124,16 @@ namespace Oxfall.Game
                 case "give-all":
                     // The same kit a test server hands out.
                     ServerWorld.GiveTestKit(_inventory);
+                    break;
+                // Puts on whatever hide clothing is carried; undress takes everything off.
+                case "wear-hide":
+                    foreach (var id in new[] { ItemIds.HideHood, ItemIds.HideVest, ItemIds.HidePants, ItemIds.HideBoots })
+                        for (int i = 0; i < _inventory.CarrySlots; i++)
+                            if (_inventory[i].ItemId == id) { _actions.Wear(i); break; }
+                    break;
+                case "undress":
+                    for (int i = _inventory.CarrySlots; i < _inventory.SlotCount; i++)
+                        if (!_inventory[i].IsEmpty) _actions.Wear(i);
                     break;
                 case "box": HoldItem(ItemIds.StorageBox); break;
                 case "furnace": HoldItem(ItemIds.Furnace); break;
@@ -1220,7 +1230,7 @@ namespace Oxfall.Game
                               $"ponds={_world.Shape.Ponds.Count} berries={_inventory.Count(ItemIds.Berries)} " +
                               $"pieces={_buildings.Grid.PieceCount} views={_buildings.Count} doorLook={_interactor.LookingAtDoor} lookAt={_interactor.LookingAt} " +
                               $"locks={_lockViews.Count} keypad={(_keypad.IsOpen ? _keypad.Current.ToString() : "closed")} " +
-                              $"metal={_inventory.Count(ItemIds.MetalFragments)} animals={_animalViews.Count} sleepers={_sleeperViews.Count} arrows={_inventory.Count(ItemIds.Arrow)} " +
+                              $"metal={_inventory.Count(ItemIds.MetalFragments)} animals={_animalViews.Count} sleepers={_sleeperViews.Count} arrows={_inventory.Count(ItemIds.Arrow)} armour={Mathf.RoundToInt(_inventory.Protection * 100f)} " +
                               $"meat={_inventory.Count(ItemIds.RawMeat)} cooked={_inventory.Count(ItemIds.CookedMeat)} leather={_inventory.Count(ItemIds.Leather)} " +
                               $"pos={_player.transform.position} quality={GraphicsQuality.Name(_quality.Tier)} " +
                               $"screen={Screen.width}x{Screen.height} grass={_grass.BladeCount} " +
@@ -1306,7 +1316,7 @@ namespace Oxfall.Game
         private void HoldItem(string id)
         {
             if (_hotbar.SelectItem(id)) return;
-            for (int slot = Inventory.HotbarSize; slot < _inventory.SlotCount; slot++)
+            for (int slot = Inventory.HotbarSize; slot < _inventory.CarrySlots; slot++)
             {
                 if (_inventory[slot].ItemId != id) continue;
                 _actions.MoveSlot(slot, Inventory.HotbarSize - 1);
