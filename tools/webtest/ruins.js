@@ -83,6 +83,12 @@ const stamp = () => ((Date.now() - t0) / 1000).toFixed(1).padStart(6);
   await cmd('face-workbench', 1500);
   await cmd('interact', 2500);
   await shot('09-bench-craft-panel');
+  // The revolver's blueprint: locked, then learned here for scrap, then made.
+  await cmd('give-metal', 1200);
+  await cmd('select-revolver', 1500);
+  await shot('09b-revolver-locked');
+  await cmd('learn-revolver', 2000);
+  await shot('09c-revolver-learned');
   await cmd('craft-revolver', 1500);
   await cmd('stats', 800);
   await cmd('craft-panel', 800);
@@ -107,6 +113,6 @@ const stamp = () => ((Date.now() - t0) / 1000).toFixed(1).padStart(6);
   await shot('15-recycler-machine');
 
   fs.writeFileSync(path.join(out, 'console.log'), log.join('\n'));
-  console.log(log.filter(l => l.includes('[test]') || l.includes('Gathered') || l.includes('At the ruins') || l.includes('Craft') || l.includes('Put ') || l.includes('recycler') || l.includes('[pageerror]') || l.includes('Exception') || l.includes('Unknown debug')).join('\n'));
+  console.log(log.filter(l => l.includes('[test]') || l.includes('Learned') || l.includes('Gathered') || l.includes('At the ruins') || l.includes('Craft') || l.includes('Put ') || l.includes('recycler') || l.includes('[pageerror]') || l.includes('Exception') || l.includes('Unknown debug')).join('\n'));
   await browser.close();
 })();

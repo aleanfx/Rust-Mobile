@@ -1419,6 +1419,8 @@ namespace Oxfall.Game
                 case "craft-hatchet": TryCraft(_recipes.Get("stone_hatchet")); break;
                 case "craft-pickaxe": TryCraft(_recipes.Get("stone_pickaxe")); break;
                 case "craft-revolver": TryCraft(_recipes.Get("revolver")); break;
+                case "select-revolver": _hud.CraftSelect(_recipes.Get("revolver")); break;
+                case "learn-revolver": TryLearn(_recipes.Get("revolver")); break;
                 case "craft-panel": _hud.ToggleCraftPanel(); break;
                 case "craft-tab-1": _hud.CraftTab(0); break;
                 case "craft-tab-2": _hud.CraftTab(1); break;
