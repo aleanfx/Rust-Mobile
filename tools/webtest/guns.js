@@ -100,7 +100,13 @@ const wait = ms => new Promise(r => setTimeout(r, ms));
     const ana = await open('Ana', q('Ana'));
     log.push(`${stamp()} [test] Ana online: ${await waitForLog('Ana [log] [Oxfall] Online', 240000)}`);
     const beto = await open('Beto', q('Beto'));
-    log.push(`${stamp()} [test] Beto online: ${await waitForLog('Beto [log] [Oxfall] Online', 240000)}`);
+    // On a slow test machine the second game can miss its first connection while it renders its icons.
+    let betoOnline = await waitForLog('Beto [log] [Oxfall] Online', 240000);
+    if (!betoOnline) {
+      await cmd(beto, 'Beto', 'reconnect', 1000);
+      betoOnline = await waitForLog('Beto [log] [Oxfall] Online', 120000);
+    }
+    log.push(`${stamp()} [test] Beto online: ${betoOnline}`);
     await wait(3000);
     await focus(ana);
     await focus(beto);

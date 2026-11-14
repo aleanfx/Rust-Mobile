@@ -15,7 +15,7 @@ namespace Oxfall.Core.Net
     public sealed partial class ServerWorld
     {
         /// <summary>Raised whenever the save's layout changes; older saves are then not loaded.</summary>
-        public const ushort SaveVersion = 3;
+        public const ushort SaveVersion = 4;
 
         private static readonly byte[] Magic = { (byte)'O', (byte)'X', (byte)'S', (byte)'V' };
 

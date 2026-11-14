@@ -1,3 +1,4 @@
+using Oxfall.Core.Building;
 using Oxfall.Core.Crafting;
 using Oxfall.Core.Items;
 using Oxfall.Core.Net;
@@ -420,6 +421,8 @@ namespace Oxfall.Game.Net
                 case ActionResult.Occupied: return "Ahí ya hay algo";
                 case ActionResult.NeedsFoundation: return "Necesita un cimiento debajo";
                 case ActionResult.NeedsWall: return "El techo necesita una pared";
+                case ActionResult.NeedsFloor: return "Necesita un piso debajo (un techo en el piso de abajo)";
+                case ActionResult.TooHigh: return $"Máximo {BuildingGrid.MaxLevel + 1} pisos";
                 case ActionResult.NeedsDoorway: return "Apunta a un marco de puerta vacío";
                 case ActionResult.NoPiece: return "Ya no está ahí";
                 case ActionResult.MaxTier: return "Ya está al nivel máximo";

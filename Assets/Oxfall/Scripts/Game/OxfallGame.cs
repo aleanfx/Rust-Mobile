@@ -1361,6 +1361,9 @@ namespace Oxfall.Game
                 case "use-door":
                 case "interact": _interactor.Use(); break;
                 case "build-hut": BuildTestHut(); break;
+                case "build-tower": BuildTestTower(); break;
+                case "on-stairs": StandOnStairs(); break;
+                case "tower-top": ToTowerTop(); break;
                 case "aim-wall": AimAtPiece(PieceType.Wall, 1.5f); break;
                 case "aim-door": AimAtPiece(PieceType.Doorway, 1.1f); break;
                 case "upgrade-all-1": UpgradeAll(BuildingTier.Wood); break;
@@ -1481,6 +1484,94 @@ namespace Oxfall.Game
             Debug.Log($"[Oxfall] Test hut at {cell}, doorway {doorway}, pieces={grid.PieceCount}");
         }
 
+        private Cell _towerStairs, _towerRoom;
+
+        /// <summary>
+        /// For tests: a two-storey twig house ahead of the player, free: two squares side by side, the
+        /// one ahead with a doorway towards the player and a window, the other with spiral stairs up
+        /// to the room above, which has windows on every side and a roof.
+        /// </summary>
+        private void BuildTestTower()
+        {
+            var grid = _buildings.Grid;
+            var p = _player.transform.position;
+            var forward = _player.transform.forward;
+            forward.y = 0f;
+            var ahead = p + forward.normalized * 5f;
+            var room = BuildingGrid.CellAt(ahead.x, ahead.z);
+            float s = BuildingGrid.CellSize;
+            var toPlayer = new Vector3(p.x - (room.X + 0.5f) * s, 0f, p.z - (room.Z + 0.5f) * s);
+            bool sideways = Mathf.Abs(toPlayer.x) > Mathf.Abs(toPlayer.z);
+            Edge doorway = sideways ? (toPlayer.x > 0f ? room.East : room.West) : (toPlayer.z > 0f ? room.North : room.South);
+            // The stairwell beside the room, across the line of sight; its stairs come out over the room.
+            var stairs = sideways ? new Cell(room.X, room.Z + 1) : new Cell(room.X + 1, room.Z);
+            int facing = sideways ? 2 : 3;
+            float top = 0f;
+            foreach (var cell in new[] { room, stairs })
+            {
+                float x0 = cell.X * s, z0 = cell.Z * s;
+                top = Mathf.Max(top, Mathf.Max(Mathf.Max(_world.Shape.Height(x0, z0), _world.Shape.Height(x0 + s, z0)),
+                    Mathf.Max(_world.Shape.Height(x0, z0 + s), _world.Shape.Height(x0 + s, z0 + s))) + 0.25f);
+            }
+            grid.PlaceFoundation(room, top);
+            grid.PlaceFoundation(stairs, top);
+            var opposite = sideways ? (doorway.Equals(room.East) ? room.West : room.East) : (doorway.Equals(room.North) ? room.South : room.North);
+            for (int level = 0; level <= 1; level++)
+            {
+                foreach (var cell in new[] { new Cell(room.X, room.Z, level), new Cell(stairs.X, stairs.Z, level) })
+                    foreach (var edge in cell.Edges)
+                    {
+                        // The two squares are one room: nothing between them.
+                        bool between = (edge.CellA.Ground.Equals(room) && edge.CellB.Ground.Equals(stairs))
+                                       || (edge.CellA.Ground.Equals(stairs) && edge.CellB.Ground.Equals(room));
+                        if (between || grid.HasEdgePiece(edge)) continue;
+                        bool roomSide = cell.Ground.Equals(room);
+                        var type = level == 0
+                            ? (edge.Equals(doorway) ? PieceType.Doorway : roomSide && edge.Equals(opposite) ? PieceType.Window : PieceType.Wall)
+                            : (roomSide ? PieceType.Window : PieceType.Wall);
+                        var placed = grid.PlaceEdge(edge, type);
+                        if (placed != PlaceResult.Ok) Debug.Log($"[Oxfall] Tower: {type} at {edge}: {placed}");
+                    }
+                if (level == 0)
+                {
+                    grid.PlaceRoof(room);
+                    grid.PlaceStairs(stairs, facing);
+                }
+            }
+            grid.PlaceRoof(new Cell(room.X, room.Z, 1));
+            grid.PlaceRoof(new Cell(stairs.X, stairs.Z, 1));
+            _towerStairs = stairs;
+            _towerRoom = room;
+            Debug.Log($"[Oxfall] Test tower: room {room}, stairs {stairs} facing {facing}, doorway {doorway}, pieces={grid.PieceCount}");
+        }
+
+        /// <summary>For tests: drops the player onto the middle of the test tower's stairs, to see the steps hold them.</summary>
+        private void StandOnStairs()
+        {
+            var grid = _buildings.Grid;
+            if (!grid.TryGetFloorHeight(_towerStairs, out float floor)) return;
+            var turn = BuildingViews.StairsRotation(grid.StairsFacing(_towerStairs));
+            // Step 8 of 16, half way along it.
+            float a = (8.5f * 360f / MeshFactory.SpiralSteps) * Mathf.Deg2Rad;
+            var local = new Vector3(Mathf.Sin(a) * 0.9f, 0f, Mathf.Cos(a) * 0.9f);
+            var at = new Vector3((_towerStairs.X + 0.5f) * BuildingGrid.CellSize, floor + 2.6f, (_towerStairs.Z + 0.5f) * BuildingGrid.CellSize) + turn * local;
+            _player.Teleport(at, _player.transform.eulerAngles.y, 10f);
+            Debug.Log($"[Oxfall] Dropped onto the stairs at {at}; step 9 top is {floor + 9 * BuildingViews.GroundRise / MeshFactory.SpiralSteps:0.00}");
+        }
+
+        /// <summary>For tests: puts the player on the test tower's upper floor, looking out of a window.</summary>
+        private void ToTowerTop()
+        {
+            var grid = _buildings.Grid;
+            var upper = new Cell(_towerRoom.X, _towerRoom.Z, 1);
+            if (!grid.TryGetFloorHeight(upper, out float floor)) return;
+            var at = new Vector3((upper.X + 0.5f) * BuildingGrid.CellSize, floor + 0.05f, (upper.Z + 0.5f) * BuildingGrid.CellSize);
+            var stairsAt = new Vector3((_towerStairs.X + 0.5f) * BuildingGrid.CellSize, at.y, (_towerStairs.Z + 0.5f) * BuildingGrid.CellSize);
+            var away = at - stairsAt;
+            _player.Teleport(at, Mathf.Atan2(away.x, away.z) * Mathf.Rad2Deg, 5f);
+            Debug.Log($"[Oxfall] On the tower's upper floor at {at}");
+        }
+
         /// <summary>For tests: takes an item in hand, moving it from the backpack to the last hotbar slot if need be.</summary>
         private void HoldItem(string id)
         {
@@ -1524,6 +1615,7 @@ namespace Oxfall.Game
             foreach (var f in _buildings.Grid.Foundations) pieces.Add(PieceRef.Foundation(f.Key));
             foreach (var e in _buildings.Grid.EdgePieces) pieces.Add(PieceRef.OnEdge(e.Key, e.Value));
             foreach (var r in _buildings.Grid.Roofs) pieces.Add(PieceRef.Roof(r));
+            foreach (var c in _buildings.Grid.Stairs) pieces.Add(PieceRef.Stairs(c));
             foreach (var piece in pieces) _buildings.Grid.Upgrade(piece, tier);
         }
 

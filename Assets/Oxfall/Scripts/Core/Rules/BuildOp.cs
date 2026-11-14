@@ -32,6 +32,8 @@ namespace Oxfall.Core.Rules
         Repair = 20,
         /// <summary>A deployable's health is now this (after a blast); at 0 it is destroyed, what it held spilling into a bag.</summary>
         DeployableHealth = 21,
+        /// <summary>A flight of stairs in a square, up to the storey above.</summary>
+        Stairs = 22,
     }
 
     /// <summary>
@@ -47,6 +49,8 @@ namespace Oxfall.Core.Rules
         public readonly PieceType Type;
         public readonly int X, Z;
         public readonly EdgeAxis Axis;
+        /// <summary>The storey of the cell or edge (0: the ground floor).</summary>
+        public readonly int Level;
         public readonly BuildingTier Tier;
         public readonly bool Open;
         public readonly float Top;
@@ -54,12 +58,13 @@ namespace Oxfall.Core.Rules
         /// <summary>The thing set down (Deploy), or the one acted on: its id, and for Authorize who.</summary>
         public readonly Deployable Deployed;
 
-        /// <summary>A lock's code (SetCode, EnterCode), or what a door is made of (Door).</summary>
+        /// <summary>A lock's code (SetCode, EnterCode), what a door is made of (Door), or the side stairs come out on (Stairs).</summary>
         public readonly int Code;
 
         private BuildOp(BuildOpKind kind, PieceType type, int x, int z, EdgeAxis axis, BuildingTier tier = BuildingTier.Twig,
-            bool open = false, float top = 0f, Deployable deployed = default, int code = 0)
+            bool open = false, float top = 0f, Deployable deployed = default, int code = 0, int level = 0)
         {
+            Level = level;
             Code = code;
             Kind = kind;
             Type = type;
@@ -76,9 +81,13 @@ namespace Oxfall.Core.Rules
             new BuildOp(BuildOpKind.Foundation, PieceType.Foundation, cell.X, cell.Z, default, top: top);
 
         public static BuildOp Edge(Edge edge, PieceType type) =>
-            new BuildOp(BuildOpKind.Edge, type, edge.X, edge.Z, edge.Axis);
+            new BuildOp(BuildOpKind.Edge, type, edge.X, edge.Z, edge.Axis, level: edge.Level);
 
-        public static BuildOp Roof(Cell cell) => new BuildOp(BuildOpKind.Roof, PieceType.Roof, cell.X, cell.Z, default);
+        public static BuildOp Roof(Cell cell) => new BuildOp(BuildOpKind.Roof, PieceType.Roof, cell.X, cell.Z, default, level: cell.Level);
+
+        /// <param name="facing">The side the top comes out on (0 north, 1 east, 2 south, 3 west), in <see cref="Code"/>.</param>
+        public static BuildOp Stairs(Cell cell, int facing) =>
+            new BuildOp(BuildOpKind.Stairs, PieceType.Stairs, cell.X, cell.Z, default, code: facing & 3, level: cell.Level);
 
         public static BuildOp Upgrade(PieceRef piece, BuildingTier tier) => OnPiece(BuildOpKind.Upgrade, piece, tier);
 
@@ -87,24 +96,24 @@ namespace Oxfall.Core.Rules
         /// <summary>A piece's health is now <paramref name="health"/> (0 or less: it fell).</summary>
         public static BuildOp Health(PieceRef piece, float health) =>
             piece.IsEdge
-                ? new BuildOp(BuildOpKind.Health, piece.Type, piece.Edge.X, piece.Edge.Z, piece.Edge.Axis, top: health)
-                : new BuildOp(BuildOpKind.Health, piece.Type, piece.Cell.X, piece.Cell.Z, default, top: health);
+                ? new BuildOp(BuildOpKind.Health, piece.Type, piece.Edge.X, piece.Edge.Z, piece.Edge.Axis, top: health, level: piece.Level)
+                : new BuildOp(BuildOpKind.Health, piece.Type, piece.Cell.X, piece.Cell.Z, default, top: health, level: piece.Level);
 
         /// <summary>The door in a doorway has <paramref name="health"/> left (0 or less: it broke).</summary>
         public static BuildOp DoorHealth(Edge edge, float health) =>
-            new BuildOp(BuildOpKind.Health, PieceType.Doorway, edge.X, edge.Z, edge.Axis, open: true, top: health);
+            new BuildOp(BuildOpKind.Health, PieceType.Doorway, edge.X, edge.Z, edge.Axis, open: true, top: health, level: edge.Level);
 
         /// <summary>A deployable's health is now this; at 0 it is destroyed.</summary>
         public static BuildOp DeployableHealth(int id, float health) => OnDeployable(BuildOpKind.DeployableHealth, id).WithTop(health);
 
         /// <summary>Mends a piece to full health, for some of what it is made of.</summary>
         public static BuildOp Repair(PieceRef piece) => piece.IsEdge
-            ? new BuildOp(BuildOpKind.Repair, piece.Type, piece.Edge.X, piece.Edge.Z, piece.Edge.Axis)
-            : new BuildOp(BuildOpKind.Repair, piece.Type, piece.Cell.X, piece.Cell.Z, default);
+            ? new BuildOp(BuildOpKind.Repair, piece.Type, piece.Edge.X, piece.Edge.Z, piece.Edge.Axis, level: piece.Level)
+            : new BuildOp(BuildOpKind.Repair, piece.Type, piece.Cell.X, piece.Cell.Z, default, level: piece.Level);
 
         /// <summary>Mends the door in a doorway.</summary>
         public static BuildOp RepairDoor(Edge edge) =>
-            new BuildOp(BuildOpKind.Repair, PieceType.Doorway, edge.X, edge.Z, edge.Axis, open: true);
+            new BuildOp(BuildOpKind.Repair, PieceType.Doorway, edge.X, edge.Z, edge.Axis, open: true, level: edge.Level);
 
         /// <summary>For <see cref="BuildOpKind.Health"/> and <see cref="BuildOpKind.Repair"/>: about the door, not the piece.</summary>
         public bool OnDoor => Open;
@@ -113,12 +122,12 @@ namespace Oxfall.Core.Rules
         public float HealthLeft => Top;
 
         public static BuildOp Door(Edge edge, DoorKind kind = DoorKind.Wood) =>
-            new BuildOp(BuildOpKind.Door, PieceType.Doorway, edge.X, edge.Z, edge.Axis, code: (int)kind);
+            new BuildOp(BuildOpKind.Door, PieceType.Doorway, edge.X, edge.Z, edge.Axis, code: (int)kind, level: edge.Level);
 
         public DoorKind DoorKind => (DoorKind)Code;
 
         public static BuildOp ToggleDoor(Edge edge, bool open) =>
-            new BuildOp(BuildOpKind.ToggleDoor, PieceType.Doorway, edge.X, edge.Z, edge.Axis, open: open);
+            new BuildOp(BuildOpKind.ToggleDoor, PieceType.Doorway, edge.X, edge.Z, edge.Axis, open: open, level: edge.Level);
 
         /// <summary>Sets a campfire, box, furnace, sleeping bag or tool cupboard down.</summary>
         public static BuildOp Deploy(Deployable deployable) =>
@@ -162,7 +171,7 @@ namespace Oxfall.Core.Rules
 
         private static BuildOp OnLock(BuildOpKind kind, LockTarget target, int code = 0, int owner = 0, bool open = false) => target.IsDoor
             ? new BuildOp(kind, PieceType.Doorway, target.Edge.X, target.Edge.Z, target.Edge.Axis, open: open,
-                deployed: Target(0).WithOwner(owner), code: code)
+                deployed: Target(0).WithOwner(owner), code: code, level: target.Edge.Level)
             : new BuildOp(kind, PieceType.Foundation, 0, 0, default, open: open, deployed: Target(target.Id).WithOwner(owner), code: code);
 
         /// <summary>What a lock op is about.</summary>
@@ -178,20 +187,18 @@ namespace Oxfall.Core.Rules
         public int Id => Deployed.Id;
 
         private static BuildOp OnPiece(BuildOpKind kind, PieceRef piece, BuildingTier tier) => piece.IsEdge
-            ? new BuildOp(kind, piece.Type, piece.Edge.X, piece.Edge.Z, piece.Edge.Axis, tier)
-            : new BuildOp(kind, piece.Type, piece.Cell.X, piece.Cell.Z, default, tier);
+            ? new BuildOp(kind, piece.Type, piece.Edge.X, piece.Edge.Z, piece.Edge.Axis, tier, level: piece.Level)
+            : new BuildOp(kind, piece.Type, piece.Cell.X, piece.Cell.Z, default, tier, level: piece.Level);
 
-        public Cell Cell => new Cell(X, Z);
-        public Edge EdgeAt => new Edge(X, Z, Axis);
+        public Cell Cell => new Cell(X, Z, Level);
+        public Edge EdgeAt => new Edge(X, Z, Axis, Level);
 
         /// <summary>The piece an upgrade or removal is about.</summary>
-        public PieceRef Piece => PieceRef.IsEdgeType(Type)
-            ? PieceRef.OnEdge(EdgeAt, Type)
-            : Type == PieceType.Roof ? PieceRef.Roof(Cell) : PieceRef.Foundation(Cell);
+        public PieceRef Piece => PieceRef.IsEdgeType(Type) ? PieceRef.OnEdge(EdgeAt, Type) : PieceRef.InCell(Type, Cell);
 
-        public BuildOp WithTop(float top) => new BuildOp(Kind, Type, X, Z, Axis, Tier, Open, top, Deployed, Code);
-        public BuildOp WithTier(BuildingTier tier) => new BuildOp(Kind, Type, X, Z, Axis, tier, Open, Top, Deployed, Code);
-        public BuildOp WithOpen(bool open) => new BuildOp(Kind, Type, X, Z, Axis, Tier, open, Top, Deployed, Code);
+        public BuildOp WithTop(float top) => new BuildOp(Kind, Type, X, Z, Axis, Tier, Open, top, Deployed, Code, Level);
+        public BuildOp WithTier(BuildingTier tier) => new BuildOp(Kind, Type, X, Z, Axis, tier, Open, Top, Deployed, Code, Level);
+        public BuildOp WithOpen(bool open) => new BuildOp(Kind, Type, X, Z, Axis, Tier, open, Top, Deployed, Code, Level);
 
         public override string ToString()
         {
@@ -212,7 +219,7 @@ namespace Oxfall.Core.Rules
                 case BuildOpKind.Health: return $"Health {(OnDoor ? "door " + EdgeAt : Piece.ToString())} {Top:0.#}";
                 case BuildOpKind.Repair: return $"Repair {(OnDoor ? "door " + EdgeAt : Piece.ToString())}";
                 case BuildOpKind.DeployableHealth: return $"DeployableHealth {Id} {Top:0.#}";
-                default: return $"{Kind} {Type} ({X},{Z}{(PieceRef.IsEdgeType(Type) ? "," + Axis : "")})";
+                default: return $"{Kind} {Type} ({X},{Z}{(PieceRef.IsEdgeType(Type) ? "," + Axis : "")}{(Level > 0 ? "@" + Level : "")})";
             }
         }
 
@@ -232,11 +239,19 @@ namespace Oxfall.Core.Rules
                     w.Int(X);
                     w.Int(Z);
                     w.Byte((byte)Axis);
+                    w.Byte((byte)Level);
                     w.Byte((byte)Type);
                     break;
                 case BuildOpKind.Roof:
                     w.Int(X);
                     w.Int(Z);
+                    w.Byte((byte)Level);
+                    break;
+                case BuildOpKind.Stairs:
+                    w.Int(X);
+                    w.Int(Z);
+                    w.Byte((byte)Level);
+                    w.Byte((byte)Code);
                     break;
                 case BuildOpKind.Upgrade:
                 case BuildOpKind.Remove:
@@ -244,6 +259,7 @@ namespace Oxfall.Core.Rules
                     w.Int(X);
                     w.Int(Z);
                     w.Byte((byte)Axis);
+                    w.Byte((byte)Level);
                     w.Byte((byte)Tier);
                     break;
                 case BuildOpKind.Door:
@@ -251,6 +267,7 @@ namespace Oxfall.Core.Rules
                     w.Int(X);
                     w.Int(Z);
                     w.Byte((byte)Axis);
+                    w.Byte((byte)Level);
                     w.Bool(Open);
                     if (Kind == BuildOpKind.Door) w.Byte((byte)DoorKind);
                     break;
@@ -302,6 +319,7 @@ namespace Oxfall.Core.Rules
                     w.Int(X);
                     w.Int(Z);
                     w.Byte((byte)Axis);
+                    w.Byte((byte)Level);
                     w.Bool(Open);
                     if (Kind == BuildOpKind.Health) w.Float(Top);
                     break;
@@ -326,29 +344,37 @@ namespace Oxfall.Core.Rules
                 }
                 case BuildOpKind.Edge:
                 {
-                    var edge = new Edge(Coordinate(r), Coordinate(r), ReadAxis(r));
+                    int x = Coordinate(r), z = Coordinate(r);
+                    var axis = ReadAxis(r);
+                    var edge = new Edge(x, z, axis, ReadLevel(r));
                     var type = ReadType(r);
                     if (!PieceRef.IsEdgeType(type)) throw new ProtocolException("Not an edge piece.");
                     return Edge(edge, type);
                 }
                 case BuildOpKind.Roof:
-                    return Roof(new Cell(Coordinate(r), Coordinate(r)));
+                case BuildOpKind.Stairs:
+                {
+                    int x = Coordinate(r), z = Coordinate(r);
+                    var cell = new Cell(x, z, ReadLevel(r));
+                    if (kind == BuildOpKind.Roof) return Roof(cell);
+                    int facing = r.Byte();
+                    if (facing > 3) throw new ProtocolException("Unknown facing.");
+                    return Stairs(cell, facing);
+                }
                 case BuildOpKind.Upgrade:
                 case BuildOpKind.Remove:
                 {
-                    var type = ReadType(r);
-                    int x = Coordinate(r), z = Coordinate(r);
-                    var axis = ReadAxis(r);
+                    var piece = ReadPiece(r);
                     var tier = (BuildingTier)r.Byte();
                     if (!Enum.IsDefined(typeof(BuildingTier), tier)) throw new ProtocolException("Unknown tier.");
-                    var piece = PieceRef.IsEdgeType(type) ? PieceRef.OnEdge(new Edge(x, z, axis), type)
-                        : type == PieceType.Roof ? PieceRef.Roof(new Cell(x, z)) : PieceRef.Foundation(new Cell(x, z));
                     return kind == BuildOpKind.Upgrade ? Upgrade(piece, tier) : Remove(piece);
                 }
                 case BuildOpKind.Door:
                 case BuildOpKind.ToggleDoor:
                 {
-                    var edge = new Edge(Coordinate(r), Coordinate(r), ReadAxis(r));
+                    int x = Coordinate(r), z = Coordinate(r);
+                    var axis = ReadAxis(r);
+                    var edge = new Edge(x, z, axis, ReadLevel(r));
                     bool open = r.Bool();
                     if (kind == BuildOpKind.ToggleDoor) return ToggleDoor(edge, open);
                     var door = (DoorKind)r.Byte();
@@ -409,13 +435,9 @@ namespace Oxfall.Core.Rules
                 case BuildOpKind.Health:
                 case BuildOpKind.Repair:
                 {
-                    var type = ReadType(r);
-                    int x = Coordinate(r), z = Coordinate(r);
-                    var axis = ReadAxis(r);
+                    var piece = ReadPiece(r);
                     bool door = r.Bool();
-                    var piece = PieceRef.IsEdgeType(type) ? PieceRef.OnEdge(new Edge(x, z, axis), type)
-                        : type == PieceType.Roof ? PieceRef.Roof(new Cell(x, z)) : PieceRef.Foundation(new Cell(x, z));
-                    if (door && type != PieceType.Doorway) throw new ProtocolException("Only a doorway has a door.");
+                    if (door && piece.Type != PieceType.Doorway) throw new ProtocolException("Only a doorway has a door.");
                     if (kind == BuildOpKind.Repair) return door ? RepairDoor(piece.Edge) : Repair(piece);
                     float health = Finite(r.Float());
                     return door ? DoorHealth(piece.Edge, health) : Health(piece, health);
@@ -439,13 +461,46 @@ namespace Oxfall.Core.Rules
                 w.Int(target.Edge.X);
                 w.Int(target.Edge.Z);
                 w.Byte((byte)target.Edge.Axis);
+                w.Byte((byte)target.Edge.Level);
             }
             else w.Int(target.Id);
         }
 
-        private static LockTarget ReadLock(NetReader r) => r.Bool()
-            ? LockTarget.Door(new Edge(Coordinate(r), Coordinate(r), ReadAxis(r)))
-            : LockTarget.On(r.Int());
+        private static LockTarget ReadLock(NetReader r)
+        {
+            if (!r.Bool()) return LockTarget.On(r.Int());
+            int x = Coordinate(r), z = Coordinate(r);
+            var axis = ReadAxis(r);
+            return LockTarget.Door(new Edge(x, z, axis, ReadLevel(r)));
+        }
+
+        /// <summary>Writes a piece as <see cref="ReadPiece"/> reads it.</summary>
+        internal static void WritePiece(NetWriter w, PieceRef piece)
+        {
+            w.Byte((byte)piece.Type);
+            w.Int(piece.IsEdge ? piece.Edge.X : piece.Cell.X);
+            w.Int(piece.IsEdge ? piece.Edge.Z : piece.Cell.Z);
+            w.Byte(piece.IsEdge ? (byte)piece.Edge.Axis : (byte)0);
+            w.Byte((byte)piece.Level);
+        }
+
+        /// <summary>A piece named by its type, coordinates, axis (edges) and storey.</summary>
+        internal static PieceRef ReadPiece(NetReader r)
+        {
+            var type = ReadType(r);
+            int x = Coordinate(r), z = Coordinate(r);
+            var axis = ReadAxis(r);
+            int level = ReadLevel(r);
+            if (type == PieceType.Foundation && level != 0) throw new ProtocolException("Foundations are on the ground.");
+            return PieceRef.IsEdgeType(type) ? PieceRef.OnEdge(new Edge(x, z, axis, level), type) : PieceRef.InCell(type, new Cell(x, z, level));
+        }
+
+        private static int ReadLevel(NetReader r)
+        {
+            int level = r.Byte();
+            if (level > BuildingGrid.MaxLevel) throw new ProtocolException("Storey too high.");
+            return level;
+        }
 
         private static int Coordinate(NetReader r)
         {
@@ -490,6 +545,7 @@ namespace Oxfall.Core.Rules
                 case BuildOpKind.Foundation: return grid.PlaceFoundation(op.Cell, op.Top) == PlaceResult.Ok;
                 case BuildOpKind.Edge: return grid.PlaceEdge(op.EdgeAt, op.Type) == PlaceResult.Ok;
                 case BuildOpKind.Roof: return grid.PlaceRoof(op.Cell) == PlaceResult.Ok;
+                case BuildOpKind.Stairs: return grid.PlaceStairs(op.Cell, op.Code & 3) == PlaceResult.Ok;
                 case BuildOpKind.Upgrade: return grid.Upgrade(Stored(grid, op.Piece), op.Tier) == PlaceResult.Ok;
                 case BuildOpKind.Remove: return grid.Remove(Stored(grid, op.Piece));
                 case BuildOpKind.Door: return grid.PlaceDoor(op.EdgeAt, op.DoorKind) == PlaceResult.Ok;
@@ -565,15 +621,27 @@ namespace Oxfall.Core.Rules
                 ops.Add(BuildOp.Foundation(f.Key, f.Value));
                 Tier(PieceRef.Foundation(f.Key));
             }
-            foreach (var e in grid.EdgePieces)
+            // Storey by storey, each on what the one below holds up: walls, then roofs and stairs.
+            for (int level = 0; level <= BuildingGrid.MaxLevel; level++)
             {
-                ops.Add(BuildOp.Edge(e.Key, e.Value));
-                Tier(PieceRef.OnEdge(e.Key, e.Value));
-            }
-            foreach (var cell in grid.Roofs)
-            {
-                ops.Add(BuildOp.Roof(cell));
-                Tier(PieceRef.Roof(cell));
+                foreach (var e in grid.EdgePieces)
+                {
+                    if (e.Key.Level != level) continue;
+                    ops.Add(BuildOp.Edge(e.Key, e.Value));
+                    Tier(PieceRef.OnEdge(e.Key, e.Value));
+                }
+                foreach (var cell in grid.Roofs)
+                {
+                    if (cell.Level != level) continue;
+                    ops.Add(BuildOp.Roof(cell));
+                    Tier(PieceRef.Roof(cell));
+                }
+                foreach (var cell in grid.Stairs)
+                {
+                    if (cell.Level != level) continue;
+                    ops.Add(BuildOp.Stairs(cell, grid.StairsFacing(cell)));
+                    Tier(PieceRef.Stairs(cell));
+                }
             }
             ops.AddRange(upgrades);
             // What blasts took off (after the upgrades, which mend a piece to its new tier's full health).

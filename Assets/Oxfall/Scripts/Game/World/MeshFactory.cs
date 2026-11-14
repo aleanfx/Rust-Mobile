@@ -1085,6 +1085,101 @@ namespace Oxfall.Game.World
             return b.Build(doorway ? "TwigDoorway" : "TwigWall", 50f);
         }
 
+        /// <summary>
+        /// A twig window: the twig wall's frame with a square hole (see <see cref="Oxfall.Core.Building.Openings"/>),
+        /// sticks woven below the sill, beside it and above the lintel.
+        /// </summary>
+        public static Mesh TwigWindow()
+        {
+            var b = new FlatMeshBuilder(1) { UvScale = 0.6f };
+            var random = new System.Random(43);
+            const float post = 0.07f, stick = 0.035f;
+            float half = Oxfall.Core.Building.Openings.WindowHalfWidth + 0.02f;
+            float sill = Oxfall.Core.Building.Openings.WindowBottom, lintel = Oxfall.Core.Building.Openings.WindowTop;
+            Stick(b, -1.42f, 0f, -1.42f, 3f, 0f, post);
+            Stick(b, 1.42f, 0f, 1.42f, 3f, 0f, post);
+            Stick(b, -1.5f, 0.1f, 1.5f, 0.1f, 0f, post);
+            Stick(b, -1.5f, 2.9f, 1.5f, 2.9f, 0f, post);
+            Stick(b, -half, 0.1f, -half, 2.9f, 0f, post);
+            Stick(b, half, 0.1f, half, 2.9f, 0f, post);
+            Stick(b, -1.5f, sill, 1.5f, sill, 0f, post);
+            Stick(b, -1.5f, lintel, 1.5f, lintel, 0f, post);
+            foreach (float side in new[] { -1f, 1f })
+            {
+                for (int i = 0; i < 3; i++)
+                {
+                    float x = side * (0.84f + i * 0.22f);
+                    Stick(b, x, 0.1f, x + Rand(random, -0.04f, 0.04f), 2.9f, i % 2 == 0 ? 0.035f : -0.035f, stick);
+                }
+                Stick(b, side * 0.66f, 0.15f, side * 1.38f, 2.85f, 0.075f, 0.045f);
+            }
+            for (int i = 0; i < 4; i++)
+            {
+                float x = -0.45f + i * 0.3f;
+                Stick(b, x, 0.1f, x + Rand(random, -0.03f, 0.03f), sill, i % 2 == 0 ? 0.035f : -0.035f, stick);
+                Stick(b, x, lintel, x + Rand(random, -0.03f, 0.03f), 2.9f, i % 2 == 0 ? -0.035f : 0.035f, stick);
+            }
+            return b.Build("TwigWindow", 50f);
+        }
+
+        /// <summary>Steps in a full turn of spiral stairs.</summary>
+        public const int SpiralSteps = 16;
+
+        /// <summary>
+        /// Spiral stairs round a post in the middle of a 3 m square, rising <paramref name="rise"/> in
+        /// one full turn: the first step just clockwise of +Z (seen from above), the last just before it,
+        /// so they are entered and left on the +Z side. A rail runs along the middle steps. Twig: rough
+        /// sticks laid across a pole; otherwise solid wedge steps.
+        /// </summary>
+        public static Mesh SpiralStairs(float rise, bool twig)
+        {
+            var b = new FlatMeshBuilder(1) { UvScale = twig ? 0.6f : 1.6f };
+            var random = new System.Random(59);
+            const float inner = 0.13f, outer = 1.42f, thick = 0.14f;
+            int n = SpiralSteps;
+            float step = 360f / n;
+            Vector3 At(float degrees, float radius, float y)
+            {
+                float a = degrees * Mathf.Deg2Rad;
+                return new Vector3(Mathf.Sin(a) * radius, y, Mathf.Cos(a) * radius);
+            }
+            if (twig) b.AddTube(0, new Vector3(0f, 0f, 0f), new Vector3(0f, rise + 1.0f, 0f), 0.1f, 0.085f, 7);
+            else b.AddBox(0, new Vector3(-0.13f, 0f, -0.13f), new Vector3(0.13f, rise + 1.0f, 0.13f));
+            for (int i = 0; i < n; i++)
+            {
+                float top = (i + 1) * rise / n, a0 = i * step, a1 = (i + 1) * step;
+                if (twig)
+                {
+                    // Three sticks fanned across the step, lashed to the pole.
+                    for (int k = 0; k < 3; k++)
+                    {
+                        float a = Mathf.Lerp(a0 + 3f, a1 - 3f, k / 2f) + Rand(random, -1.5f, 1.5f);
+                        b.AddTube(0, At(a, inner, top - 0.05f), At(a + Rand(random, -2f, 2f), outer, top - 0.05f + Rand(random, -0.02f, 0.02f)),
+                            0.05f, 0.04f, 5);
+                    }
+                    b.AddTube(0, At(a0 + step * 0.5f, outer - 0.1f, top - 0.12f), At(a0 + step * 0.5f, inner, top - 0.12f - rise / n), 0.035f, 0.03f, 5);
+                }
+                else
+                {
+                    var lo = top - thick;
+                    b.AddHex(0, (ix, iy, iz) => At(ix == 0 ? a0 : a1, iz == 0 ? inner : outer, iy == 0 ? lo : top));
+                }
+            }
+            // The rail: posts on the outer ends of the middle steps (the first and last few stay open to step on and off).
+            const int railFrom = 3, railTo = 12;
+            Vector3 railPrev = default;
+            for (int i = railFrom; i <= railTo; i++)
+            {
+                float top = (i + 1) * rise / n, a = (i + 0.5f) * step;
+                var foot = At(a, outer - 0.08f, top);
+                var head = foot + new Vector3(0f, 0.9f, 0f);
+                b.AddTube(0, foot, head, twig ? 0.035f : 0.03f, twig ? 0.03f : 0.03f, 5);
+                if (i > railFrom) b.AddTube(0, railPrev, head, twig ? 0.04f : 0.035f, twig ? 0.04f : 0.035f, 5);
+                railPrev = head;
+            }
+            return b.Build(twig ? "TwigSpiralStairs" : "SpiralStairs", twig ? 50f : 0f);
+        }
+
         /// <summary>A twig roof: a square frame with sticks laid across, 3.2 m square on the origin.</summary>
         public static Mesh TwigRoof()
         {
@@ -1679,6 +1774,22 @@ namespace Oxfall.Game.World
                 Quad(submesh, P(lo.x, lo.y, lo.z), P(lo.x, lo.y, hi.z), P(lo.x, hi.y, hi.z), P(lo.x, hi.y, lo.z)); // -X
                 Quad(submesh, P(lo.x, lo.y, hi.z), P(hi.x, lo.y, hi.z), P(hi.x, hi.y, hi.z), P(lo.x, hi.y, hi.z)); // +Z
                 Quad(submesh, P(lo.x, lo.y, lo.z), P(lo.x, hi.y, lo.z), P(hi.x, hi.y, lo.z), P(hi.x, lo.y, lo.z)); // -Z
+            }
+
+            /// <summary>
+            /// A box bent to any eight corners, <paramref name="corner"/>(x, y, z) giving the corner a box
+            /// would have at its low (0) or high (1) side along each axis; faces are wound as
+            /// <see cref="AddBox"/> winds them, so the corners must keep the box's handedness.
+            /// </summary>
+            public void AddHex(int submesh, System.Func<int, int, int, Vector3> corner)
+            {
+                Vector3 P(int x, int y, int z) => corner(x, y, z);
+                Quad(submesh, P(0, 1, 0), P(0, 1, 1), P(1, 1, 1), P(1, 1, 0)); // top
+                Quad(submesh, P(0, 0, 0), P(1, 0, 0), P(1, 0, 1), P(0, 0, 1)); // bottom
+                Quad(submesh, P(1, 0, 0), P(1, 1, 0), P(1, 1, 1), P(1, 0, 1)); // +X
+                Quad(submesh, P(0, 0, 0), P(0, 0, 1), P(0, 1, 1), P(0, 1, 0)); // -X
+                Quad(submesh, P(0, 0, 1), P(1, 0, 1), P(1, 1, 1), P(0, 1, 1)); // +Z
+                Quad(submesh, P(0, 0, 0), P(0, 1, 0), P(1, 1, 0), P(1, 0, 0)); // -Z
             }
 
             private void Quad(int submesh, Vector3 a, Vector3 b, Vector3 c, Vector3 d)

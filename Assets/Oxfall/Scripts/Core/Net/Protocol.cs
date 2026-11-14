@@ -12,7 +12,7 @@ namespace Oxfall.Core.Net
     public static class Protocol
     {
         /// <summary>Raised whenever a message changes shape; a client of another version is turned away.</summary>
-        public const ushort Version = 10;
+        public const ushort Version = 11;
 
         /// <summary>Snapshots per second the server sends.</summary>
         public const int TickRate = 20;

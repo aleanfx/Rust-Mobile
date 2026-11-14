@@ -40,20 +40,7 @@ namespace Oxfall.Core.Rules
         {
             w.Byte((byte)Surface);
             if (Surface == ChargeSurface.Ground) return;
-            var piece = Piece;
-            w.Byte((byte)piece.Type);
-            if (piece.IsEdge)
-            {
-                w.Int(piece.Edge.X);
-                w.Int(piece.Edge.Z);
-                w.Byte((byte)piece.Edge.Axis);
-            }
-            else
-            {
-                w.Int(piece.Cell.X);
-                w.Int(piece.Cell.Z);
-                w.Byte(0);
-            }
+            BuildOp.WritePiece(w, Piece);
         }
 
         public static ChargeTarget Read(NetReader r)
@@ -61,19 +48,12 @@ namespace Oxfall.Core.Rules
             var surface = (ChargeSurface)r.Byte();
             if (surface == ChargeSurface.Ground) return Ground;
             if (surface != ChargeSurface.Piece && surface != ChargeSurface.Door) throw new ProtocolException("Unknown charge surface.");
-            var type = (PieceType)r.Byte();
-            if (!Enum.IsDefined(typeof(PieceType), type)) throw new ProtocolException("Unknown piece type.");
-            int x = r.Int(), z = r.Int();
-            var axis = (EdgeAxis)r.Byte();
-            if (Math.Abs(x) > 4096 || Math.Abs(z) > 4096) throw new ProtocolException("Coordinate off the island.");
-            if (PieceRef.IsEdgeType(type) && !Enum.IsDefined(typeof(EdgeAxis), axis)) throw new ProtocolException("Unknown edge axis.");
+            var piece = BuildOp.ReadPiece(r);
             if (surface == ChargeSurface.Door)
             {
-                if (type != PieceType.Doorway) throw new ProtocolException("Only a doorway has a door.");
-                return OnDoor(new Edge(x, z, axis));
+                if (piece.Type != PieceType.Doorway) throw new ProtocolException("Only a doorway has a door.");
+                return OnDoor(piece.Edge);
             }
-            var piece = PieceRef.IsEdgeType(type) ? PieceRef.OnEdge(new Edge(x, z, axis), type)
-                : type == PieceType.Roof ? PieceRef.Roof(new Cell(x, z)) : PieceRef.Foundation(new Cell(x, z));
             return OnPiece(piece);
         }
 
@@ -263,15 +243,48 @@ namespace Oxfall.Core.Rules
                     float px = x0 + (x1 - x0) * t, py = y0 + (y1 - y0) * t, pz = z0 + (z1 - z0) * t;
                     float along = alongX ? px : pz;
                     int cellAlong = (int)Math.Floor(along / S);
-                    var edge = alongX ? new Edge(cellAlong, k, EdgeAxis.AlongX) : new Edge(k, cellAlong, EdgeAxis.AlongZ);
-                    if (!grid.TryGetEdgePiece(edge, out var piece)) continue;
-                    float h = py - grid.EdgeBaseHeight(edge);
-                    if (h < -0.05f || h > BuildingGrid.WallHeight + 0.05f) continue;
-                    if (piece.Type == PieceType.Wall) return true;
-                    // A doorway: its frame shields, and its opening does while a door is shut in it.
-                    float offset = along - (cellAlong + 0.5f) * S;
-                    bool inOpening = Math.Abs(offset) < 0.6f && h < 2.2f;
-                    if (!inOpening || (grid.HasDoor(edge) && !grid.IsDoorOpen(edge))) return true;
+                    for (int level = 0; level <= BuildingGrid.MaxLevel; level++)
+                    {
+                        var edge = alongX ? new Edge(cellAlong, k, EdgeAxis.AlongX, level) : new Edge(k, cellAlong, EdgeAxis.AlongZ, level);
+                        if (!grid.TryGetEdgePiece(edge, out var piece)) continue;
+                        float h = py - grid.EdgeBaseHeight(edge);
+                        if (h < -0.05f || h > BuildingGrid.WallHeight + 0.05f) continue;
+                        if (piece.Type == PieceType.Wall) return true;
+                        float offset = along - (cellAlong + 0.5f) * S;
+                        // A window: shields but for its opening.
+                        if (piece.Type == PieceType.Window)
+                        {
+                            if (!Openings.InWindow(offset, h)) return true;
+                            continue;
+                        }
+                        // A doorway: its frame shields, and its opening does while a door is shut in it.
+                        if (!Openings.InDoorway(offset, h) || (grid.HasDoor(edge) && !grid.IsDoorOpen(edge))) return true;
+                    }
+                }
+            }
+            return Floored(grid, x0, y0, z0, x1, y1, z1);
+        }
+
+        /// <summary>Whether a floor (a roof, seen from below or above) lies between the two points.</summary>
+        private static bool Floored(BuildingGrid grid, float x0, float y0, float z0, float x1, float y1, float z1)
+        {
+            if (Math.Abs(y1 - y0) < 0.05f) return false;
+            // A step at a time along the line: a floor is crossed where the storey under a step changes.
+            int steps = Math.Max(1, (int)Math.Ceiling(Distance(x0, y0, z0, x1, y1, z1) / 0.25f));
+            for (int i = 0; i < steps; i++)
+            {
+                float t0 = (float)i / steps, t1 = (float)(i + 1) / steps;
+                float xa = x0 + (x1 - x0) * t0, ya = y0 + (y1 - y0) * t0, za = z0 + (z1 - z0) * t0;
+                float xb = x0 + (x1 - x0) * t1, yb = y0 + (y1 - y0) * t1, zb = z0 + (z1 - z0) * t1;
+                var column = BuildingGrid.CellAt((xa + xb) * 0.5f, (za + zb) * 0.5f);
+                if (!grid.TryGetFoundationTop(column, out float top)) continue;
+                float low = Math.Min(ya, yb), high = Math.Max(ya, yb);
+                // The roof over storey L lies at top + (L + 1) × wall height, a floor's thickness deep.
+                for (int level = 0; level <= BuildingGrid.MaxLevel; level++)
+                {
+                    float plane = top + (level + 1) * BuildingGrid.WallHeight + BuildingGrid.FloorThickness * 0.5f;
+                    if (plane > high) break;
+                    if (plane >= low && grid.HasRoof(new Cell(column.X, column.Z, level))) return true;
                 }
             }
             return false;

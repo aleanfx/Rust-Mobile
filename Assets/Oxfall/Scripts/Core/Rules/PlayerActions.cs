@@ -45,6 +45,10 @@ namespace Oxfall.Core.Rules
         NotDamaged,
         /// <summary>The hammer: hit by a blast moments ago, it cannot be mended yet.</summary>
         RecentlyDamaged,
+        /// <summary>A piece on an upper storey with no floor (a roof below) to stand on.</summary>
+        NeedsFloor,
+        /// <summary>Above the highest storey a building may have.</summary>
+        TooHigh,
     }
 
     /// <summary>
@@ -169,7 +173,7 @@ namespace Oxfall.Core.Rules
             if (s.Inventory.IsEmpty) return false;
             // A little above the ground or floor, so it never sinks in.
             float ground = settlement.Ground.Height(x, z);
-            float floor = settlement.Grid.TryGetFoundationTop(BuildingGrid.CellAt(x, z), out float top) && Math.Abs(top - y) < 1.5f ? top : ground;
+            float floor = settlement.Grid.TryGetFloorBelow(x, y, z, out float top) && Math.Abs(top - y) < 1.5f ? top : ground;
             bag = settlement.Add(new Deployable(0, DeployableKind.Bag, x, Math.Max(floor, Math.Min(y, floor + 1f)), z, yaw, owner));
             var into = settlement.Container(bag.Id);
             var slots = new List<(int, ItemStack)>();
@@ -374,6 +378,14 @@ namespace Oxfall.Core.Rules
                     if (can == PlaceResult.Ok && !Privileged(settlement, owner, PiecePoint(grid, PieceRef.Roof(op.Cell))))
                         return ActionResult.BuildingBlocked;
                     return Place(settlement, s, owner, PieceRef.Roof(op.Cell), can, () => grid.PlaceRoof(op.Cell));
+                }
+                case BuildOpKind.Stairs:
+                {
+                    var can = grid.CanPlaceStairs(op.Cell);
+                    var at = PiecePoint(grid, PieceRef.Stairs(op.Cell));
+                    if (can == PlaceResult.Ok && !Near(x, y, z, at, BuildReach)) return ActionResult.TooFar;
+                    if (can == PlaceResult.Ok && !Privileged(settlement, owner, at)) return ActionResult.BuildingBlocked;
+                    return Place(settlement, s, owner, PieceRef.Stairs(op.Cell), can, () => grid.PlaceStairs(op.Cell, op.Code & 3));
                 }
                 case BuildOpKind.Upgrade:
                 {
@@ -636,7 +648,7 @@ namespace Oxfall.Core.Rules
         {
             float ground = settlement.Ground.Height(x, z);
             if (ground < IslandGround.WaterLevel + 0.3f) return ActionResult.InWater;
-            float floor = settlement.Grid.TryGetFoundationTop(BuildingGrid.CellAt(x, z), out float top) ? top : ground;
+            float floor = settlement.Grid.TryGetFloorBelow(x, y, z, out float top) ? top : ground;
             if (Math.Abs(y - floor) > 0.7f && Math.Abs(y - ground) > 0.7f) return ActionResult.Invalid;
             if (!settlement.HasPrivilege(owner, x, z)) return ActionResult.BuildingBlocked;
             float radius = Deployables.Radius(kind);
@@ -690,8 +702,13 @@ namespace Oxfall.Core.Rules
                 }
                 case PieceType.Roof:
                 {
-                    grid.TryGetFoundationTop(piece.Cell, out float floor);
-                    return ((piece.Cell.X + 0.5f) * S, floor + BuildingGrid.WallHeight, (piece.Cell.Z + 0.5f) * S);
+                    grid.TryGetStoreyBase(piece.Cell, out float storey);
+                    return ((piece.Cell.X + 0.5f) * S, storey + BuildingGrid.WallHeight, (piece.Cell.Z + 0.5f) * S);
+                }
+                case PieceType.Stairs:
+                {
+                    grid.TryGetFloorHeight(piece.Cell, out float floor);
+                    return ((piece.Cell.X + 0.5f) * S, floor + BuildingGrid.WallHeight * 0.5f, (piece.Cell.Z + 0.5f) * S);
                 }
                 default:
                     return EdgePoint(grid, piece.Edge);
@@ -717,6 +734,8 @@ namespace Oxfall.Core.Rules
                 case PlaceResult.NeedsDoorway: return ActionResult.NeedsDoorway;
                 case PlaceResult.NoPiece: return ActionResult.NoPiece;
                 case PlaceResult.NotAnUpgrade: return ActionResult.MaxTier;
+                case PlaceResult.NeedsFloor: return ActionResult.NeedsFloor;
+                case PlaceResult.TooHigh: return ActionResult.TooHigh;
                 default: return ActionResult.Invalid;
             }
         }

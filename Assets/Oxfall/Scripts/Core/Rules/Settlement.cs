@@ -77,7 +77,7 @@ namespace Oxfall.Core.Rules
                 if (_clearing || !DropsLoot) return;
                 _falling.Clear();
                 foreach (var d in _deployables.Values)
-                    if (BuildingGrid.CellAt(d.X, d.Z).Equals(cell) && d.Y > top - OnFloorSlack) _falling.Add(d);
+                    if (BuildingGrid.CellAt(d.X, d.Z).Equals(cell.Ground) && d.Y > top - OnFloorSlack) _falling.Add(d);
                 foreach (var d in _falling)
                 {
                     DeployableFell?.Invoke(d.Id);
