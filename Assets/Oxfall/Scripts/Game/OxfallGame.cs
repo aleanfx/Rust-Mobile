@@ -1448,6 +1448,14 @@ namespace Oxfall.Game
                 case "blunderbuss": HoldItem(ItemIds.Blunderbuss); break;
                 case "bandage": HoldItem(ItemIds.Bandage); break;
                 case "map": _map.Toggle(); break;
+                case "face-marker":
+                    // Test: turns the player to look toward the map marker.
+                    if (_map.Marker.HasValue)
+                    {
+                        var to = _map.Marker.Value - _player.transform.position;
+                        _player.Teleport(_player.transform.position, Mathf.Atan2(to.x, to.z) * Mathf.Rad2Deg, _player.Pitch);
+                    }
+                    break;
                 case "syringe": HoldItem(ItemIds.MedicalSyringe); break;
                 case "fire": _gatherer.UseOnce(); break;
                 case "reload":
