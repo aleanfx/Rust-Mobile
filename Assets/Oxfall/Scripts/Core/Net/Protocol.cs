@@ -11,7 +11,7 @@ namespace Oxfall.Core.Net
     public static class Protocol
     {
         /// <summary>Raised whenever a message changes shape; a client of another version is turned away.</summary>
-        public const ushort Version = 3;
+        public const ushort Version = 4;
 
         /// <summary>Snapshots per second the server sends.</summary>
         public const int TickRate = 20;
@@ -78,6 +78,7 @@ namespace Oxfall.Core.Net
         VitalsState = 21,
         Failed = 22,
         Built = 23,
+        TimeOfDay = 24,
     }
 
     /// <summary>What a player does to their own belongings (inside an <see cref="MessageType.Act"/> message).</summary>
@@ -415,6 +416,21 @@ namespace Oxfall.Core.Net
             health = r.Float();
             food = r.Float();
             water = r.Float();
+        }
+
+        /// <summary>The island's clock (0 to 24), so everyone has the same day and night.</summary>
+        public static void TimeOfDay(NetWriter w, float hours)
+        {
+            w.Reset();
+            w.Byte((byte)MessageType.TimeOfDay);
+            w.Float(hours);
+        }
+
+        public static float ReadTimeOfDay(NetReader r)
+        {
+            float hours = r.Float();
+            if (float.IsNaN(hours) || hours < 0f || hours >= 24.001f) throw new ProtocolException("Bad time of day.");
+            return hours;
         }
 
         /// <summary>Something the player asked for did not happen, and why.</summary>

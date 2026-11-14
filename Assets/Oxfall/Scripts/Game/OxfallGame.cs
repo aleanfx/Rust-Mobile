@@ -76,9 +76,24 @@ namespace Oxfall.Game
         [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.AfterSceneLoad)]
         private static void Boot()
         {
+            // Also after the scene is loaded again (to build another island: see OnWelcomed).
+            UnityEngine.SceneManagement.SceneManager.sceneLoaded += (scene, mode) => Spawn();
+            Spawn();
+        }
+
+        private static void Spawn()
+        {
             if (FindAnyObjectByType<OxfallGame>() != null) return;
             new GameObject("Oxfall").AddComponent<OxfallGame>();
         }
+
+        // Carried over a scene reload when the server's island is another seed (a new wipe).
+        private static int s_seed = DefaultSeed;
+        private static string s_server;
+
+        private TitleScreen _title;
+        private bool _menuView;
+        private float _menuAngle;
 
         private void Start()
         {
@@ -87,7 +102,7 @@ namespace Oxfall.Game
 
             var clock = System.Diagnostics.Stopwatch.StartNew();
             var materials = new MaterialLibrary();
-            _world = WorldBuilder.Build(DefaultSeed, materials);
+            _world = WorldBuilder.Build(s_seed, materials);
             Debug.Log($"[Oxfall] World built in {clock.ElapsedMilliseconds} ms: {_world.Nodes.Count} resources, " +
                       $"spawn {_world.SpawnPosition}, {SystemInfo.graphicsDeviceName}, {SystemInfo.systemMemorySize} MB RAM.");
 
@@ -259,6 +274,17 @@ namespace Oxfall.Game
             // Online, the server keeps the real survivor and settlement; these keep the copies in step.
             _net.Welcomed += pose =>
             {
+                // Another island this week: build it (the scene starts again and joins at once).
+                if (_net.Seed != s_seed)
+                {
+                    Debug.Log($"[Oxfall] The server's island is seed {_net.Seed}: building it");
+                    s_seed = _net.Seed;
+                    s_server = _net.Url;
+                    _net.Disconnect();
+                    UnityEngine.SceneManagement.SceneManager.LoadScene(UnityEngine.SceneManagement.SceneManager.GetActiveScene().buildIndex);
+                    return;
+                }
+                if (_title != null) EnterGame();
                 // A fresh copy of everything comes next: what was here alone makes way for it.
                 _quietPickups = true;
                 _inventory.Clear();
@@ -295,15 +321,124 @@ namespace Oxfall.Game
                 _hud.ShowToast(GameActions.Explain(why));
                 Debug.Log("[Oxfall] The server refused: " + why);
             };
+            _net.TimeOfDay += hours =>
+            {
+                // Small drift is eased away by the next one; only a real difference is jumped.
+                float diff = Mathf.Abs(Mathf.DeltaAngle(_dayNight.Cycle.Hours * 15f, hours * 15f)) / 15f;
+                if (diff > 0.02f) _dayNight.SetHour(hours);
+            };
             _net.Built += ops =>
             {
                 foreach (var op in ops)
                     if (!BuildOps.Apply(_settlement, op)) Debug.LogWarning("[Oxfall] A building change did not fit: " + op);
             };
             _nameTags = new NameTags(_hud);
+
+            // Straight in when the address says so (?server=… joins it, ?solo plays alone: for links
+            // and tests) or when coming back from building the server's island; otherwise the title.
             var server = NetClient.ChosenServer(out var playerName);
-            if (!string.IsNullOrEmpty(server)) _net.Connect(server, playerName);
-            _hud.ShowToast("Bienvenido a Oxfall: golpea árboles y rocas");
+            if (s_server != null)
+            {
+                _net.Connect(s_server, playerName);
+                s_server = null;
+                EnterGame();
+            }
+            else if (NetClient.UrlParam("server") != null)
+            {
+                _net.Connect(server, playerName);
+                EnterGame();
+            }
+            else if (NetClient.UrlParam("solo") != null) EnterGame();
+            else ShowTitle(server, playerName);
+        }
+
+        /// <summary>The title: the island turning behind it, the player and the HUD waiting.</summary>
+        private void ShowTitle(string server, string playerName)
+        {
+            _title = TitleScreen.Create(playerName, ServerInfo(server));
+            _hud.gameObject.SetActive(false);
+            _player.enabled = false;
+            _gatherer.enabled = false;
+            _camera.transform.SetParent(null, true);
+            _menuView = true;
+            _dayNight.SetHour(17.4f);
+            _title.NameChanged += name =>
+            {
+                PlayerPrefs.SetString("oxfall.name", name);
+                PlayerPrefs.Save();
+            };
+            _title.PlaySolo += () =>
+            {
+                _dayNight.SetHour(9f);
+                EnterGame();
+            };
+            _title.PlayOnline += () =>
+            {
+                string url = NetClient.ChosenServer(out var name);
+                if (string.IsNullOrEmpty(url))
+                {
+                    _title.ShowError("Aún no hay servidor oficial: juega solo mientras tanto");
+                    return;
+                }
+                _title.ShowConnecting(true);
+                _net.Connect(url, name);
+            };
+            _title.Cancelled += () =>
+            {
+                _net.Disconnect();
+                _title.ShowConnecting(false);
+            };
+            Debug.Log("[Oxfall] Title screen");
+        }
+
+        private static string ServerInfo(string server)
+        {
+            if (string.IsNullOrEmpty(server)) return "Servidor oficial: muy pronto";
+            string host = server;
+            int scheme = host.IndexOf("://", System.StringComparison.Ordinal);
+            if (scheme >= 0) host = host.Substring(scheme + 3);
+            int slash = host.IndexOf('/');
+            if (slash >= 0) host = host.Substring(0, slash);
+            return "Servidor: " + host;
+        }
+
+        /// <summary>From the title (or straight from the start) into the game.</summary>
+        private void EnterGame()
+        {
+            if (_title != null)
+            {
+                _title.Close();
+                _title = null;
+            }
+            if (_menuView)
+            {
+                _menuView = false;
+                _camera.transform.SetParent(_player.Head, false);
+                _camera.transform.localPosition = Vector3.zero;
+                _camera.transform.localRotation = Quaternion.identity;
+            }
+            _hud.gameObject.SetActive(true);
+            if (!_vitals.IsDead)
+            {
+                _player.enabled = true;
+                _gatherer.enabled = true;
+            }
+            _hud.ShowToast(_actions.Online || _net.State == NetClient.Status.Connecting
+                ? "Bienvenido: golpea árboles y rocas, construye y sobrevive"
+                : "Bienvenido a Oxfall: golpea árboles y rocas");
+            Debug.Log("[Oxfall] In the game");
+        }
+
+        /// <summary>Behind the title: a slow flight round the island at golden hour.</summary>
+        private void TickMenuView(float dt)
+        {
+            if (!_menuView) return;
+            _menuAngle += dt * 2.2f;
+            float a = _menuAngle * Mathf.Deg2Rad;
+            float radius = IslandShape.IslandRadius * 0.95f;
+            var position = new Vector3(Mathf.Cos(a) * radius, 46f, Mathf.Sin(a) * radius);
+            var target = new Vector3(Mathf.Cos(a + 1.1f) * 40f, 6f, Mathf.Sin(a + 1.1f) * 40f);
+            _camera.transform.SetPositionAndRotation(position, Quaternion.LookRotation(target - position));
         }
 
         /// <summary>The inventory or the hotbar choice changed: redraw, and update the hand and building mode.</summary>
@@ -394,10 +529,9 @@ namespace Oxfall.Game
                     _hud.ShowToast("Conectado al servidor");
                     // From now on the server decides what trees and rocks give, and when they grow back.
                     _gatherer.RemoteHit = _net.SendHit;
-                    if (_net.Seed != DefaultSeed)
-                        Debug.LogWarning($"[Oxfall] The server's island (seed {_net.Seed}) is not this one ({DefaultSeed}).");
                     break;
                 case NetClient.Status.Failed:
+                    _title?.ShowError(_net.FailReason);
                     // Carries on alone with what the server last said.
                     _gatherer.RemoteHit = null;
                     _crafting.Mirror = false;
@@ -771,7 +905,8 @@ namespace Oxfall.Game
 
         private void Update()
         {
-            TickVitals(Time.deltaTime);
+            TickMenuView(Time.deltaTime);
+            if (_title == null) TickVitals(Time.deltaTime);
             _vitalsUi?.Tick();
             TickNet();
 

@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using Oxfall.Core.Crafting;
+using Oxfall.Core.Environment;
 using Oxfall.Core.Gathering;
 using Oxfall.Core.Items;
 using Oxfall.Core.Rules;
@@ -74,6 +75,8 @@ namespace Oxfall.Core.Net
         public ItemCatalog Catalog { get; }
         public RecipeBook Recipes { get; }
         public Settlement Settlement { get; }
+        /// <summary>The island's day and night, the same for everyone (a new island starts in the morning).</summary>
+        public DayCycle Day { get; } = new DayCycle(9f);
         public int Seed => Players.Seed;
         public int NodeCount => _nodes.Count;
         public IEnumerable<SurvivorRecord> Records => _records.Values;
@@ -252,6 +255,7 @@ namespace Oxfall.Core.Net
         public void Tick(float deltaSeconds)
         {
             if (deltaSeconds <= 0f) return;
+            Day.Tick(deltaSeconds);
             foreach (var record in _online.Values)
             {
                 var s = record.Survivor;

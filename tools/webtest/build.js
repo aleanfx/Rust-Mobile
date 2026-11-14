@@ -37,7 +37,7 @@ const stamp = () => ((Date.now() - t0) / 1000).toFixed(1).padStart(6);
     return false;
   };
 
-  await page.goto('http://localhost:8080/index.html');
+  await page.goto('http://localhost:8080/index.html?solo');
   log.push(`${stamp()} [test] world built: ${await waitForLog('[Oxfall] World built', 240000)}`);
   await wait(3000);
   await shot('01-start');

@@ -74,6 +74,9 @@ namespace Oxfall.Game.Net
         /// <summary>Changes to what stands on the island, to apply in order.</summary>
         public event Action<List<BuildOp>> Built;
 
+        /// <summary>The island's clock as the server has it (0 to 24).</summary>
+        public event Action<float> TimeOfDay;
+
         private readonly List<(int Id, int Remaining)> _nodeStates = new List<(int, int)>();
         private readonly List<(string ItemId, int Amount)> _gathered = new List<(string, int)>();
         private readonly List<(int Slot, ItemStack Stack)> _slots = new List<(int, ItemStack)>();
@@ -296,6 +299,9 @@ namespace Oxfall.Game.Net
                     Messages.ReadBuilt(reader, _ops);
                     Built?.Invoke(_ops);
                     break;
+                case MessageType.TimeOfDay:
+                    TimeOfDay?.Invoke(Messages.ReadTimeOfDay(reader));
+                    break;
                 case MessageType.Correction:
                 {
                     var pose = Messages.ReadCorrection(reader);
@@ -325,6 +331,25 @@ namespace Oxfall.Game.Net
             }
         }
 
+        /// <summary>The game's own server, once it is up (empty until then).</summary>
+        public const string OfficialServer = "";
+
+        /// <summary>A parameter of the web page's address (<c>?solo</c> gives ""), or null if absent.</summary>
+        public static string UrlParam(string key)
+        {
+            string url = Application.absoluteURL;
+            int q = string.IsNullOrEmpty(url) ? -1 : url.IndexOf('?');
+            if (q < 0) return null;
+            foreach (var part in url.Substring(q + 1).Split('&', '#'))
+            {
+                int eq = part.IndexOf('=');
+                string k = eq < 0 ? part : part.Substring(0, eq);
+                if (k != key) continue;
+                return eq < 0 ? "" : Uri.UnescapeDataString(part.Substring(eq + 1).Replace('+', ' '));
+            }
+            return null;
+        }
+
         /// <summary>
         /// The server to play on: <c>?server=wss://…</c> in the web page's address, or what was saved
         /// on the phone. Empty means play alone.
@@ -332,7 +357,7 @@ namespace Oxfall.Game.Net
         public static string ChosenServer(out string playerName)
         {
             playerName = PlayerPrefs.GetString("oxfall.name", "");
-            string server = PlayerPrefs.GetString("oxfall.server", "");
+            string server = PlayerPrefs.GetString("oxfall.server", OfficialServer);
             string url = Application.absoluteURL;
             int q = string.IsNullOrEmpty(url) ? -1 : url.IndexOf('?');
             if (q >= 0)

@@ -4,7 +4,7 @@ const { chromium } = require('playwright');
 const fs = require('fs');
 const path = require('path');
 const out = process.argv[2] || path.join(__dirname, 'shots-ui');
-const query = process.argv[3] || '';
+const query = process.argv[3] || '?solo';
 fs.mkdirSync(out, { recursive: true });
 const log = [];
 const t0 = Date.now();

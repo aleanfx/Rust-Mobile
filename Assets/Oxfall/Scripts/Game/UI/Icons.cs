@@ -36,6 +36,11 @@ namespace Oxfall.Game.UI
                 RotatedBox(p, new Vector2(0.36f, 0.64f), new Vector2(0.24f, 0.09f), 25f, 0.09f));
         });
 
+        /// <summary>A pencil, slanted: "change this".</summary>
+        public static Sprite Pencil => Get("pencil", p =>
+            Min(RotatedBox(p, new Vector2(0.08f, 0.08f), new Vector2(0.62f, 0.15f), 45f, 0.04f),
+                Polygon(p, new Vector2(-0.48f, -0.27f), new Vector2(-0.27f, -0.48f), new Vector2(-0.72f, -0.72f))));
+
         public static Sprite Bag => Get("bag", p =>
         {
             float body = RoundBox(p, new Vector2(0f, -0.12f), new Vector2(0.58f, 0.62f), 0.22f);

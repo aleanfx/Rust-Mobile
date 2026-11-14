@@ -116,7 +116,7 @@ namespace Oxfall.Server
             var writer = new NetWriter(2048);
             var period = TimeSpan.FromSeconds(1.0 / Protocol.TickRate);
             using var timer = new PeriodicTimer(period);
-            float lastTick = Now, lastRespawn = Now, lastSave = Now;
+            float lastTick = Now, lastRespawn = Now, lastSave = Now, lastClock = Now;
             while (await timer.WaitForNextTickAsync(stop))
             {
                 if (Now - lastSave >= SaveInterval)
@@ -142,6 +142,13 @@ namespace Oxfall.Server
                         }
                     }
                     if (_sessions.Count == 0) continue;
+                    // The clock now and then keeps everyone's day in step (each phone runs it in between).
+                    if (now - lastClock >= 30f)
+                    {
+                        lastClock = now;
+                        Messages.TimeOfDay(writer, _world.Day.Hours);
+                        Broadcast(writer.ToArray());
+                    }
                     Messages.Snapshot(writer, now, _state.Snapshot());
                     Broadcast(writer.ToArray());
                     foreach (var session in _sessions.Values) Flush(session, now);
@@ -332,6 +339,8 @@ namespace Oxfall.Server
                 }
                 id = player.Id;
                 Messages.Welcome(writer, player.Id, _state.Seed, now, player.Pose);
+                connection.Send(writer.ToArray());
+                Messages.TimeOfDay(writer, _world.Day.Hours);
                 connection.Send(writer.ToArray());
                 // What has been cut or mined and not grown back yet.
                 var damaged = _world.NotFull();
