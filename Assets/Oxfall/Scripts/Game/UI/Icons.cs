@@ -26,10 +26,15 @@ namespace Oxfall.Game.UI
             Mathf.Min(Circle(p, new Vector2(0f, -0.28f), 0.52f),
                 Polygon(p, new Vector2(-0.47f, -0.10f), new Vector2(0.47f, -0.10f), new Vector2(0f, 0.86f))));
 
+        /// <summary>An apple: reads as "food" even at the size of a vital's icon.</summary>
         public static Sprite Food => Get("food", p =>
-            Min(Circle(p, new Vector2(0.22f, 0.24f), 0.5f),
-                Segment(p, new Vector2(0.05f, 0.05f), new Vector2(-0.5f, -0.5f), 0.13f),
-                Circle(p, new Vector2(-0.62f, -0.44f), 0.15f), Circle(p, new Vector2(-0.44f, -0.62f), 0.15f)));
+        {
+            float body = Mathf.Min(Circle(p, new Vector2(-0.2f, -0.1f), 0.5f), Circle(p, new Vector2(0.2f, -0.1f), 0.5f));
+            body = Mathf.Max(body, -Circle(p, new Vector2(0f, 0.52f), 0.18f));
+            body = Mathf.Max(body, -Circle(p, new Vector2(0f, -0.8f), 0.12f));
+            return Min(body, Segment(p, new Vector2(0f, 0.28f), new Vector2(0.1f, 0.72f), 0.065f),
+                RotatedBox(p, new Vector2(0.36f, 0.64f), new Vector2(0.24f, 0.09f), 25f, 0.09f));
+        });
 
         public static Sprite Bag => Get("bag", p =>
         {
