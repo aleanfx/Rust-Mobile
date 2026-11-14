@@ -29,6 +29,7 @@ namespace Oxfall.Game.Construction
             Cupboard,
             Crate,
             Workbench,
+            Player,
         }
 
         private BuildingGrid _grid;
@@ -39,6 +40,13 @@ namespace Oxfall.Game.Construction
         private Edge _door;
         private int _deployable;
         private ResourceNodeView _crate;
+        private ushort _player;
+
+        /// <summary>Whether this player could be asked into a team (online, not already a teammate, awake).</summary>
+        public Func<ushort, bool> CanInvite { get; set; }
+
+        /// <summary>The player asked another (by player id) into their team.</summary>
+        public event Action<ushort> Invite;
         private bool _hasLock;
         private LockTarget _lock;
         private float _timer;
@@ -143,6 +151,9 @@ namespace Oxfall.Game.Construction
                 case Target.Workbench:
                     _hud.SetUseButton("MESA", Icons.Hammer);
                     break;
+                case Target.Player:
+                    _hud.SetUseButton("INVITAR", Icons.Team);
+                    break;
                 default:
                     _hud.SetUseButton(null);
                     break;
@@ -169,6 +180,16 @@ namespace Oxfall.Game.Construction
             {
                 _target = Target.Crate;
                 _crate = node;
+                return;
+            }
+            var other = hit.collider.GetComponent<Net.PlayerTag>();
+            if (other != null)
+            {
+                if (CanInvite != null && CanInvite(other.Id))
+                {
+                    _target = Target.Player;
+                    _player = other.Id;
+                }
                 return;
             }
             var tag = hit.collider.GetComponent<DeployableTag>();
@@ -221,6 +242,10 @@ namespace Oxfall.Game.Construction
                     break;
                 case Target.Workbench:
                     UseWorkbench?.Invoke();
+                    break;
+                case Target.Player:
+                    Invite?.Invoke(_player);
+                    _timer = 0f;
                     break;
             }
         }

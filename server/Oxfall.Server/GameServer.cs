@@ -41,6 +41,8 @@ namespace Oxfall.Server
         private readonly Stopwatch _clock = Stopwatch.StartNew();
         private readonly ILogger _log;
         private readonly NetWriter _flushWriter = new NetWriter(1024);
+        /// <summary>Survivors whose team or invitation changed since they were last told (by owner number).</summary>
+        private readonly HashSet<int> _teamNews = new HashSet<int>();
 
         /// <param name="savePath">Where the island is saved; null keeps nothing between runs.</param>
         public GameServer(int seed, bool devMode, string savePath, ILogger log)
@@ -49,6 +51,10 @@ namespace Oxfall.Server
             _savePath = savePath;
             _world = LoadOrCreate(seed, devMode);
             _state = _world.Players;
+            _world.Teams.Changed += owners =>
+            {
+                foreach (int owner in owners) _teamNews.Add(owner);
+            };
             _log.LogInformation("Island {Seed}: {Nodes} trees, rocks and plants, {Pieces} building pieces, {Survivors} survivors{Dev}",
                 seed, _world.NodeCount, _world.Settlement.Grid.PieceCount, _state.Count + CountRecords(),
                 devMode ? " (DEV MODE: teleports allowed, one beach for everyone)" : "");
@@ -224,6 +230,18 @@ namespace Oxfall.Server
                             Messages.Animals(writer, _world.Fauna.All, player.Pose.X, player.Pose.Z, ServerWorld.AnimalRange);
                             session.Connection.Send(writer.ToArray());
                         }
+                    // Teams: told at once of a change, and once a second where everyone is (for the map).
+                    bool second = ticks % Protocol.TickRate == 0;
+                    foreach (var session in _sessions.Values)
+                    {
+                        int owner = session.Record.Owner;
+                        bool news = _world.HasTeamNews(owner);
+                        if (!_teamNews.Contains(owner) && !(second && (news || session.TeamTold))) continue;
+                        session.TeamTold = news;
+                        _world.WriteTeam(writer, owner);
+                        session.Connection.Send(writer.ToArray());
+                    }
+                    _teamNews.Clear();
                     foreach (var session in _sessions.Values) Flush(session, now);
                 }
             }
@@ -443,13 +461,33 @@ namespace Oxfall.Server
                 }
                 case MessageType.Chat:
                 {
-                    string text = Protocol.CleanChat(Messages.ReadChat(reader));
+                    string text = Protocol.CleanChat(Messages.ReadChat(reader, out bool team));
                     // One line every second and a bit: enough to talk, too slow to flood.
                     if (text == null || now - session.LastChat < ChatInterval) break;
                     session.LastChat = now;
-                    _log.LogInformation("Chat {Id} '{Name}': {Text}", id, session.Record.Name, text);
-                    Messages.ChatLine(writer, id, session.Record.Name, text);
-                    Broadcast(writer.ToArray());
+                    // To the team: only its members hear it (alone in none: nobody else).
+                    if (team && !_world.Teams.TryGetTeam(session.Record.Owner, out _))
+                    {
+                        Fail(session, writer, ActionResult.NoTeam);
+                        break;
+                    }
+                    _log.LogInformation("Chat {Id} '{Name}'{Team}: {Text}", id, session.Record.Name, team ? " (team)" : "", text);
+                    Messages.ChatLine(writer, id, session.Record.Name, text, team);
+                    if (!team) Broadcast(writer.ToArray());
+                    else
+                    {
+                        var line = writer.ToArray();
+                        foreach (var s in _sessions.Values)
+                            if (_world.Teams.SameTeam(s.Record.Owner, session.Record.Owner)) s.Connection.Send(line);
+                    }
+                    break;
+                }
+                case MessageType.TeamAct:
+                {
+                    Messages.ReadTeamAct(reader, out var op, out int arg);
+                    var result = _world.TeamAct(id, op, arg);
+                    if (result != ActionResult.Ok) Fail(session, writer, result);
+                    else _log.LogInformation("Team: {Id} '{Name}' {Op} {Arg}", id, session.Record.Name, op, arg);
                     break;
                 }
                 case MessageType.Act:
@@ -593,6 +631,10 @@ namespace Oxfall.Server
 
                 var session = new Session(player.Id, record, connection);
                 _sessions[player.Id] = session;
+                // Their team, and everyone in it that they are back.
+                _teamNews.Add(record.Owner);
+                if (_world.Teams.TryGetTeam(record.Owner, out var team))
+                    foreach (int mate in team.MemberList) _teamNews.Add(mate);
                 Flush(session, now);
                 return true;
             }
@@ -639,6 +681,8 @@ namespace Oxfall.Server
             public float LastChat = -10f;
             /// <summary>What everyone was last told this player wears (null: nothing told yet).</summary>
             public string LastOutfit;
+            /// <summary>Whether they were last told of a team or an invitation (so that its end is told too).</summary>
+            public bool TeamTold;
 
             public Session(ushort id, SurvivorRecord record, Connection connection)
             {

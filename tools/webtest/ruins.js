@@ -39,6 +39,8 @@ const stamp = () => ((Date.now() - t0) / 1000).toFixed(1).padStart(6);
   await page.evaluate(() => { const c = document.querySelector('canvas'); if (c) { c.setAttribute('tabindex', '0'); c.focus(); } });
   await cmd('quality-high', 2500);
   await cmd('time-12', 1500);
+  // The bandits have their own test (bandits.js): here nobody shoots.
+  await cmd('clear-animals', 800);
 
   // The ruins, from their middle; then from a little way back to see them whole.
   await cmd('to-ruins', 3500);

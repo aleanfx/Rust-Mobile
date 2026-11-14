@@ -27,7 +27,7 @@ namespace Oxfall.Game.UI
         public void Begin() => _used = 0;
 
         /// <summary>One name over a head at <paramref name="head"/> (world position), if no farther than <paramref name="maxDistance"/>.</summary>
-        public void Show(Camera camera, Vector3 head, string name, float maxDistance = MaxDistance)
+        public void Show(Camera camera, Vector3 head, string name, float maxDistance = MaxDistance, Color? colour = null)
         {
             var screen = camera.WorldToScreenPoint(head);
             if (screen.z <= 0.3f || screen.z > maxDistance) return;
@@ -40,9 +40,9 @@ namespace Oxfall.Game.UI
             var tag = _pool[_used++];
             if (!tag.gameObject.activeSelf) tag.gameObject.SetActive(true);
             if (tag.text != name) tag.text = name;
-            var colour = UiTheme.Text;
-            colour.a = Mathf.Clamp01((maxDistance - screen.z) / Mathf.Min(10f, maxDistance * 0.3f));
-            tag.color = colour;
+            var tint = colour ?? UiTheme.Text;
+            tint.a = Mathf.Clamp01((maxDistance - screen.z) / Mathf.Min(10f, maxDistance * 0.3f));
+            tag.color = tint;
             tag.rectTransform.anchoredPosition = local;
         }
 

@@ -73,6 +73,7 @@ namespace Oxfall.Game
         private GameActions _actions;
         private bool _quietPickups;
         private NameTags _nameTags;
+        private TeamUi _team;
         private Camera _camera;
         private int _shownOnline = -1;
         private float _respawnTimer;
@@ -253,6 +254,7 @@ namespace Oxfall.Game
                 Me = () => _actions.Owner,
                 Covered = () => (_inventoryUi != null && _inventoryUi.IsOpen) || _hud.CraftPanelOpen || _hud.SettingsOpen
                     || (_cupboard != null && _cupboard.IsOpen) || (_keypad != null && _keypad.IsOpen)
+                    || (_team != null && _team.IsOpen)
                     || (_hud.Modal != null && _hud.Modal.gameObject.activeInHierarchy),
             };
             _guide.StepDone += () => audio.Play(SoundCue.Accepted);
@@ -394,7 +396,8 @@ namespace Oxfall.Game
             _interactor = playerObject.AddComponent<Interactor>();
             _interactor.Init(_settlement, player.Head, _hud);
             _interactor.Actions = _actions;
-            _interactor.Busy = () => (_keypad != null && _keypad.IsOpen) || (_cupboard != null && _cupboard.IsOpen) || (_inventoryUi != null && _inventoryUi.IsOpen);
+            _interactor.Busy = () => (_keypad != null && _keypad.IsOpen) || (_cupboard != null && _cupboard.IsOpen) || (_inventoryUi != null && _inventoryUi.IsOpen)
+                || (_team != null && _team.IsOpen);
             _interactor.DoorUsed += () => audio.Play(SoundCue.Wood);
             _interactor.OpenBox += OpenBox;
             _interactor.OpenCupboard += OpenCupboard;
@@ -528,8 +531,20 @@ namespace Oxfall.Game
             };
             _net.Hurt += OnHurt;
             _chat = new ChatUi(_hud);
-            _chat.Said += text => _net.SendChat(text);
-            _net.ChatLine += (from, name, text) => _chat.Add(from == 0 ? null : name, text, from == _net.PlayerId);
+            _chat.Said += (text, team) => _net.SendChat(text, team);
+            _net.ChatLine += (from, name, text, team) => _chat.Add(from == 0 ? null : name, text, from == _net.PlayerId, team);
+            // Teams: asked in face to face (the use button on another player), a panel by the chat's button.
+            _team = new TeamUi(_hud) { Me = () => _player.transform.position };
+            _team.Asked += (op, arg) => _net.SendTeam(op, arg);
+            _team.Talk += _chat.AskTeam;
+            _net.TeamChanged += (id, leader, mates, from) => _team.Apply(id, leader, mates, from, _net.Owner);
+            _interactor.CanInvite = id => _net.State == NetClient.Status.Online && !_team.IsMate(id)
+                && _net.Players.TryGetValue(id, out var them) && !them.Down;
+            _interactor.Invite += id =>
+            {
+                _net.SendTeam(TeamOp.Invite, id);
+                _hud.ShowToast($"Invitación enviada a {_net.NameOf(id) ?? "ese jugador"}");
+            };
             // Who comes and goes (not the ones already there when this player arrives).
             _net.PlayerJoined += name => { if (Time.time - _onlineSince > 3f) _chat.Add(null, $"{name} ha llegado a la isla"); };
             _net.PlayerLeft += name => _chat.Add(null, $"{name} se ha ido");
@@ -744,7 +759,8 @@ namespace Oxfall.Game
         }
 
         /// <summary>Test view: turns to look at the nearest other player.</summary>
-        private void FacePlayer()
+        /// <summary>Test: turns to the nearest other player (<paramref name="walk"/>: first to two metres from them).</summary>
+        private void FacePlayer(bool walk = false)
         {
             RemotePlayer nearest = null;
             float best = float.MaxValue;
@@ -754,9 +770,18 @@ namespace Oxfall.Game
                 if (other.Visible && d < best) { best = d; nearest = other; }
             }
             if (nearest == null) return;
-            var to = nearest.Root.position - _player.transform.position;
+            var from = _player.transform.position;
+            if (walk)
+            {
+                var away = from - nearest.Root.position;
+                away.y = 0f;
+                from = nearest.Root.position + (away.sqrMagnitude > 0.01f ? away.normalized : Vector3.forward) * 2f;
+                from.y = _world.Shape.Height(from.x, from.z) + 0.05f;
+                best = 4f;
+            }
+            var to = nearest.Root.position - from;
             float yaw = Mathf.Atan2(to.x, to.z) * Mathf.Rad2Deg;
-            _player.Teleport(_player.transform.position, yaw, 4f);
+            _player.Teleport(from, yaw, 4f);
             Debug.Log($"[Oxfall] Facing {nearest.Name}, {Mathf.Sqrt(best):0.0} m away");
         }
 
@@ -779,9 +804,11 @@ namespace Oxfall.Game
                     _animalViews.Clear();
                     _onlineSince = Time.time;
                     _chat.SetOnline(true);
+                    _team.SetOnline(true);
                     break;
                 case NetClient.Status.Failed:
                     _chat.SetOnline(false);
+                    _team.SetOnline(false);
                     _title?.ShowError(_net.FailReason);
                     // Carries on alone with what the server last said.
                     _gatherer.RemoteHit = null;
@@ -795,6 +822,7 @@ namespace Oxfall.Game
                     break;
                 default:
                     _chat.SetOnline(false);
+                    _team.SetOnline(false);
                     _gatherer.RemoteHit = null;
                     _gatherer.StrikePlayer = null;
                     _gatherer.StrikeSleeper = null;
@@ -818,8 +846,24 @@ namespace Oxfall.Game
                     _shownOnline = _net.OnlineCount;
                     _hud.SetOnline(_shownOnline.ToString(), true);
                 }
+                var here = _player.transform.position;
                 foreach (var other in _net.Players.Values)
-                    if (other.Visible && !other.Down) _nameTags.Show(_camera, other.Root.position + Vector3.up * 2.05f, other.Name);
+                {
+                    if (!other.Visible || other.Down) continue;
+                    // A teammate's name shows from anywhere, in green, with how far they are.
+                    if (_team.IsMate(other.Id))
+                        _nameTags.Show(_camera, other.Root.position + Vector3.up * 2.05f,
+                            $"{other.Name} · {Vector3.Distance(other.Root.position, here):0} m", 2000f, UiTheme.Good);
+                    else _nameTags.Show(_camera, other.Root.position + Vector3.up * 2.05f, other.Name);
+                }
+                // Teammates too far to be drawn: where the team says they are.
+                foreach (var m in _team.Mates)
+                {
+                    if (!m.Online || m.Dead || m.Owner == _net.Owner) continue;
+                    if (_net.Players.TryGetValue(m.PlayerId, out var drawn) && drawn.Visible) continue;
+                    var at = new Vector3(m.X, _world.Shape.Height(m.X, m.Z) + 2.05f, m.Z);
+                    _nameTags.Show(_camera, at, $"{m.Name} · {Vector3.Distance(at, here):0} m", 2000f, UiTheme.Good);
+                }
                 // Sleepers only up close: a body in the grass, and whose it is.
                 foreach (var (at, name) in _sleeperViews.All())
                     _nameTags.Show(_camera, at + Vector3.up * 0.6f, $"{name} · durmiendo", 12f);
@@ -1107,6 +1151,11 @@ namespace Oxfall.Game
                     _mapPins.Add(new MapUi.Pin(new Vector3(d.X, d.Y, d.Z), Icons.Home, new Color(1f, 0.82f, 0.4f)));
             }
             if (_diedAt.HasValue) _mapPins.Add(new MapUi.Pin(_diedAt.Value, Icons.Close, UiTheme.Bad, "Moriste aquí"));
+            // Teammates, where they are (asleep: dimmed).
+            if (_team != null)
+                foreach (var m in _team.Mates)
+                    if (m.Owner != _actions.Owner)
+                        _mapPins.Add(new MapUi.Pin(new Vector3(m.X, 0f, m.Z), Icons.Team, m.Online ? UiTheme.Good : UiTheme.TextFaint, m.Name));
             _map.Refresh(_player.transform.position, _player.Yaw, _mapPins);
         }
 
@@ -1268,6 +1317,11 @@ namespace Oxfall.Game
             {
                 case "settings": _hud.ToggleSettings(); break;
                 case "face-player": FacePlayer(); break;
+                case "near-player": FacePlayer(true); break;
+                case "team-invite": _interactor.Use(); break;
+                case "team-accept": _net.SendTeam(TeamOp.Accept, 0); break;
+                case "team-leave": _net.SendTeam(TeamOp.Leave, 0); break;
+                case "team-panel": _team.Toggle(); break;
                 case "face-sleeper": FaceSleeper(false); break;
                 case "approach-sleeper": FaceSleeper(true); break;
                 case "face-animal": FaceAnimal(false); break;
@@ -1501,6 +1555,8 @@ namespace Oxfall.Game
                         _hotbar.Select(slot - 1);
                     else if (command.StartsWith("say:"))
                         _chat.Send(command.Substring(4));
+                    else if (command.StartsWith("team-say:"))
+                        _chat.Send(command.Substring(9), true);
                     else if (command.StartsWith("tap-") && int.TryParse(command.Substring(4), out int tap))
                         _inventoryUi.TapSlot(tap);
                     // code-NNNN types a code on the open keypad and confirms it; key-N presses one key.
@@ -1907,6 +1963,8 @@ namespace Oxfall.Game
             TickAnimals(Time.deltaTime);
             if (_map != null && _map.IsOpen) RefreshMap();
             _chat?.Tick(Time.unscaledDeltaTime);
+            _chat?.SetDrop(_guide != null && _guide.Showing ? 128f : 0f);
+            _team?.Tick(Time.unscaledDeltaTime);
 
             // Charges thrown alone burn down here (online the server sets them off).
             _actions?.TickCharges();

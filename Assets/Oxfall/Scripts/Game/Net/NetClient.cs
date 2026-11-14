@@ -121,8 +121,13 @@ namespace Oxfall.Game.Net
         /// <summary>A sleeper was hurt: whose body (owner), attacker id (0: long ago), their name, damage, killed.</summary>
         public event Action<int, ushort, string, int, bool> SleeperHit;
 
-        /// <summary>A line of chat: from whom (0: the server), their name, what.</summary>
-        public event Action<ushort, string, string> ChatLine;
+        /// <summary>A line of chat: from whom (0: the server), their name, what, and whether only the team heard it.</summary>
+        public event Action<ushort, string, string, bool> ChatLine;
+
+        /// <summary>This player's team as the server tells it: its id (0: none), leader, members, and who asked them in ("" for nobody).</summary>
+        public event Action<int, int, List<TeamMate>, string> TeamChanged;
+
+        private readonly List<TeamMate> _teamMates = new List<TeamMate>();
 
         /// <summary>Someone came or went (their name).</summary>
         public event Action<string> PlayerJoined;
@@ -171,10 +176,17 @@ namespace Oxfall.Game.Net
             _socket.Send(_writer.Buffer, _writer.Length);
         }
 
-        public void SendChat(string text)
+        public void SendChat(string text, bool team = false)
         {
             if (State != Status.Online || _socket == null) return;
-            Messages.Chat(_writer, text);
+            Messages.Chat(_writer, text, team);
+            _socket.Send(_writer.Buffer, _writer.Length);
+        }
+
+        public void SendTeam(TeamOp op, int arg)
+        {
+            if (State != Status.Online || _socket == null) return;
+            Messages.TeamAct(_writer, op, arg);
             _socket.Send(_writer.Buffer, _writer.Length);
         }
 
@@ -503,8 +515,14 @@ namespace Oxfall.Game.Net
                 }
                 case MessageType.ChatLine:
                 {
-                    Messages.ReadChatLine(reader, out ushort from, out string name, out string text);
-                    ChatLine?.Invoke(from, name, text);
+                    Messages.ReadChatLine(reader, out ushort from, out string name, out string text, out bool team);
+                    ChatLine?.Invoke(from, name, text, team);
+                    break;
+                }
+                case MessageType.TeamState:
+                {
+                    Messages.ReadTeamState(reader, out int teamId, out int leader, _teamMates, out string inviteFrom);
+                    TeamChanged?.Invoke(teamId, leader, _teamMates, inviteFrom);
                     break;
                 }
                 case MessageType.Arrow:

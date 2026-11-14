@@ -30,9 +30,10 @@ namespace Oxfall.Game.UI
         private readonly RectTransform _root;
         private readonly RectTransform _button;
         private TouchScreenKeyboard _keyboard;
+        private bool _toTeam;
 
-        /// <summary>The player said something (already cleaned).</summary>
-        public event Action<string> Said;
+        /// <summary>The player said something (already cleaned), and whether only to their team.</summary>
+        public event Action<string, bool> Said;
 
         /// <summary>The chat button (for tests: its place on screen).</summary>
         public RectTransform Button => _button;
@@ -64,14 +65,21 @@ namespace Oxfall.Game.UI
             _button.gameObject.SetActive(false);
         }
 
+        /// <summary>How far down the lines start (under the first-steps card while it shows).</summary>
+        public void SetDrop(float drop)
+        {
+            var at = new Vector2(24f, -232f - drop);
+            if (_root.anchoredPosition != at) _root.anchoredPosition = at;
+        }
+
         /// <summary>Online the button shows; offline there is no one to talk to.</summary>
         public void SetOnline(bool online)
         {
             if (_button.gameObject.activeSelf != online) _button.gameObject.SetActive(online);
         }
 
-        /// <summary>A line from someone (or, with no name, from the server: joins, leaves, deaths).</summary>
-        public void Add(string name, string text, bool mine = false)
+        /// <summary>A line from someone (or, with no name, from the server: joins, leaves, deaths); a team's own lines marked.</summary>
+        public void Add(string name, string text, bool mine = false, bool team = false)
         {
             if (string.IsNullOrEmpty(text)) return;
             // Older lines move down; the newest goes on top.
@@ -81,40 +89,49 @@ namespace Oxfall.Game.UI
             for (int i = 0; i < Lines; i++) _lines[i].Rect.anchoredPosition = new Vector2(0f, -i * LineHeight);
 
             string colour = ColorUtility.ToHtmlStringRGB(mine ? UiTheme.Good : UiTheme.Accent);
+            string good = ColorUtility.ToHtmlStringRGB(UiTheme.Good);
             last.Text.text = string.IsNullOrEmpty(name)
                 ? $"<color=#{ColorUtility.ToHtmlStringRGB(UiTheme.TextMuted)}>{text}</color>"
+                : team ? $"<color=#{good}><b>[EQUIPO]</b> {name}</color>  {text}"
                 : $"<color=#{colour}>{name}</color>  {text}";
             last.Back.sizeDelta = new Vector2(Mathf.Min(MaxWidth, last.Text.preferredWidth + 28f), LineHeight - 6f);
             last.Age = 0f;
             last.Group.alpha = 1f;
-            Debug.Log($"[Oxfall] Chat: {(string.IsNullOrEmpty(name) ? "*" : name)}: {text}");
+            Debug.Log($"[Oxfall] Chat{(team ? " (team)" : "")}: {(string.IsNullOrEmpty(name) ? "*" : name)}: {text}");
         }
 
-        /// <summary>Opens the keyboard to say something.</summary>
-        public void Ask()
+        /// <summary>Opens the keyboard to say something to everyone.</summary>
+        public void Ask() => Ask(false);
+
+        /// <summary>Opens the keyboard to say something to the team alone.</summary>
+        public void AskTeam() => Ask(true);
+
+        private void Ask(bool team)
         {
+            _toTeam = team;
+            string prompt = team ? "Mensaje para tu equipo" : "Mensaje para todos";
 #if UNITY_WEBGL && !UNITY_EDITOR
-            string typed = Net.BrowserPrompt.Ask("Mensaje para todos", "");
-            Send(typed);
+            string typed = Net.BrowserPrompt.Ask(prompt, "");
+            Send(typed, team);
 #else
             if (TouchScreenKeyboard.isSupported)
-                _keyboard = TouchScreenKeyboard.Open("", TouchScreenKeyboardType.Default, true, false, false, false, "Mensaje para todos",
+                _keyboard = TouchScreenKeyboard.Open("", TouchScreenKeyboardType.Default, true, false, false, false, prompt,
                     Core.Net.Protocol.MaxChatLength);
 #endif
         }
 
         /// <summary>Says something (for the keyboard's answer, and tests).</summary>
-        public void Send(string typed)
+        public void Send(string typed, bool team = false)
         {
             string clean = Core.Net.Protocol.CleanChat(typed);
-            if (clean != null) Said?.Invoke(clean);
+            if (clean != null) Said?.Invoke(clean, team);
         }
 
         public void Tick(float dt)
         {
             if (_keyboard != null && _keyboard.status != TouchScreenKeyboard.Status.Visible)
             {
-                if (_keyboard.status == TouchScreenKeyboard.Status.Done) Send(_keyboard.text);
+                if (_keyboard.status == TouchScreenKeyboard.Status.Done) Send(_keyboard.text, _toTeam);
                 _keyboard = null;
             }
             foreach (var line in _lines)

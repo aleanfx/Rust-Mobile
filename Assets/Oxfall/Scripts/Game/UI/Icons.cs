@@ -233,6 +233,22 @@ namespace Oxfall.Game.UI
                     new Vector2(-0.38f, 0.5f), new Vector2(-0.7f, 0.5f)),
                 RoundBox(p, new Vector2(0.48f, 0.5f), new Vector2(0.14f, 0.12f), 0.03f)));
 
+        /// <summary>Two people, one in front of the other: a team.</summary>
+        public static Sprite Team => Get("team", p =>
+        {
+            float front = Mathf.Min(Circle(p, new Vector2(0.2f, 0.24f), 0.25f),
+                Mathf.Max(RoundBox(p, new Vector2(0.2f, -0.5f), new Vector2(0.46f, 0.36f), 0.3f), -p.y - 0.66f));
+            float back = Mathf.Min(Circle(p, new Vector2(-0.34f, 0.36f), 0.21f),
+                Mathf.Max(RoundBox(p, new Vector2(-0.34f, -0.24f), new Vector2(0.38f, 0.32f), 0.26f), -p.y - 0.4f));
+            // A gap where the one in front overlaps the one behind.
+            return Mathf.Min(front, Mathf.Max(back, -(front - 0.09f)));
+        });
+
+        /// <summary>A crown: the team's leader.</summary>
+        public static Sprite Crown => Get("crown", p =>
+            Polygon(p, new Vector2(-0.7f, -0.5f), new Vector2(0.7f, -0.5f), new Vector2(0.72f, 0.42f), new Vector2(0.36f, 0.02f),
+                new Vector2(0f, 0.58f), new Vector2(-0.36f, 0.02f), new Vector2(-0.72f, 0.42f)));
+
         public static Sprite Close => Get("close", p =>
             Mathf.Min(Segment(p, new Vector2(-0.5f, -0.5f), new Vector2(0.5f, 0.5f), Stroke),
                 Segment(p, new Vector2(-0.5f, 0.5f), new Vector2(0.5f, -0.5f), Stroke)));

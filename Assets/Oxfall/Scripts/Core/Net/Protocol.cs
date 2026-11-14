@@ -12,7 +12,7 @@ namespace Oxfall.Core.Net
     public static class Protocol
     {
         /// <summary>Raised whenever a message changes shape; a client of another version is turned away.</summary>
-        public const ushort Version = 13;
+        public const ushort Version = 14;
 
         /// <summary>Snapshots per second the server sends.</summary>
         public const int TickRate = 20;
@@ -117,6 +117,8 @@ namespace Oxfall.Core.Net
         Reload = 45,
         /// <summary>What the player now holds (an item id; empty for bare hands), whenever that changes.</summary>
         Hold = 46,
+        /// <summary>Something asked of the player's team (<see cref="Rules.TeamOp"/>) and whom it is about.</summary>
+        TeamAct = 47,
 
         // Server to client
         Welcome = 10,
@@ -161,6 +163,8 @@ namespace Oxfall.Core.Net
         Gunshot = 37,
         /// <summary>What a player holds (an item id; empty for bare hands), whenever that changes.</summary>
         Held = 38,
+        /// <summary>The player's team (who is in it, where they are) and who asked them in, whenever that changes and once a second.</summary>
+        TeamState = 39,
     }
 
     /// <summary>What a player does to their own belongings (inside an <see cref="MessageType.Act"/> message).</summary>
@@ -194,6 +198,27 @@ namespace Oxfall.Core.Net
     }
 
     /// <summary>Where a player stands and which way the body faces (degrees about up).</summary>
+    /// <summary>A teammate as the others are told of them: who, their player id while online (0 away), where they last were.</summary>
+    public readonly struct TeamMate
+    {
+        public readonly int Owner;
+        public readonly ushort PlayerId;
+        public readonly string Name;
+        public readonly float X, Z;
+        public readonly bool Online, Dead;
+
+        public TeamMate(int owner, ushort playerId, string name, float x, float z, bool online, bool dead)
+        {
+            Owner = owner;
+            PlayerId = playerId;
+            Name = name;
+            X = x;
+            Z = z;
+            Online = online;
+            Dead = dead;
+        }
+    }
+
     public readonly struct Pose : IEquatable<Pose>
     {
         public readonly float X, Y, Z, Yaw;
@@ -1083,29 +1108,99 @@ namespace Oxfall.Core.Net
 
         // ---- Chat
 
-        public static void Chat(NetWriter w, string text)
+        /// <summary>A line said to everyone, or only to the speaker's team.</summary>
+        public static void Chat(NetWriter w, string text, bool team = false)
         {
             w.Reset();
             w.Byte((byte)MessageType.Chat);
             w.String(text ?? "", 512);
+            w.Byte((byte)(team ? 1 : 0));
         }
 
-        public static string ReadChat(NetReader r) => r.String();
+        public static string ReadChat(NetReader r) => ReadChat(r, out _);
 
-        public static void ChatLine(NetWriter w, ushort from, string name, string text)
+        public static string ReadChat(NetReader r, out bool team)
+        {
+            string text = r.String();
+            team = r.Remaining > 0 && r.Byte() != 0;
+            return text;
+        }
+
+        public static void ChatLine(NetWriter w, ushort from, string name, string text, bool team = false)
         {
             w.Reset();
             w.Byte((byte)MessageType.ChatLine);
             w.UShort(from);
             w.String(name ?? "", 64);
             w.String(text ?? "", 512);
+            w.Byte((byte)(team ? 1 : 0));
         }
 
-        public static void ReadChatLine(NetReader r, out ushort from, out string name, out string text)
+        public static void ReadChatLine(NetReader r, out ushort from, out string name, out string text) =>
+            ReadChatLine(r, out from, out name, out text, out _);
+
+        public static void ReadChatLine(NetReader r, out ushort from, out string name, out string text, out bool team)
         {
             from = r.UShort();
             name = r.String();
             text = r.String();
+            team = r.Remaining > 0 && r.Byte() != 0;
+        }
+
+        // ---- Teams
+
+        public static void TeamAct(NetWriter w, Rules.TeamOp op, int arg)
+        {
+            w.Reset();
+            w.Byte((byte)MessageType.TeamAct);
+            w.Byte((byte)op);
+            w.Int(arg);
+        }
+
+        public static void ReadTeamAct(NetReader r, out Rules.TeamOp op, out int arg)
+        {
+            op = (Rules.TeamOp)r.Byte();
+            arg = r.Int();
+        }
+
+        /// <summary>A player's team as they are told it: none (id 0), or its leader and members; and who asked them in ("" for nobody).</summary>
+        public static void TeamState(NetWriter w, int teamId, int leader, IReadOnlyList<TeamMate> mates, string inviteFrom)
+        {
+            w.Reset();
+            w.Byte((byte)MessageType.TeamState);
+            w.Int(teamId);
+            w.Int(leader);
+            int n = mates == null ? 0 : Math.Min(mates.Count, 16);
+            w.Byte((byte)n);
+            for (int i = 0; i < n; i++)
+            {
+                var m = mates[i];
+                w.Int(m.Owner);
+                w.UShort(m.PlayerId);
+                w.String(m.Name ?? "", 64);
+                w.Float(m.X);
+                w.Float(m.Z);
+                w.Byte((byte)((m.Online ? 1 : 0) | (m.Dead ? 2 : 0)));
+            }
+            w.String(inviteFrom ?? "", 64);
+        }
+
+        public static void ReadTeamState(NetReader r, out int teamId, out int leader, List<TeamMate> into, out string inviteFrom)
+        {
+            teamId = r.Int();
+            leader = r.Int();
+            into.Clear();
+            int n = r.Byte();
+            for (int i = 0; i < n; i++)
+            {
+                int owner = r.Int();
+                ushort playerId = r.UShort();
+                string name = r.String();
+                float x = r.Float(), z = r.Float();
+                byte flags = r.Byte();
+                into.Add(new TeamMate(owner, playerId, name, x, z, (flags & 1) != 0, (flags & 2) != 0));
+            }
+            inviteFrom = r.String();
         }
 
         // ---- Clothing

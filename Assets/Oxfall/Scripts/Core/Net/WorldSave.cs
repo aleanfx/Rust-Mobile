@@ -92,6 +92,17 @@ namespace Oxfall.Core.Net
                     w.Float(job.Elapsed);
                 }
             }
+
+            // The teams (added after the layout's last change: a save without them has none).
+            var teams = Teams.Save();
+            w.Int(teams.Count);
+            foreach (var (id, leader, members) in teams)
+            {
+                w.Int(id);
+                w.Int(leader);
+                w.Byte((byte)members.Length);
+                foreach (int m in members) w.Int(m);
+            }
             return w.ToArray();
         }
 
@@ -206,6 +217,20 @@ namespace Oxfall.Core.Net
                     record.Survivor.Crafting.Load(jobs);
                     record.Survivor.Vitals.Set(health, food, water);
                     _nextOwner = Math.Max(_nextOwner, owner + 1);
+                }
+
+                if (r.Remaining > 0)
+                {
+                    var teams = new List<(int, int, int[])>();
+                    int teamCount = r.Int();
+                    for (int i = 0; i < teamCount; i++)
+                    {
+                        int id = r.Int(), leader = r.Int();
+                        var members = new int[r.Byte()];
+                        for (int m = 0; m < members.Length; m++) members[m] = r.Int();
+                        teams.Add((id, leader, members));
+                    }
+                    Teams.Load(teams);
                 }
                 return true;
             }

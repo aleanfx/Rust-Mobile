@@ -137,6 +137,9 @@ namespace Oxfall.Game.UI
         /// <summary>Something the steps wait for happened ("crate", "recycle", ...): it counts even ahead of its turn.</summary>
         public void Saw(string flag) => _seen.Add(flag);
 
+        /// <summary>Whether its card is on screen (the chat's lines go under it then).</summary>
+        public bool Showing => _card.gameObject.activeSelf;
+
         /// <summary>Back to the first step, shown again (for tests).</summary>
         public void Restart()
         {

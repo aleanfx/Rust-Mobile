@@ -57,6 +57,16 @@ namespace Oxfall.Core.Rules
         NothingToRecycle,
         /// <summary>A tree or a boulder stands where it would go.</summary>
         Obstructed,
+        /// <summary>They are in a team already.</summary>
+        HasTeam,
+        /// <summary>Only the team's leader can do that.</summary>
+        NotLeader,
+        /// <summary>The team has as many as it can hold.</summary>
+        TeamFull,
+        /// <summary>Nobody asked them in (or the invitation ran out).</summary>
+        NoInvite,
+        /// <summary>They are in no team.</summary>
+        NoTeam,
     }
 
     /// <summary>
