@@ -24,6 +24,30 @@ namespace Oxfall.Core.Rules
             GiveStarterKit();
         }
 
+        private readonly System.Collections.Generic.HashSet<string> _learned = new System.Collections.Generic.HashSet<string>();
+
+        /// <summary>The blueprints they have learned (recipe ids); the rest of what needs one is locked.</summary>
+        public System.Collections.Generic.IReadOnlyCollection<string> Learned => _learned;
+
+        /// <summary>Their blueprints changed (one learned, or the server said which they know).</summary>
+        public event Action LearnedChanged;
+
+        /// <summary>Whether they can make this: it needs no blueprint, or they learned it.</summary>
+        public bool Knows(Recipe recipe) => recipe.ScrapToLearn <= 0 || _learned.Contains(recipe.Id);
+
+        public void Learn(string recipeId)
+        {
+            if (_learned.Add(recipeId)) LearnedChanged?.Invoke();
+        }
+
+        /// <summary>Exactly these blueprints (as the server or a save says).</summary>
+        public void SetLearned(System.Collections.Generic.IEnumerable<string> recipeIds)
+        {
+            _learned.Clear();
+            foreach (string id in recipeIds) _learned.Add(id);
+            LearnedChanged?.Invoke();
+        }
+
         /// <summary>The box or furnace they have open (0: none).</summary>
         public int Looting { get; set; }
 

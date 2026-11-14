@@ -103,6 +103,18 @@ namespace Oxfall.Core.Net
                 w.Byte((byte)members.Length);
                 foreach (int m in members) w.Int(m);
             }
+
+            // The blueprints each survivor has learned (added after the teams).
+            w.Int(_records.Count);
+            foreach (var record in _records.Values)
+            {
+                w.String(record.Token, Protocol.MaxTokenBytes);
+                var learned = record.Survivor.Learned;
+                w.Byte((byte)Math.Min(255, learned.Count));
+                int n = 0;
+                foreach (string id in learned)
+                    if (n++ < 255) w.String(id, 64);
+            }
             return w.ToArray();
         }
 
@@ -231,6 +243,24 @@ namespace Oxfall.Core.Net
                         teams.Add((id, leader, members));
                     }
                     Teams.Load(teams);
+                }
+
+                if (r.Remaining > 0)
+                {
+                    var learned = new List<string>();
+                    int count = r.Int();
+                    for (int i = 0; i < count; i++)
+                    {
+                        string token = r.String();
+                        learned.Clear();
+                        int known = r.Byte();
+                        for (int k = 0; k < known; k++)
+                        {
+                            string id = r.String();
+                            if (Recipes.TryGet(id, out _)) learned.Add(id);
+                        }
+                        if (_records.TryGetValue(token, out var record)) record.Survivor.SetLearned(learned);
+                    }
                 }
                 return true;
             }

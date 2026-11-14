@@ -5,6 +5,7 @@ const { chromium } = require('playwright');
 const fs = require('fs');
 const path = require('path');
 const out = process.argv[2] || path.join(__dirname, 'shots-airdrops');
+// Online: pass the server, e.g. ws://localhost:7777/ws (the game is on /ws).
 const server = process.argv[3];
 fs.mkdirSync(out, { recursive: true });
 const log = [];

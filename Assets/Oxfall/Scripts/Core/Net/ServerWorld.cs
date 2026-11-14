@@ -314,6 +314,9 @@ namespace Oxfall.Core.Net
                 case ActKind.Craft:
                     return Recipes.TryGet(recipeId ?? "", out var recipe)
                         ? PlayerActions.Craft(s, recipe, Settlement, player.Pose.X, player.Pose.Y, player.Pose.Z) : ActionResult.Invalid;
+                case ActKind.Learn:
+                    return Recipes.TryGet(recipeId ?? "", out var blueprint)
+                        ? PlayerActions.Learn(s, blueprint, Settlement, player.Pose.X, player.Pose.Y, player.Pose.Z) : ActionResult.Invalid;
                 case ActKind.CancelCraft: return PlayerActions.CancelCraft(s, a);
                 case ActKind.Eat: return PlayerActions.Eat(s, a);
                 case ActKind.Drink: return PlayerActions.Drink(s, Ground, player.Pose.X, player.Pose.Y, player.Pose.Z);

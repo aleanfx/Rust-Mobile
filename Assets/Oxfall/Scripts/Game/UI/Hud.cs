@@ -429,9 +429,9 @@ namespace Oxfall.Game.UI
         public bool SettingsOpen => _settings != null && _settings.gameObject.activeSelf;
 
         public void BuildCraftPanel(RecipeBook book, ItemCatalog catalog, Inventory inventory, CraftingQueue queue,
-            System.Action<Recipe> onCraft)
+            System.Action<Recipe> onCraft, System.Func<Recipe, bool> knows, System.Action<Recipe> onLearn)
         {
-            _craft = new CraftUi(this, book, catalog, inventory, queue, onCraft);
+            _craft = new CraftUi(this, book, catalog, inventory, queue, onCraft, knows, onLearn);
         }
 
         /// <summary>Whether a workbench is near the player (the crafting panel asks when it redraws).</summary>

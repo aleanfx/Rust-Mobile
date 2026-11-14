@@ -504,6 +504,13 @@ namespace Oxfall.Server
                     var result = _world.Act(id, kind, a, b, recipe);
                     if (result != ActionResult.Ok) Fail(session, writer, result);
                     else if (kind == ActKind.Respawn) SendPose(session, writer);
+                    else if (kind == ActKind.Learn)
+                    {
+                        // What they know now (the scrap it cost goes with their slots).
+                        Messages.Blueprints(writer, session.Record.Survivor.Learned);
+                        session.Connection.Send(writer.ToArray());
+                        _log.LogInformation("Learned: {Id} '{Name}' {Recipe}", id, session.Record.Name, recipe);
+                    }
                     break;
                 }
                 case MessageType.Build:
@@ -636,6 +643,10 @@ namespace Oxfall.Server
                     Messages.SleeperHit(writer, record.Owner, 0, killedBy, 0f, true);
                     connection.Send(writer.ToArray());
                 }
+
+                // The blueprints they have learned.
+                Messages.Blueprints(writer, record.Survivor.Learned);
+                connection.Send(writer.ToArray());
 
                 // Supply planes in the air (or crates still coming down) as they join.
                 foreach (var drop in _world.Airdrops.Flying)

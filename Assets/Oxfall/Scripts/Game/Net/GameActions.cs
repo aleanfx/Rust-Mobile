@@ -277,10 +277,23 @@ namespace Oxfall.Game.Net
         {
             var p = _player.position;
             if (!Online) return PlayerActions.Craft(_survivor, recipe, _settlement, p.x, p.y, p.z);
+            if (!_survivor.Knows(recipe)) return ActionResult.NotLearned;
             if (recipe.NeedsWorkbench && !PlayerActions.NearWorkbench(_settlement, p.x, p.y, p.z)) return ActionResult.NeedsWorkbench;
             if (_survivor.Crafting.Jobs.Count >= CraftingQueue.MaxJobs) return ActionResult.QueueFull;
             if (!recipe.CanAfford(Inventory)) return ActionResult.NotEnoughResources;
             _net.SendAct(ActKind.Craft, recipe: recipe.Id);
+            return ActionResult.Ok;
+        }
+
+        /// <summary>Learns a recipe's blueprint at a workbench, for scrap (online the server says when it is known).</summary>
+        public ActionResult Learn(Recipe recipe)
+        {
+            var p = _player.position;
+            if (!Online) return PlayerActions.Learn(_survivor, recipe, _settlement, p.x, p.y, p.z);
+            if (recipe == null || _survivor.Knows(recipe)) return ActionResult.Invalid;
+            if (!PlayerActions.NearWorkbench(_settlement, p.x, p.y, p.z)) return ActionResult.NeedsWorkbench;
+            if (Inventory.Count(ItemIds.Scrap) < recipe.ScrapToLearn) return ActionResult.NotEnoughResources;
+            _net.SendAct(ActKind.Learn, recipe: recipe.Id);
             return ActionResult.Ok;
         }
 
@@ -426,6 +439,7 @@ namespace Oxfall.Game.Net
                 case ActionResult.NeedsFloor: return "Necesita un piso debajo (un techo en el piso de abajo)";
                 case ActionResult.TooHigh: return $"Máximo {BuildingGrid.MaxLevel + 1} pisos";
                 case ActionResult.NeedsWorkbench: return "Hace falta una mesa de trabajo cerca";
+                case ActionResult.NotLearned: return "Primero aprende su plano en una mesa de trabajo (con chatarra)";
                 case ActionResult.Monument: return "Las ruinas son de todos: aquí no se construye";
                 case ActionResult.NothingToRecycle: return "Mete algo que se recicle: piezas, herramientas, armas o ropa";
                 case ActionResult.Obstructed: return "Hay un árbol o una roca en medio";

@@ -12,7 +12,7 @@ namespace Oxfall.Core.Net
     public static class Protocol
     {
         /// <summary>Raised whenever a message changes shape; a client of another version is turned away.</summary>
-        public const ushort Version = 14;
+        public const ushort Version = 15;
 
         /// <summary>Snapshots per second the server sends.</summary>
         public const int TickRate = 20;
@@ -170,6 +170,8 @@ namespace Oxfall.Core.Net
 
         /// <summary>A supply plane set off: its line across the island, where the crate comes down, and how long ago.</summary>
         Airdrop = 60,
+        /// <summary>The blueprints this player has learned (recipe ids).</summary>
+        Blueprints = 61,
     }
 
     /// <summary>What a player does to their own belongings (inside an <see cref="MessageType.Act"/> message).</summary>
@@ -202,6 +204,8 @@ namespace Oxfall.Core.Net
         Wear = 17,
         /// <summary>Test servers only: a supply plane now, dropping ahead of the player.</summary>
         DevAirdrop = 18,
+        /// <summary>Learns a recipe's blueprint at a workbench, for scrap (its id in the recipe field).</summary>
+        Learn = 19,
     }
 
     /// <summary>Where a player stands and which way the body faces (degrees about up).</summary>
@@ -380,9 +384,13 @@ namespace Oxfall.Core.Net
                 case ActKind.Split:
                 case ActKind.CancelCraft:
                 case ActKind.Eat:
+                case ActKind.Wear:
+                case ActKind.DevSpawnAnimal:
+                case ActKind.DevGive:
                     w.Byte((byte)a);
                     break;
                 case ActKind.Craft:
+                case ActKind.Learn:
                     w.String(recipe ?? "", 64);
                     break;
                 case ActKind.Respawn:
@@ -427,14 +435,19 @@ namespace Oxfall.Core.Net
                 case ActKind.Split:
                 case ActKind.CancelCraft:
                 case ActKind.Eat:
+                case ActKind.Wear:
+                case ActKind.DevSpawnAnimal:
+                case ActKind.DevGive:
                     a = r.Byte();
                     break;
                 case ActKind.Craft:
+                case ActKind.Learn:
                     recipe = r.String();
                     break;
                 case ActKind.Drink:
-                case ActKind.DevGive:
                 case ActKind.Close:
+                case ActKind.TakeAll:
+                case ActKind.DevAirdrop:
                     break;
                 default:
                     throw new ProtocolException("Unknown action " + (byte)kind + ".");
@@ -1179,6 +1192,28 @@ namespace Oxfall.Core.Net
             float fx = r.Float(), fz = r.Float(), tx = r.Float(), tz = r.Float(), dx = r.Float(), dz = r.Float(), gy = r.Float();
             float ago = r.Float();
             return new World.Airdrop(id, fx, fz, tx, tz, dx, dz, gy, now - ago);
+        }
+
+        // ---- Blueprints
+
+        public static void Blueprints(NetWriter w, IReadOnlyCollection<string> recipeIds)
+        {
+            w.Reset();
+            w.Byte((byte)MessageType.Blueprints);
+            w.Byte((byte)Math.Min(255, recipeIds.Count));
+            int n = 0;
+            foreach (string id in recipeIds)
+            {
+                if (n++ == 255) break;
+                w.String(id, 64);
+            }
+        }
+
+        public static void ReadBlueprints(NetReader r, List<string> into)
+        {
+            into.Clear();
+            int count = r.Byte();
+            for (int i = 0; i < count; i++) into.Add(r.String());
         }
 
         // ---- Teams

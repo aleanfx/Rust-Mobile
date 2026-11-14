@@ -44,6 +44,7 @@ namespace Oxfall.Game.UI
             new Step { Text = "Abre una caja en las ruinas", Hint = "Mira el mapa (toca la brújula). Ojo: hay bandidos armados", Icon = null, Flag = "crate" },
             new Step { Text = "Recicla piezas", Hint = "En las ruinas hay una recicladora: mete engranajes o tubos y enciéndela", Icon = ItemIds.Gears, Flag = "recycle" },
             new Step { Text = "Fabrica una mesa de trabajo", Hint = "Se hace con chatarra; cerca de ella fabricas armas y herramientas de metal", Icon = ItemIds.Workbench, Flag = "workbench" },
+            new Step { Text = "Aprende un plano", Hint = "Junto a la mesa, en FABRICAR, elige algo con candado y apréndelo con chatarra", Icon = ItemIds.Scrap, Flag = "learn" },
         };
 
         private readonly Hud _hud;
@@ -69,6 +70,9 @@ namespace Oxfall.Game.UI
 
         /// <summary>Whether a panel covers the screen (the card hides under it).</summary>
         public System.Func<bool> Covered;
+
+        /// <summary>Whether the player has learned any blueprint.</summary>
+        public System.Func<bool> HasLearned;
 
         /// <summary>A step was done.</summary>
         public event System.Action StepDone;
@@ -210,6 +214,7 @@ namespace Oxfall.Game.UI
             _check = 0.25f;
             if (step.Flag == "hatchet" && (_inventory.Count(ItemIds.StoneHatchet) > 0 || _inventory.Count(ItemIds.MetalHatchet) > 0)) Saw("hatchet");
             if (step.Flag == "workbench" && _inventory.Count(ItemIds.Workbench) > 0) Saw("workbench");
+            if (step.Flag == "learn" && HasLearned != null && HasLearned()) Saw("learn");
             bool done = step.Item != null ? have >= step.Amount : _seen.Contains(step.Flag);
             if (done) Complete();
         }

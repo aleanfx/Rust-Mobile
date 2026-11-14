@@ -91,6 +91,9 @@ namespace Oxfall.Core.Tests
             s.Inventory.Add(ItemIds.MetalPipe, 2);
             s.Inventory.Add(ItemIds.MetalSpring, 2);
             float x = 10f, y = ground.Height(10f, 10f), z = 10f;
+            // Their blueprints already learned (see BlueprintTests): here only the bench counts.
+            s.Learn("revolver");
+            s.Learn("metal_hatchet");
 
             Assert.AreEqual(ActionResult.NeedsWorkbench, PlayerActions.Craft(s, recipes.Get("revolver"), settlement, x, y, z));
             Assert.AreEqual(ActionResult.NeedsWorkbench, PlayerActions.Craft(s, recipes.Get("metal_hatchet")), "no settlement given: no bench");

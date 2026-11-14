@@ -67,6 +67,8 @@ namespace Oxfall.Core.Rules
         NoInvite,
         /// <summary>They are in no team.</summary>
         NoTeam,
+        /// <summary>Its blueprint has not been learned yet (at a workbench, for scrap).</summary>
+        NotLearned,
     }
 
     /// <summary>
@@ -133,6 +135,7 @@ namespace Oxfall.Core.Rules
         {
             if (recipe == null) return ActionResult.Invalid;
             if (s.Vitals.IsDead) return ActionResult.Dead;
+            if (!s.Knows(recipe)) return ActionResult.NotLearned;
             if (recipe.NeedsWorkbench && (settlement == null || !NearWorkbench(settlement, x, y, z))) return ActionResult.NeedsWorkbench;
             switch (s.Crafting.Enqueue(recipe))
             {
@@ -140,6 +143,21 @@ namespace Oxfall.Core.Rules
                 case CraftingQueue.EnqueueResult.QueueFull: return ActionResult.QueueFull;
                 default: return ActionResult.NotEnoughResources;
             }
+        }
+
+        /// <summary>
+        /// Learns a recipe's blueprint, as on the PC game's workbench: near a workbench, for the scrap it
+        /// costs. Once learned it is known for good (through death, until the island is wiped).
+        /// </summary>
+        public static ActionResult Learn(Survivor s, Recipe recipe, Settlement settlement, float x, float y, float z)
+        {
+            if (recipe == null || s.Knows(recipe)) return ActionResult.Invalid;
+            if (s.Vitals.IsDead) return ActionResult.Dead;
+            if (settlement == null || !NearWorkbench(settlement, x, y, z)) return ActionResult.NeedsWorkbench;
+            if (s.Inventory.Count(ItemIds.Scrap) < recipe.ScrapToLearn) return ActionResult.NotEnoughResources;
+            s.Inventory.Remove(ItemIds.Scrap, recipe.ScrapToLearn);
+            s.Learn(recipe.Id);
+            return ActionResult.Ok;
         }
 
         /// <summary>Whether a workbench stands within reach of (x, y, z).</summary>

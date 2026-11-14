@@ -266,6 +266,7 @@ namespace Oxfall.Game
                     || (_cupboard != null && _cupboard.IsOpen) || (_keypad != null && _keypad.IsOpen)
                     || (_team != null && _team.IsOpen)
                     || (_hud.Modal != null && _hud.Modal.gameObject.activeInHierarchy),
+                HasLearned = () => _survivor.Learned.Count > 0,
             };
             _guide.StepDone += () => audio.Play(SoundCue.Accepted);
             // A recycler this player started.
@@ -320,7 +321,8 @@ namespace Oxfall.Game
             }
             _crafting.Completed += Crafted;
             _crafting.Overflow = (itemId, amount) => _hud.ShowToast("Inventario lleno");
-            _hud.BuildCraftPanel(_recipes, _catalog, _inventory, _crafting, TryCraft);
+            _hud.BuildCraftPanel(_recipes, _catalog, _inventory, _crafting, TryCraft, r => _survivor.Knows(r), TryLearn);
+            _survivor.LearnedChanged += _hud.RefreshCraftPanel;
             _hud.NearWorkbench = () =>
             {
                 var p = _player.transform.position;
@@ -574,6 +576,16 @@ namespace Oxfall.Game
             _net.AnimalHit += _actions.OnServerAnimalHit;
             _net.AnimalsSeen += animals => _animalViews.Apply(animals);
             _net.AirdropSeen += drop => _airdropViews.Add(drop);
+            // What this player has learned; one more than before is one just learned.
+            _net.BlueprintsSeen += ids =>
+            {
+                Recipe fresh = null;
+                foreach (string id in ids)
+                    if (!System.Linq.Enumerable.Contains(_survivor.Learned, id) && _recipes.TryGet(id, out var r)) fresh = r;
+                bool joining = Time.time - _onlineSince < 3f;
+                _survivor.SetLearned(ids);
+                if (fresh != null && !joining) Learned(fresh);
+            };
             _net.SleepersSeen += sleepers => _sleeperViews.Apply(sleepers, _net.Owner);
             _net.SleeperHit += OnSleeperHit;
             _net.ChargeArmed += (charge, left) => _explosions.Arm(charge, left, charge.Thrower == _net.PlayerId);
@@ -1471,6 +1483,10 @@ namespace Oxfall.Game
                 case "to-recycler": ToRecycler(); break;
                 case "to-bandit": ToBandit(); break;
                 case "airdrop": DevAirdrop(); break;
+                case "learn-all":
+                    // Test, alone: every blueprint known.
+                    foreach (var recipe in _recipes.All) _survivor.Learn(recipe.Id);
+                    break;
                 case "hide-hud":
                 {
                     // Test: the controls out of the way, for a clean shot of the world.
@@ -1804,6 +1820,27 @@ namespace Oxfall.Game
             foreach (var r in _buildings.Grid.Roofs) pieces.Add(PieceRef.Roof(r));
             foreach (var c in _buildings.Grid.Stairs) pieces.Add(PieceRef.Stairs(c));
             foreach (var piece in pieces) _buildings.Grid.Upgrade(piece, tier);
+        }
+
+        /// <summary>Learns the blueprint of a locked recipe (alone it is known at once; online when the server says).</summary>
+        private void TryLearn(Recipe recipe)
+        {
+            var result = _actions.Learn(recipe);
+            if (result == ActionResult.Ok)
+            {
+                if (!_actions.Online) Learned(recipe);
+                return;
+            }
+            _hud.ShowToast(result == ActionResult.NotEnoughResources
+                ? $"Hacen falta {recipe.ScrapToLearn} de chatarra para aprenderlo"
+                : GameActions.Explain(result));
+        }
+
+        private void Learned(Recipe recipe)
+        {
+            _hud.ShowToast($"Plano aprendido: {_catalog.Get(recipe.OutputItemId).DisplayName}. Ya puedes fabricarlo");
+            _audio?.Play(SoundCue.Accepted);
+            Debug.Log("[Oxfall] Learned " + recipe.Id);
         }
 
         private void TryCraft(Recipe recipe)

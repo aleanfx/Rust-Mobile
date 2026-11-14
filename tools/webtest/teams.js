@@ -6,7 +6,7 @@ const { chromium } = require('playwright');
 const fs = require('fs');
 const path = require('path');
 const out = process.argv[2] || path.join(__dirname, 'shots-teams');
-const server = process.argv[3] || 'ws://localhost:7777';
+const server = process.argv[3] || 'ws://localhost:7777/ws';
 fs.mkdirSync(out, { recursive: true });
 const log = [];
 const t0 = Date.now();

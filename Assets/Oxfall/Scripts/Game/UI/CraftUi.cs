@@ -11,7 +11,8 @@ namespace Oxfall.Game.UI
     /// left (bright when affordable, dim when not), and on the right the chosen item large, what it
     /// needs against what the player has, how long it takes and one big FABRICAR button. What is
     /// being made shows under the grid, and on a small chip above the craft button once the panel is
-    /// closed, so the player can go on gathering while it finishes.
+    /// closed, so the player can go on gathering while it finishes. Things whose blueprint is not
+    /// learned yet show a padlock; chosen, the big button learns them instead, at a workbench, for scrap.
     /// </summary>
     public sealed class CraftUi
     {
@@ -39,7 +40,12 @@ namespace Oxfall.Game.UI
         /// <summary>Asked once per redraw: whether a workbench is near.</summary>
         private bool _bench;
 
-        private bool Makeable(Recipe recipe) => recipe.CanAfford(_inventory) && (!recipe.NeedsWorkbench || _bench);
+        private bool Makeable(Recipe recipe) => _knows(recipe) && recipe.CanAfford(_inventory) && (!recipe.NeedsWorkbench || _bench);
+
+        /// <summary>The blue of blueprints: the learn button and the padlocks.</summary>
+        private static readonly Color BlueprintBlue = new Color(0.25f, 0.5f, 0.86f);
+
+        private readonly System.Func<Recipe, bool> _knows;
 
         /// <summary>Which tab an item is made under.</summary>
         public static int TabOf(string itemId)
@@ -128,6 +134,7 @@ namespace Oxfall.Game.UI
             public Image Frame;
             public Image Icon;
             public Text Label;
+            public RectTransform Lock;
         }
 
         private sealed class IngredientRow
@@ -140,9 +147,10 @@ namespace Oxfall.Game.UI
         }
 
         public CraftUi(Hud hud, RecipeBook book, ItemCatalog catalog, Inventory inventory, CraftingQueue queue,
-            System.Action<Recipe> onCraft)
+            System.Action<Recipe> onCraft, System.Func<Recipe, bool> knows, System.Action<Recipe> onLearn)
         {
             _hud = hud;
+            _knows = knows ?? (_ => true);
             _catalog = catalog;
             _inventory = inventory;
             _queue = queue;
@@ -257,7 +265,11 @@ namespace Oxfall.Game.UI
                 Rect = button,
                 OnTap = () =>
                 {
-                    if (_selected != null) onCraft(_selected);
+                    if (_selected != null)
+                    {
+                        if (_knows(_selected)) onCraft(_selected);
+                        else onLearn?.Invoke(_selected);
+                    }
                     Refresh();
                 },
             });
@@ -294,7 +306,7 @@ namespace Oxfall.Game.UI
                 {
                     if (tile.Tab != _tab) continue;
                     if (first == null) first = tile.Recipe;
-                    if (affordable == null && tile.Recipe.CanAfford(_inventory)) affordable = tile.Recipe;
+                    if (affordable == null && _knows(tile.Recipe) && tile.Recipe.CanAfford(_inventory)) affordable = tile.Recipe;
                 }
                 _selected = affordable ?? first;
             }
@@ -308,9 +320,9 @@ namespace Oxfall.Game.UI
             if (open)
             {
                 // Open on something that can be made now, if anything can.
-                if (_selected == null || !_selected.CanAfford(_inventory))
+                if (_selected == null || !_knows(_selected) || !_selected.CanAfford(_inventory))
                     foreach (var r in _recipes)
-                        if (r.CanAfford(_inventory)) { _selected = r; break; }
+                        if (_knows(r) && r.CanAfford(_inventory)) { _selected = r; break; }
                 SetTab(_selected != null ? TabOf(_selected.OutputItemId) : _tab);
             }
             _shownJobs = -1;
@@ -350,7 +362,9 @@ namespace Oxfall.Game.UI
                 if (tile.Icon.sprite != icon) tile.Icon.sprite = icon;
                 tile.Icon.enabled = icon != null;
                 tile.Label.text = icon == null ? _catalog.Get(tile.Recipe.OutputItemId).DisplayName : "";
-                tile.Icon.color = can ? Color.white : new Color(1f, 1f, 1f, 0.35f);
+                bool known = _knows(tile.Recipe);
+                tile.Icon.color = can ? Color.white : new Color(1f, 1f, 1f, known ? 0.35f : 0.22f);
+                if (tile.Lock.gameObject.activeSelf == known) tile.Lock.gameObject.SetActive(!known);
                 tile.Back.color = chosen ? UiTheme.SlotHover : UiTheme.Slot;
                 tile.Frame.color = chosen ? UiTheme.Accent : can ? UiTheme.Good.WithAlpha(0.55f) : Color.clear;
             }
@@ -362,7 +376,10 @@ namespace Oxfall.Game.UI
             _bigIcon.enabled = big != null;
             _bigName.text = big == null ? def.DisplayName : "";
             _name.text = def.DisplayName + (_selected.OutputAmount > 1 ? " x" + _selected.OutputAmount : "");
-            _description.text = _selected.NeedsWorkbench
+            bool knows = _knows(_selected);
+            _description.text = !knows
+                ? def.Description + $"\nPlano sin aprender: apréndelo en una mesa de trabajo por {_selected.ScrapToLearn} de chatarra."
+                : _selected.NeedsWorkbench
                 ? def.Description + (_bench ? "\nMesa de trabajo cerca: se puede fabricar." : "\nSolo cerca de una mesa de trabajo.")
                 : def.Description;
             _time.text = $"{_selected.CraftSeconds:0} s";
@@ -384,6 +401,18 @@ namespace Oxfall.Game.UI
                 row.Have.color = have >= ingredient.Amount ? UiTheme.Good : UiTheme.Bad;
             }
 
+            if (!knows)
+            {
+                // Locked: the button learns it (at a workbench, for scrap).
+                int scrap = _inventory.Count(ItemIds.Scrap);
+                bool canLearn = _bench && scrap >= _selected.ScrapToLearn;
+                _craftButton.color = canLearn ? BlueprintBlue : UiTheme.Slot;
+                _craftLabel.text = !_bench ? "APRENDER: NECESITA MESA"
+                    : scrap < _selected.ScrapToLearn ? $"CHATARRA {scrap}/{_selected.ScrapToLearn}"
+                    : $"APRENDER · {_selected.ScrapToLearn} CHATARRA";
+                _craftLabel.color = canLearn ? Color.white : UiTheme.TextMuted;
+                return;
+            }
             bool afford = _selected.CanAfford(_inventory);
             bool bench = !_selected.NeedsWorkbench || _bench;
             bool full = _queue.Jobs.Count >= CraftingQueue.MaxJobs;
@@ -451,6 +480,11 @@ namespace Oxfall.Game.UI
             var label = UiFactory.NewRect("Name", tile.Rect, centre, centre, Vector2.zero, new Vector2(Tile - 12f, Tile - 12f));
             tile.Label = UiFactory.AddText(label, "", 22, TextAnchor.MiddleCenter, UiTheme.Text, true);
             tile.Label.horizontalOverflow = HorizontalWrapMode.Wrap;
+            // A padlock in the corner while its blueprint is not learned.
+            tile.Lock = UiFactory.NewRect("Lock", tile.Rect, new Vector2(1f, 1f), new Vector2(1f, 1f), new Vector2(-8f, -8f), new Vector2(38f, 38f));
+            UiFactory.AddImage(tile.Lock, UiFactory.Circle, BlueprintBlue);
+            UiFactory.AddIcon(tile.Lock, Icons.Lock, Vector2.zero, 24f, Color.white);
+            tile.Lock.gameObject.SetActive(false);
             return tile;
         }
 
