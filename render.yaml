@@ -1,0 +1,14 @@
+# Render blueprint for the Oxfall game server (free plan: sleeps after 15 minutes with nobody on
+# it and wakes on the next connection). Render gives it an https/wss address automatically.
+services:
+  - type: web
+    name: oxfall-server
+    runtime: docker
+    dockerfilePath: ./server/Dockerfile
+    dockerContext: .
+    plan: free
+    healthCheckPath: /
+    autoDeploy: true
+    envVars:
+      - key: OXFALL_SEED
+        value: "20261113"

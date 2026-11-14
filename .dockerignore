@@ -1,0 +1,7 @@
+# Only the rules and the server go into the server image.
+*
+!Assets/Oxfall/Scripts/Core/**
+!server/Oxfall.Server/**
+**/bin
+**/obj
+**/*.meta

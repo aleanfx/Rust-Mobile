@@ -11,6 +11,8 @@ on:
       - 'tests/**'
       - 'server/**'
       - 'tools/servertest/**'
+      - '.dockerignore'
+      - 'render.yaml'
       - '.github/workflows/core-tests.yml'
   pull_request:
   workflow_dispatch:
@@ -37,3 +39,5 @@ jobs:
           for i in $(seq 1 30); do curl -sf http://localhost:7777/ && break; sleep 1; done
           node tools/servertest/bots.js ws://localhost:7777/ws 20 6
           echo; tail -n 5 server.log
+      - name: Server container builds
+        run: docker build -q -f server/Dockerfile -t oxfall-server .
