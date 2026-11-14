@@ -109,10 +109,14 @@ namespace Oxfall.Game
         // The island's animals: alone the game runs them, online the server does and says where they are.
         private Fauna _fauna;
         private AnimalViews _animalViews;
+        private SleeperViews _sleeperViews;
         private readonly System.Collections.Generic.List<AnimalSnap> _animalSnaps = new System.Collections.Generic.List<AnimalSnap>();
         private readonly System.Collections.Generic.List<Fauna.Prey> _prey = new System.Collections.Generic.List<Fauna.Prey>();
         private readonly System.Collections.Generic.List<Fauna.Bite> _bites = new System.Collections.Generic.List<Fauna.Bite>();
         private float _bladeHintAt;
+        private ArrowFlights _arrows;
+        private ChatUi _chat;
+        private float _onlineSince;
 
         private void Start()
         {
@@ -164,7 +168,15 @@ namespace Oxfall.Game
             _fauna.Populate();
             _actions.Fauna = _fauna;
             _animalViews = new AnimalViews(materials, (x, z) => _world.Shape.Height(x, z));
+            _sleeperViews = new SleeperViews(materials);
             gatherer.StrikeAnimal = _actions.StrikeAnimal;
+
+            // Arrows in flight, this player's and everyone else's.
+            var arrowMaterials = new[] { materials.Bark, materials.Stone, materials.Bone };
+            _arrows = ArrowFlights.Create(MeshFactory.Arrow(), arrowMaterials);
+            gatherer.Arrows = _arrows;
+            gatherer.StringMaterial = materials.Rope;
+            gatherer.ArrowMaterials = arrowMaterials;
             _actions.AnimalHit += OnAnimalHit;
 
             _hud = Hud.Create();
@@ -423,6 +435,12 @@ namespace Oxfall.Game
                     if (!BuildOps.Apply(_settlement, op)) Debug.LogWarning("[Oxfall] A building change did not fit: " + op);
             };
             _net.Hurt += OnHurt;
+            _chat = new ChatUi(_hud);
+            _chat.Said += text => _net.SendChat(text);
+            _net.ChatLine += (from, name, text) => _chat.Add(from == 0 ? null : name, text, from == _net.PlayerId);
+            // Who comes and goes (not the ones already there when this player arrives).
+            _net.PlayerJoined += name => { if (Time.time - _onlineSince > 3f) _chat.Add(null, $"{name} ha llegado a la isla"); };
+            _net.PlayerLeft += name => _chat.Add(null, $"{name} se ha ido");
             _net.Bitten += (target, kind, damage, killed) =>
             {
                 Debug.Log($"[Oxfall] Bitten: {_net.NameOf(target) ?? "someone"} by {kind}, -{damage}{(killed ? ", killed" : "")}");
@@ -430,6 +448,13 @@ namespace Oxfall.Game
             };
             _net.AnimalHit += _actions.OnServerAnimalHit;
             _net.AnimalsSeen += animals => _animalViews.Apply(animals);
+            _net.SleepersSeen += sleepers => _sleeperViews.Apply(sleepers, _net.Owner);
+            _net.SleeperHit += OnSleeperHit;
+            _net.ArrowSeen += (origin, yaw, pitch) =>
+            {
+                var direction = Quaternion.Euler(-pitch, yaw, 0f) * Vector3.forward;
+                _arrows.Launch(origin, direction);
+            };
             _nameTags = new NameTags(_hud);
 
             // Straight in when the address says so (?server=… joins it, ?solo plays alone: for links
@@ -569,7 +594,10 @@ namespace Oxfall.Game
             if (door) _doorPlacer.SetActive(true, doorKind);
             if (codeLock) _lockPlacer.SetActive(true);
             bool food = held?.Category == ItemCategory.Food;
-            _hud.SetAttackLabel(plan || deploy || door || codeLock ? "COLOCAR" : hammer ? "MEJORAR" : food ? "COMER" : "GOLPEAR");
+            bool bow = held?.Tool == ToolKind.Bow;
+            int arrows = bow ? _inventory.Count(ItemIds.Arrow) : 0;
+            _hud.SetAttackLabel(plan || deploy || door || codeLock ? "COLOCAR" : hammer ? "MEJORAR" : food ? "COMER"
+                : bow ? (arrows > 0 ? $"FLECHAS {arrows}" : "SIN FLECHAS") : "GOLPEAR");
             _hud.SetAttackIcon(held != null ? ItemIcons.Get(held.Id) : null);
         }
 
@@ -639,21 +667,30 @@ namespace Oxfall.Game
                     _gatherer.RemoteHit = _net.SendHit;
                     // And whether a blow at another player lands.
                     _gatherer.StrikePlayer = _net.SendStrike;
+                    _gatherer.StrikeSleeper = _net.SendStrikeSleeper;
                     // And where the animals are.
                     _animalViews.Clear();
+                    _onlineSince = Time.time;
+                    _chat.SetOnline(true);
                     break;
                 case NetClient.Status.Failed:
+                    _chat.SetOnline(false);
                     _title?.ShowError(_net.FailReason);
                     // Carries on alone with what the server last said.
                     _gatherer.RemoteHit = null;
                     _gatherer.StrikePlayer = null;
+                    _gatherer.StrikeSleeper = null;
+                    _sleeperViews.Clear();
                     _crafting.Mirror = false;
                     _hud.SetOnline("SIN CONEXIÓN", false);
                     _hud.ShowToast(_net.FailReason);
                     break;
                 default:
+                    _chat.SetOnline(false);
                     _gatherer.RemoteHit = null;
                     _gatherer.StrikePlayer = null;
+                    _gatherer.StrikeSleeper = null;
+                    _sleeperViews.Clear();
                     _crafting.Mirror = false;
                     _hud.SetOnline(null, false);
                     break;
@@ -674,6 +711,9 @@ namespace Oxfall.Game
                 }
                 foreach (var other in _net.Players.Values)
                     if (other.Visible && !other.Down) _nameTags.Show(_camera, other.Root.position + Vector3.up * 2.05f, other.Name);
+                // Sleepers only up close: a body in the grass, and whose it is.
+                foreach (var (at, name) in _sleeperViews.All())
+                    _nameTags.Show(_camera, at + Vector3.up * 0.6f, $"{name} · durmiendo", 12f);
             }
             _nameTags.End();
         }
@@ -697,6 +737,48 @@ namespace Oxfall.Game
                 _audio.Play(SoundCue.HitBody);
                 if (killed) _hud.ShowToast($"Has derribado a {whom}");
             }
+        }
+
+        /// <summary>A sleeper was hurt: it jolts, the attacker sees the hit; it may be this player's own body, long ago.</summary>
+        private void OnSleeperHit(int owner, ushort attacker, string by, int damage, bool killed)
+        {
+            Debug.Log($"[Oxfall] Sleeper hit: {owner} by {(string.IsNullOrEmpty(by) ? "someone" : by)}, -{damage}{(killed ? ", killed" : "")}");
+            if (owner == _net.Owner)
+            {
+                // Killed in their sleep while away: the death screen says by whom.
+                if (killed) _killer = $"{(string.IsNullOrEmpty(by) ? "alguien" : by)} mientras dormías";
+                return;
+            }
+            _sleeperViews.Flinch(owner);
+            if (attacker != _net.PlayerId) return;
+            _hud.ShowHitMarker(killed);
+            _audio.Play(SoundCue.HitBody);
+            if (killed && _sleeperViews.TryGet(owner, out _, out var name)) _hud.ShowToast($"Has matado a {name} mientras dormía");
+        }
+
+        /// <summary>Turns to the nearest sleeper; with <paramref name="approach"/>, first steps up beside them.</summary>
+        private void FaceSleeper(bool approach)
+        {
+            var eye = _player.transform.position;
+            int owner = _sleeperViews.Nearest(eye, out var at);
+            if (owner == 0)
+            {
+                Debug.Log("[Oxfall] No sleepers");
+                return;
+            }
+            if (approach)
+            {
+                var away = eye - at;
+                away.y = 0f;
+                var stand = at + (away.sqrMagnitude > 0.01f ? away.normalized : Vector3.forward) * 1.6f;
+                stand.y = _world.Shape.Height(stand.x, stand.z) + 0.05f;
+                eye = stand;
+            }
+            var to = at - eye;
+            float yaw = Mathf.Atan2(to.x, to.z) * Mathf.Rad2Deg;
+            float pitch = Mathf.Atan2(1.5f, Mathf.Max(0.5f, new Vector2(to.x, to.z).magnitude)) * Mathf.Rad2Deg;
+            _player.Teleport(eye, yaw, pitch);
+            Debug.Log($"[Oxfall] Facing sleeper {owner}, {to.magnitude:0.0} m away");
         }
 
         private static string AnimalName(AnimalKind kind) => "un " + Animals.Name(kind).ToLowerInvariant();
@@ -780,6 +862,7 @@ namespace Oxfall.Game
                 _animalViews.Apply(_animalSnaps);
             }
             _animalViews.Tick(dt, _camera != null ? _camera.transform.position : Vector3.zero);
+            _sleeperViews.Tick(dt, _camera != null ? _camera.transform.position : Vector3.zero);
         }
 
         /// <summary>Test view: the nearest animal (living or dead): turns to it, or walks up to it first.</summary>
@@ -826,8 +909,10 @@ namespace Oxfall.Game
                 _net.SendAct(ActKind.DevSpawnAnimal, (int)kind);
                 return;
             }
+            // A deer beyond where it would bolt, a wolf within sight, a boar close by.
+            float distance = kind == AnimalKind.Deer ? 16f : kind == AnimalKind.Wolf ? 14f : 7f;
             var t = _player.transform;
-            var at = t.position + t.forward * 7f;
+            var at = t.position + t.forward * distance;
             _fauna.Add(kind, at.x, at.z, t.eulerAngles.y + 180f);
         }
 
@@ -987,6 +1072,8 @@ namespace Oxfall.Game
             {
                 case "settings": _hud.ToggleSettings(); break;
                 case "face-player": FacePlayer(); break;
+                case "face-sleeper": FaceSleeper(false); break;
+                case "approach-sleeper": FaceSleeper(true); break;
                 case "face-animal": FaceAnimal(false); break;
                 case "approach-animal": FaceAnimal(true); break;
                 case "spawn-boar": SpawnAnimal(AnimalKind.Boar); break;
@@ -1018,6 +1105,11 @@ namespace Oxfall.Game
                 case "craft-hatchet": TryCraft(_recipes.Get("stone_hatchet")); break;
                 case "craft-pickaxe": TryCraft(_recipes.Get("stone_pickaxe")); break;
                 case "craft-panel": _hud.ToggleCraftPanel(); break;
+                case "craft-tab-1": _hud.CraftTab(0); break;
+                case "craft-tab-2": _hud.CraftTab(1); break;
+                case "craft-tab-3": _hud.CraftTab(2); break;
+                case "craft-tab-4": _hud.CraftTab(3); break;
+                case "bow": HoldItem(ItemIds.WoodenBow); break;
                 case "give" when _actions.Online:
                 case "give-all" when _actions.Online:
                     // A test server hands out the kit itself (a real one refuses).
@@ -1127,7 +1219,7 @@ namespace Oxfall.Game
                               $"ponds={_world.Shape.Ponds.Count} berries={_inventory.Count(ItemIds.Berries)} " +
                               $"pieces={_buildings.Grid.PieceCount} views={_buildings.Count} doorLook={_interactor.LookingAtDoor} lookAt={_interactor.LookingAt} " +
                               $"locks={_lockViews.Count} keypad={(_keypad.IsOpen ? _keypad.Current.ToString() : "closed")} " +
-                              $"metal={_inventory.Count(ItemIds.MetalFragments)} animals={_animalViews.Count} " +
+                              $"metal={_inventory.Count(ItemIds.MetalFragments)} animals={_animalViews.Count} sleepers={_sleeperViews.Count} arrows={_inventory.Count(ItemIds.Arrow)} " +
                               $"meat={_inventory.Count(ItemIds.RawMeat)} cooked={_inventory.Count(ItemIds.CookedMeat)} leather={_inventory.Count(ItemIds.Leather)} " +
                               $"pos={_player.transform.position} quality={GraphicsQuality.Name(_quality.Tier)} " +
                               $"screen={Screen.width}x{Screen.height} grass={_grass.BladeCount} " +
@@ -1135,6 +1227,10 @@ namespace Oxfall.Game
                               $"others={string.Join(";", System.Linq.Enumerable.Select(_net.Players.Values, p => p.Name + "@" + p.Root.position))}");
                     break;
                 case "disconnect": _net.Disconnect(); break;
+                case "reconnect": _net.Reconnect(); break;
+                case "chat-button": _chat.Ask(); break;
+                // Full health again (alone only: online the server keeps it); for slow test machines.
+                case "heal": if (!_actions.Online && !_vitals.IsDead) _vitals.Set(Vitals.MaxHealth, _vitals.Food, _vitals.Water); break;
                 default:
                     // connect:URL joins a server; slot-N chooses hotbar slot N (1 to 6); tap-N taps
                     // inventory slot N (0 to 29).
@@ -1142,6 +1238,8 @@ namespace Oxfall.Game
                         _net.Connect(command.Substring(8), "Tester");
                     else if (command.StartsWith("slot-") && int.TryParse(command.Substring(5), out int slot))
                         _hotbar.Select(slot - 1);
+                    else if (command.StartsWith("say:"))
+                        _chat.Send(command.Substring(4));
                     else if (command.StartsWith("tap-") && int.TryParse(command.Substring(4), out int tap))
                         _inventoryUi.TapSlot(tap);
                     // code-NNNN types a code on the open keypad and confirms it; key-N presses one key.
@@ -1149,6 +1247,16 @@ namespace Oxfall.Game
                         _keypad.Type(command.Substring(5));
                     else if (command.StartsWith("key-") && int.TryParse(command.Substring(4), out int key))
                         _keypad.Press(key);
+                    // fwd-M / back-M walk the player M metres along (or against) where they face, onto the ground.
+                    else if ((command.StartsWith("fwd-") || command.StartsWith("back-")) && float.TryParse(command.Substring(command.IndexOf('-') + 1),
+                                 System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out float metres))
+                    {
+                        var flat = _player.transform.forward;
+                        flat.y = 0f;
+                        var to = _player.transform.position + flat.normalized * (command[0] == 'b' ? -metres : metres);
+                        to.y = _world.Shape.Height(to.x, to.z) + 0.05f;
+                        _player.Teleport(to, _player.Yaw, _player.Pitch);
+                    }
                     // turn-D turns the player D degrees where they stand.
                     else if (command.StartsWith("turn-") && float.TryParse(command.Substring(5),
                                  System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out float turn))
@@ -1372,6 +1480,7 @@ namespace Oxfall.Game
             _keypad?.Tick(Time.unscaledDeltaTime);
             TickNet();
             TickAnimals(Time.deltaTime);
+            _chat?.Tick(Time.unscaledDeltaTime);
 
             // Trees and rocks grow back on their own timers; checking once a second is plenty.
             _crafting?.Tick(Time.deltaTime);

@@ -80,6 +80,10 @@ namespace Oxfall.Core.Items
                 description: "Pica piedra y mineral mucho más rápido que el de piedra."),
             new ItemDefinition(ItemIds.WoodenSpear, "Lanza de madera", ItemCategory.Tool, 1, ToolKind.Spear, skinnable: true,
                 description: "Un palo largo con la punta endurecida al fuego: llega más lejos y hace más daño que cualquier herramienta."),
+            new ItemDefinition(ItemIds.WoodenBow, "Arco de madera", ItemCategory.Tool, 1, ToolKind.Bow, skinnable: true,
+                description: "Tira flechas: para cazar lo que corre más que tú y pelear de lejos. Apunta un poco por encima: la flecha cae."),
+            new ItemDefinition(ItemIds.Arrow, "Flecha", ItemCategory.Ammo, 64,
+                description: "Madera con punta de piedra. El arco las gasta una a una."),
 
             new ItemDefinition(ItemIds.BuildingPlan, "Plano de construcción", ItemCategory.Placeable, 1,
                 description: "Llévalo en la mano para construir."),

@@ -27,6 +27,48 @@ namespace Oxfall.Game.UI
         private readonly IReadOnlyList<Recipe> _recipes;
 
         private readonly List<TileView> _tiles = new List<TileView>();
+        private readonly TabView[] _tabs = new TabView[TabNames.Length];
+        private int _tab;
+
+        /// <summary>The panel's tabs, like the PC game's categories: tools, weapons, the base, and things to set down.</summary>
+        private static readonly string[] TabNames = { "ÚTILES", "ARMAS", "BASE", "OBJETOS" };
+
+        /// <summary>Which tab an item is made under.</summary>
+        public static int TabOf(string itemId)
+        {
+            switch (itemId)
+            {
+                case ItemIds.StoneHatchet:
+                case ItemIds.StonePickaxe:
+                case ItemIds.MetalHatchet:
+                case ItemIds.MetalPickaxe:
+                case ItemIds.Torch:
+                    return 0;
+                case ItemIds.WoodenSpear:
+                case ItemIds.WoodenBow:
+                case ItemIds.Arrow:
+                    return 1;
+                case ItemIds.BuildingPlan:
+                case ItemIds.Hammer:
+                case ItemIds.WoodenDoor:
+                case ItemIds.SheetMetalDoor:
+                case ItemIds.CodeLock:
+                case ItemIds.ToolCupboard:
+                    return 2;
+                default:
+                    return 3;
+            }
+        }
+
+        private sealed class TabView
+        {
+            public RectTransform Rect;
+            public Image Back;
+            public Image Underline;
+            public Text Label;
+            public RectTransform Badge;
+            public Text BadgeText;
+        }
         private readonly IngredientRow[] _rows = new IngredientRow[MaxIngredients];
         private readonly Image[] _queueIcons = new Image[CraftingQueue.MaxJobs];
         private Recipe _selected;
@@ -55,6 +97,7 @@ namespace Oxfall.Game.UI
         private sealed class TileView
         {
             public Recipe Recipe;
+            public int Tab;
             public RectTransform Rect;
             public Image Back;
             public Image Frame;
@@ -98,12 +141,36 @@ namespace Oxfall.Game.UI
             UiFactory.AddImage(accent, null, UiTheme.Accent);
             hud.CloseButton(Panel, () => SetOpen(false));
 
-            // Left: one tile per recipe.
+            // Under the title, the tabs; each shows how many of its things can be made now.
+            float tabWidth = (gridWidth - TileGap * (TabNames.Length - 1)) / TabNames.Length;
+            for (int t = 0; t < TabNames.Length; t++)
+            {
+                int index = t;
+                var tab = new TabView();
+                tab.Rect = UiFactory.NewRect("Tab " + TabNames[t], Panel, topLeft, topLeft, new Vector2(left + t * (tabWidth + TileGap), -104f), new Vector2(tabWidth, 54f));
+                tab.Back = UiFactory.AddImage(tab.Rect, UiFactory.Soft, UiTheme.Slot);
+                var label = UiFactory.NewRect("Label", tab.Rect, centre, centre, new Vector2(0f, 2f), new Vector2(tabWidth - 8f, 40f));
+                tab.Label = UiFactory.AddText(label, TabNames[t], 24, TextAnchor.MiddleCenter, UiTheme.TextMuted, true);
+                var underline = UiFactory.NewRect("Underline", tab.Rect, new Vector2(0.5f, 0f), new Vector2(0.5f, 0f), new Vector2(0f, 2f), new Vector2(tabWidth - 24f, 4f));
+                tab.Underline = UiFactory.AddImage(underline, null, UiTheme.Accent);
+                tab.Badge = UiFactory.NewRect("Badge", tab.Rect, new Vector2(1f, 1f), new Vector2(1f, 1f), new Vector2(8f, 10f), new Vector2(34f, 34f));
+                UiFactory.AddImage(tab.Badge, UiFactory.Circle, UiTheme.Good);
+                var badgeText = UiFactory.NewRect("Count", tab.Badge, centre, centre, new Vector2(0f, 1f), new Vector2(34f, 30f));
+                tab.BadgeText = UiFactory.AddText(badgeText, "", 20, TextAnchor.MiddleCenter, Color.white, true);
+                _tabs[t] = tab;
+                hud.TapTargets.Add(new Hud.TapTarget { Rect = tab.Rect, OnTap = () => SetTab(index) });
+            }
+
+            // Left: one tile per recipe, laid out in its tab's grid.
+            var placed = new int[TabNames.Length];
             for (int i = 0; i < _recipes.Count; i++)
             {
                 var recipe = _recipes[i];
-                int row = i / Columns, column = i % Columns;
-                var tile = MakeTile(recipe, new Vector2(left + column * (Tile + TileGap), -112f - row * (Tile + TileGap)));
+                int tabOf = TabOf(recipe.OutputItemId);
+                int n = placed[tabOf]++;
+                int row = n / Columns, column = n % Columns;
+                var tile = MakeTile(recipe, new Vector2(left + column * (Tile + TileGap), -176f - row * (Tile + TileGap)));
+                tile.Tab = tabOf;
                 _tiles.Add(tile);
                 hud.TapTargets.Add(new Hud.TapTarget { Rect = tile.Rect, OnTap = () => Select(recipe) });
             }
@@ -187,6 +254,26 @@ namespace Oxfall.Game.UI
             _chip.gameObject.SetActive(false);
 
             Select(_recipes.Count > 0 ? _recipes[0] : null);
+            SetTab(0);
+        }
+
+        /// <summary>Shows one tab's things (choosing the first that can be made now, if the choice was elsewhere).</summary>
+        public void SetTab(int tab)
+        {
+            _tab = Mathf.Clamp(tab, 0, TabNames.Length - 1);
+            foreach (var tile in _tiles) tile.Rect.gameObject.SetActive(tile.Tab == _tab);
+            if (_selected == null || TabOf(_selected.OutputItemId) != _tab)
+            {
+                Recipe first = null, affordable = null;
+                foreach (var tile in _tiles)
+                {
+                    if (tile.Tab != _tab) continue;
+                    if (first == null) first = tile.Recipe;
+                    if (affordable == null && tile.Recipe.CanAfford(_inventory)) affordable = tile.Recipe;
+                }
+                _selected = affordable ?? first;
+            }
+            Refresh();
         }
 
         public void SetOpen(bool open)
@@ -199,7 +286,7 @@ namespace Oxfall.Game.UI
                 if (_selected == null || !_selected.CanAfford(_inventory))
                     foreach (var r in _recipes)
                         if (r.CanAfford(_inventory)) { _selected = r; break; }
-                Refresh();
+                SetTab(_selected != null ? TabOf(_selected.OutputItemId) : _tab);
             }
             _shownJobs = -1;
             Tick();
@@ -208,13 +295,27 @@ namespace Oxfall.Game.UI
         public void Select(Recipe recipe)
         {
             _selected = recipe;
-            Refresh();
+            if (recipe != null && TabOf(recipe.OutputItemId) != _tab) SetTab(TabOf(recipe.OutputItemId));
+            else Refresh();
         }
 
         /// <summary>Redraws what can be afforded and the chosen recipe (after the inventory changes).</summary>
         public void Refresh()
         {
             if (!IsOpen) return;
+            for (int t = 0; t < _tabs.Length; t++)
+            {
+                var tab = _tabs[t];
+                bool on = t == _tab;
+                tab.Back.color = on ? UiTheme.SlotHover : UiTheme.Slot;
+                tab.Label.color = on ? UiTheme.Text : UiTheme.TextMuted;
+                tab.Underline.enabled = on;
+                int can = 0;
+                foreach (var tile in _tiles)
+                    if (tile.Tab == t && tile.Recipe.CanAfford(_inventory)) can++;
+                tab.Badge.gameObject.SetActive(can > 0);
+                tab.BadgeText.text = can.ToString();
+            }
             foreach (var tile in _tiles)
             {
                 bool can = tile.Recipe.CanAfford(_inventory);

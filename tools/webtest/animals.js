@@ -65,21 +65,24 @@ const stamp = () => ((Date.now() - t0) / 1000).toFixed(1).padStart(6);
   await shot('03-boar');
   await cmd('clear-animals', 800);
 
-  // A wolf: it comes and bites.
+  // A wolf: it comes and bites. Spear in hand first (screenshots take seconds here, the wolf does not
+  // wait for them: health is topped up after each).
+  await cmd('spear', 1200);
   await cmd('spawn-wolf', 600);
   await cmd('face-animal', 600);
   await shot('04-wolf-charges');
-  await wait(2500);
+  await cmd('heal', 200);
+  await wait(1500);
   await cmd('face-animal', 400);
   await shot('05-wolf-bites');
+  await cmd('heal', 200);
   await cmd('stats', 600);
 
   // The spear: three or four blows.
-  await cmd('spear', 1200);
   for (let i = 0; i < 6 && !has('Killed'); i++) {
     await cmd('face-animal', 250);
     await cmd('use', 900);
-    if (i === 0) await shot('06-spear-hit');
+    if (i === 0) { await shot('06-spear-hit'); await cmd('heal', 200); }
   }
   await wait(1200);
   await cmd('face-animal', 800);
@@ -95,6 +98,29 @@ const stamp = () => ((Date.now() - t0) / 1000).toFixed(1).padStart(6);
   }
   await shot('09-carcass-done');
   await cmd('stats', 600);
+
+  // The bow: a deer at 16 m, three arrows loosed quickly.
+  await cmd('clear-animals', 600);
+  await cmd('spawn-deer', 1200);
+  await cmd('bow', 1200);
+  await cmd('face-animal', 600);
+  await shot('10a-bow-aim');
+  for (let i = 0; i < 3; i++) {
+    await cmd('face-animal', 150);
+    await cmd('use', 120);
+    if (i === 0) await shot('10b-arrow-flying');
+    await wait(350);
+  }
+  await wait(800);
+  await cmd('face-animal', 600);
+  await shot('10c-arrows-landed');
+  await cmd('stats', 600);
+  await cmd('craft-panel', 1200);
+  await cmd('craft-tab-2', 1200);
+  await shot('10d-craft-weapons');
+  await cmd('craft-tab-3', 800);
+  await shot('10e-craft-base');
+  await cmd('craft-panel', 800);
 
   // Raw meat on a campfire.
   await cmd('campfire', 1200);

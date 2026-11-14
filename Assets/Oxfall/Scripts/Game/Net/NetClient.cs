@@ -96,6 +96,23 @@ namespace Oxfall.Game.Net
         public event Action<ushort, AnimalKind, int, bool> Bitten;
 
         private readonly List<AnimalSnap> _animals = new List<AnimalSnap>();
+        private readonly List<SleeperSnap> _sleepers = new List<SleeperSnap>();
+
+        /// <summary>Everyone asleep on the island (sent whole whenever it changes).</summary>
+        public event Action<List<SleeperSnap>> SleepersSeen;
+
+        /// <summary>A sleeper was hurt: whose body (owner), attacker id (0: long ago), their name, damage, killed.</summary>
+        public event Action<int, ushort, string, int, bool> SleeperHit;
+
+        /// <summary>A line of chat: from whom (0: the server), their name, what.</summary>
+        public event Action<ushort, string, string> ChatLine;
+
+        /// <summary>Someone came or went (their name).</summary>
+        public event Action<string> PlayerJoined;
+        public event Action<string> PlayerLeft;
+
+        /// <summary>Someone else loosed an arrow: from where, which way (yaw, pitch), for it to be seen flying.</summary>
+        public event Action<Vector3, float, float> ArrowSeen;
 
         private readonly List<(int, ItemStack)> _loot = new List<(int, ItemStack)>();
 
@@ -118,6 +135,34 @@ namespace Oxfall.Game.Net
         {
             if (State != Status.Online || _socket == null) return;
             Messages.Strike(_writer, target, (byte)tool);
+            _socket.Send(_writer.Buffer, _writer.Length);
+        }
+
+        public void SendStrikeSleeper(int owner, ToolKind tool)
+        {
+            if (State != Status.Online || _socket == null) return;
+            Messages.StrikeSleeper(_writer, owner, (byte)tool);
+            _socket.Send(_writer.Buffer, _writer.Length);
+        }
+
+        public void SendChat(string text)
+        {
+            if (State != Status.Online || _socket == null) return;
+            Messages.Chat(_writer, text);
+            _socket.Send(_writer.Buffer, _writer.Length);
+        }
+
+        public void SendShoot(Vector3 origin, float yaw, float pitch)
+        {
+            if (State != Status.Online || _socket == null) return;
+            Messages.Shoot(_writer, origin.x, origin.y, origin.z, yaw, pitch);
+            _socket.Send(_writer.Buffer, _writer.Length);
+        }
+
+        public void SendArrowHit(ArrowTarget kind, int target)
+        {
+            if (State != Status.Online || _socket == null) return;
+            Messages.ArrowHit(_writer, kind, target);
             _socket.Send(_writer.Buffer, _writer.Length);
         }
 
@@ -165,6 +210,12 @@ namespace Oxfall.Game.Net
             _connectStarted = Time.unscaledTime;
             SetState(Status.Connecting);
             Debug.Log("[Oxfall] Connecting to " + url);
+        }
+
+        /// <summary>The same server again, under the same name (after <see cref="Disconnect"/>).</summary>
+        public void Reconnect()
+        {
+            if (!string.IsNullOrEmpty(Url)) Connect(Url, _name);
         }
 
         public void Disconnect()
@@ -286,6 +337,7 @@ namespace Oxfall.Game.Net
                     if (id == PlayerId || _players.ContainsKey(id)) break;
                     _players[id] = new RemotePlayer(id, name, _materials, _others);
                     Debug.Log($"[Oxfall] {name} joined ({OnlineCount} online)");
+                    PlayerJoined?.Invoke(name);
                     break;
                 }
                 case MessageType.Left:
@@ -295,6 +347,7 @@ namespace Oxfall.Game.Net
                     player.Destroy();
                     _players.Remove(id);
                     Debug.Log($"[Oxfall] {player.Name} left ({OnlineCount} online)");
+                    PlayerLeft?.Invoke(player.Name);
                     break;
                 }
                 case MessageType.Snapshot:
@@ -354,6 +407,16 @@ namespace Oxfall.Game.Net
                     Hurt?.Invoke(target, attacker, damage, killed);
                     break;
                 }
+                case MessageType.Sleepers:
+                    Messages.ReadSleepers(reader, _sleepers);
+                    SleepersSeen?.Invoke(_sleepers);
+                    break;
+                case MessageType.SleeperHit:
+                {
+                    Messages.ReadSleeperHit(reader, out int owner, out ushort attacker, out string by, out int damage, out bool killed);
+                    SleeperHit?.Invoke(owner, attacker, by, damage, killed);
+                    break;
+                }
                 case MessageType.Animals:
                     Messages.ReadAnimals(reader, _animals);
                     AnimalsSeen?.Invoke(_animals);
@@ -362,6 +425,18 @@ namespace Oxfall.Game.Net
                 {
                     Messages.ReadAnimalHit(reader, out int animal, out var blow, out int damage);
                     AnimalHit?.Invoke(animal, blow, damage);
+                    break;
+                }
+                case MessageType.ChatLine:
+                {
+                    Messages.ReadChatLine(reader, out ushort from, out string name, out string text);
+                    ChatLine?.Invoke(from, name, text);
+                    break;
+                }
+                case MessageType.Arrow:
+                {
+                    Messages.ReadArrow(reader, out ushort shooter, out float ax, out float ay, out float az, out float yaw, out float pitch);
+                    if (shooter != PlayerId) ArrowSeen?.Invoke(new Vector3(ax, ay, az), yaw, pitch);
                     break;
                 }
                 case MessageType.Bitten:

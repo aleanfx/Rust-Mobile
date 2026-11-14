@@ -32,6 +32,9 @@ namespace Oxfall.Game.Items
 
         /// <summary>Whether a blow is a stab straight ahead (a spear) rather than a swing.</summary>
         public bool Thrusts;
+
+        /// <summary>Whether it is drawn and loosed (a bow) rather than swung.</summary>
+        public bool Shoots;
     }
 
     /// <summary>
@@ -203,6 +206,25 @@ namespace Oxfall.Game.Items
                     Mesh = MeshFactory.ClothRoll(),
                     Materials = new[] { m.Cloth, m.Rope },
                     IconRotation = Quaternion.AngleAxis(-20f, Vector3.right) * Quaternion.AngleAxis(-30f, Vector3.up),
+                },
+                [ItemIds.WoodenBow] = new ItemModel
+                {
+                    Mesh = MeshFactory.WoodenBow(true),
+                    Materials = new[] { m.Bark, m.Cloth, m.Rope },
+                    ShowInHand = true,
+                    // Held out ahead and a little left, canted, the arrow along the crosshair when drawn.
+                    HandPosition = new Vector3(-0.05f, -0.16f, 0.62f),
+                    HandRotation = Quaternion.Euler(0f, 0f, 14f),
+                    IconRotation = Quaternion.AngleAxis(-45f, Vector3.forward) * Quaternion.AngleAxis(90f, Vector3.up),
+                    IconZoom = 1.25f,
+                    Shoots = true,
+                },
+                [ItemIds.Arrow] = new ItemModel
+                {
+                    Mesh = MeshFactory.Arrow(),
+                    Materials = new[] { m.Bark, m.Stone, m.Bone },
+                    IconRotation = Quaternion.AngleAxis(-45f, Vector3.forward) * Quaternion.AngleAxis(-90f, Vector3.up),
+                    IconZoom = 1.6f,
                 },
                 [ItemIds.Leather] = new ItemModel
                 {

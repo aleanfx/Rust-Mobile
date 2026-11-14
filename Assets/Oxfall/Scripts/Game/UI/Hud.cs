@@ -419,6 +419,9 @@ namespace Oxfall.Game.UI
 
         public void CloseCraftPanel() => _craft?.SetOpen(false);
 
+        /// <summary>Shows one tab of the open crafting panel (0 tools, 1 weapons, 2 base, 3 things).</summary>
+        public void CraftTab(int tab) => _craft?.SetTab(tab);
+
         /// <summary>Redraws what can be afforded (after the inventory changes).</summary>
         public void RefreshCraftPanel() => _craft?.Refresh();
 

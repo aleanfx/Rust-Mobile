@@ -26,11 +26,11 @@ namespace Oxfall.Game.UI
 
         public void Begin() => _used = 0;
 
-        /// <summary>One name over a head at <paramref name="head"/> (world position).</summary>
-        public void Show(Camera camera, Vector3 head, string name)
+        /// <summary>One name over a head at <paramref name="head"/> (world position), if no farther than <paramref name="maxDistance"/>.</summary>
+        public void Show(Camera camera, Vector3 head, string name, float maxDistance = MaxDistance)
         {
             var screen = camera.WorldToScreenPoint(head);
-            if (screen.z <= 0.3f || screen.z > MaxDistance) return;
+            if (screen.z <= 0.3f || screen.z > maxDistance) return;
             if (!RectTransformUtility.ScreenPointToLocalPointInRectangle(_root, screen, null, out var local)) return;
             if (_used == _pool.Count)
             {
@@ -41,7 +41,7 @@ namespace Oxfall.Game.UI
             if (!tag.gameObject.activeSelf) tag.gameObject.SetActive(true);
             if (tag.text != name) tag.text = name;
             var colour = UiTheme.Text;
-            colour.a = Mathf.Clamp01((MaxDistance - screen.z) / 10f);
+            colour.a = Mathf.Clamp01((maxDistance - screen.z) / Mathf.Min(10f, maxDistance * 0.3f));
             tag.color = colour;
             tag.rectTransform.anchoredPosition = local;
         }

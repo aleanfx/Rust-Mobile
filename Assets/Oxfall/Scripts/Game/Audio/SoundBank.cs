@@ -31,6 +31,10 @@ namespace Oxfall.Game.Audio
 
         /// <summary>A wolf's low snarl, a boar's grunts, a deer's alarm bark.</summary>
         public AudioClip Growl { get; }
+
+        /// <summary>A bow creaking as it is drawn, and the string's thrum and the arrow's whoosh as it is loosed.</summary>
+        public AudioClip BowDraw { get; }
+        public AudioClip BowShot { get; }
         public AudioClip Grunt { get; }
         public AudioClip Bark { get; }
         public AudioClip FireLoop { get; }
@@ -99,6 +103,13 @@ namespace Oxfall.Game.Audio
             Bark = Make("bark", 0.35f, (t, i) =>
                 (Tone(t, 420f - t * 500f) * 0.5f + Tone(t, 840f - t * 900f) * 0.2f) * Env(t, 0.006f, 0.06f)
                 + Noise() * Env(t, 0.002f, 0.05f) * 0.4f);
+            BowDraw = Make("bow draw", 0.6f, (t, i) =>
+                Dark(0.25f) * (0.4f + 0.6f * Mathf.Abs(Mathf.Sin(t * 70f))) * Mathf.Clamp01(t / 0.15f) * Mathf.Clamp01((0.6f - t) / 0.15f) * 0.5f
+                + Tone(t, 95f + t * 60f) * Env(t, 0.05f, 0.4f) * 0.08f);
+            BowShot = Make("bow shot", 0.5f, (t, i) =>
+                (Tone(t, 110f) + 0.5f * Tone(t, 220f) + 0.25f * Tone(t, 330f)) * Env(t, 0.002f, 0.09f) * 0.6f
+                + Thump(t, 70f, 0.05f) * 0.5f
+                + Noise() * Env(t - 0.02f, 0.03f, 0.12f) * 0.35f);
             FireLoop = MakeLoop("fire", 3f, FireSample);
             WindLoop = MakeLoop("wind", 6f, WindSample);
             WavesLoop = MakeLoop("waves", 8f, WavesSample);

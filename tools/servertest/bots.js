@@ -6,7 +6,7 @@ const count = +(process.argv[3] || 5);
 const seconds = +(process.argv[4] || 6);
 const VERSION = 7;
 const T = {
-  Hello: 1, Move: 2, Act: 4, Build: 5,
+  Hello: 1, Move: 2, Act: 4, Build: 5, Chat: 40, ChatLine: 31,
   Welcome: 10, Rejected: 11, Joined: 12, Left: 13, Snapshot: 14, Correction: 15,
   Slots: 18, Crafts: 19, VitalsState: 21, Failed: 22, Built: 23,
 };
@@ -25,6 +25,7 @@ function hello(name, token) {
   head.writeUInt8(T.Hello, 0); head.writeUInt16LE(VERSION, 1);
   return Buffer.concat([head, str(name), str(token)]);
 }
+const chat = text => Buffer.concat([Buffer.from([T.Chat]), str(text)]);
 const craft = recipe => Buffer.concat([Buffer.from([T.Act, 4]), str(recipe)]);
 const moveSlot = (from, to) => Buffer.from([T.Act, 1, from, to]);
 function foundation(cx, cz) {
@@ -47,7 +48,7 @@ function check(ok, what) { if (!ok) fails.push(what); }
 function bot(i) {
   return new Promise(resolve => {
     const s = { id: 0, joined: new Set(), left: 0, snapshots: 0, maxSeen: 0, corrections: 0, bytes: 0,
-      slots: 0, crafts: 0, vitals: 0, failed: [] };
+      slots: 0, crafts: 0, vitals: 0, failed: [], chat: [] };
     const ws = new WebSocket(url);
     ws.binaryType = 'arraybuffer';
     let timer, t0 = Date.now();
@@ -63,6 +64,8 @@ function bot(i) {
       // Bot 1 moves its rock and tries to craft a torch with nothing; bot 2 tries to build for free.
       if (i === 1) setTimeout(() => { ws.send(moveSlot(0, 10)); ws.send(craft('torch')); }, 1000);
       if (i === 2) setTimeout(() => ws.send(foundation(Math.floor(x / 3), Math.floor(z / 3))), 1000);
+      // Bot 0 says hello with a tag in it, then floods: everyone hears one clean line.
+      if (i === 0) setTimeout(() => { ws.send(chat('  hola <b>a</b>   todos ')); ws.send(chat('spam')); ws.send(chat('spam')); }, 2500);
     }
     ws.onmessage = e => {
       const b = Buffer.from(e.data);
@@ -81,6 +84,12 @@ function bot(i) {
         case T.Snapshot: s.snapshots++; s.maxSeen = Math.max(s.maxSeen, b.readUInt16LE(5)); break;
         case T.Correction: s.corrections++; break;
         case T.Rejected: s.rejected = b.toString('utf8', 3); break;
+        case T.ChatLine: {
+          const from = b.readUInt16LE(1), n = b.readUInt16LE(3), name = b.toString('utf8', 5, 5 + n);
+          const m = b.readUInt16LE(5 + n);
+          s.chat.push(`${name}: ${b.toString('utf8', 7 + n, 7 + n + m)}`);
+          break;
+        }
       }
     };
     ws.onerror = e => { s.error = String(e.message || e.type); };
@@ -98,6 +107,8 @@ function bot(i) {
     check(s.snapshots >= seconds * 15, `bot ${i} got only ${s.snapshots} snapshots in ${seconds} s`);
   });
   check(results[0].corrections >= 1, 'the 500 m jump was not corrected');
+  results.forEach((s, i) => check(s.chat.length === 1 && s.chat[0] === 'Bot0: hola ba/b todos',
+    `bot ${i} heard the chat as ${JSON.stringify(s.chat)}`));
   results.forEach((s, i) => {
     check(s.slots >= 1 && s.crafts >= 1 && s.vitals >= 1, `bot ${i} was not told its inventory, queue and vitals`);
     if (i !== 1 && i !== 2) check(s.failed.length === 0, `bot ${i} had actions refused: ${s.failed}`);

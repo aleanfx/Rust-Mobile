@@ -111,6 +111,9 @@ namespace Oxfall.Server
 
         private float Now => (float)_clock.Elapsed.TotalSeconds;
 
+        /// <summary>The least time between two chat lines from one player.</summary>
+        private const float ChatInterval = 1.2f;
+
         /// <summary>Moves time on and sends everyone a snapshot, every tick, until stopped.</summary>
         public async Task RunTicks(CancellationToken stop)
         {
@@ -148,6 +151,16 @@ namespace Oxfall.Server
                             Broadcast(writer.ToArray());
                         }
                         _world.Announcements.Clear();
+                    }
+                    // Someone fell asleep, woke up or was killed asleep: everyone gets the new list.
+                    if (_world.SleepersChanged)
+                    {
+                        _world.SleepersChanged = false;
+                        if (_sessions.Count > 0)
+                        {
+                            Messages.Sleepers(writer, _world.Sleepers);
+                            Broadcast(writer.ToArray());
+                        }
                     }
 
                     // Trees and rocks grow back whether anyone is online or not; once a second is plenty.
@@ -291,6 +304,15 @@ namespace Oxfall.Server
                     Broadcast(writer.ToArray());
                     break;
                 }
+                case MessageType.StrikeSleeper:
+                {
+                    Messages.ReadStrikeSleeper(reader, out int owner, out byte tool);
+                    if (!_world.StrikeSleeper(id, owner, (ToolKind)tool, now, out float damage, out bool killed)) break;
+                    Messages.SleeperHit(writer, owner, id, session.Record.Name, damage, killed);
+                    Broadcast(writer.ToArray());
+                    if (killed) _log.LogInformation("Player {Id} '{Name}' killed sleeper {Owner}", id, session.Record.Name, owner);
+                    break;
+                }
                 case MessageType.StrikeAnimal:
                 {
                     Messages.ReadStrikeAnimal(reader, out int animal, out byte tool);
@@ -299,6 +321,49 @@ namespace Oxfall.Server
                     Messages.AnimalHit(writer, animal, blow, damage);
                     session.Connection.Send(writer.ToArray());
                     if (lost > 0) Fail(session, writer, ActionResult.InventoryFull);
+                    break;
+                }
+                case MessageType.Shoot:
+                {
+                    Messages.ReadShoot(reader, out float x, out float y, out float z, out float yaw, out float pitch);
+                    if (!_world.Shoot(id, x, y, z, now)) break;
+                    // Everyone else sees the arrow fly (the shooter already does).
+                    Messages.Arrow(writer, id, x, y, z, yaw, pitch);
+                    var arrow = writer.ToArray();
+                    foreach (var other in _sessions.Values)
+                        if (other.Id != id) other.Connection.Send(arrow);
+                    break;
+                }
+                case MessageType.ArrowHit:
+                {
+                    Messages.ReadArrowHit(reader, out var kind, out int target);
+                    if (!_world.ArrowHit(id, kind, target, now, out float damage, out bool killed, out var blow)) break;
+                    if (kind == ArrowTarget.Player)
+                    {
+                        Messages.Hurt(writer, (ushort)target, id, damage, killed);
+                        Broadcast(writer.ToArray());
+                    }
+                    else if (kind == ArrowTarget.Sleeper)
+                    {
+                        Messages.SleeperHit(writer, target, id, session.Record.Name, damage, killed);
+                        Broadcast(writer.ToArray());
+                    }
+                    else
+                    {
+                        Messages.AnimalHit(writer, target, blow, damage);
+                        session.Connection.Send(writer.ToArray());
+                    }
+                    break;
+                }
+                case MessageType.Chat:
+                {
+                    string text = Protocol.CleanChat(Messages.ReadChat(reader));
+                    // One line every second and a bit: enough to talk, too slow to flood.
+                    if (text == null || now - session.LastChat < ChatInterval) break;
+                    session.LastChat = now;
+                    _log.LogInformation("Chat {Id} '{Name}': {Text}", id, session.Record.Name, text);
+                    Messages.ChatLine(writer, id, session.Record.Name, text);
+                    Broadcast(writer.ToArray());
                     break;
                 }
                 case MessageType.Act:
@@ -414,6 +479,16 @@ namespace Oxfall.Server
                 }
                 Messages.Joined(writer, player.Id, player.Name, player.Pose);
                 Broadcast(writer.ToArray());
+                // Who sleeps where (this player no longer among them).
+                Messages.Sleepers(writer, _world.Sleepers);
+                connection.Send(writer.ToArray());
+                // Killed in their sleep while away: they learn by whom before they see themselves dead.
+                string killedBy = _world.TakeKilledAsleep(record.Owner);
+                if (killedBy != null)
+                {
+                    Messages.SleeperHit(writer, record.Owner, 0, killedBy, 0f, true);
+                    connection.Send(writer.ToArray());
+                }
 
                 var session = new Session(player.Id, record, connection);
                 _sessions[player.Id] = session;
@@ -460,6 +535,7 @@ namespace Oxfall.Server
             public readonly SurvivorSync Sync = new SurvivorSync();
             public readonly LootSync Loot = new LootSync();
             public float LastCorrection = -1f;
+            public float LastChat = -10f;
 
             public Session(ushort id, SurvivorRecord record, Connection connection)
             {

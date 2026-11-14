@@ -33,6 +33,38 @@ namespace Oxfall.Core.Net
         }
 
         /// <summary>Trims a chosen name to something showable: letters, digits, spaces; 2 to 16 characters.</summary>
+        /// <summary>Longest a chat line may be, in characters.</summary>
+        public const int MaxChatLength = 120;
+
+        /// <summary>
+        /// A chat line as it may be said: no control characters, runs of spaces made one, trimmed and
+        /// cut to <see cref="MaxChatLength"/>. Null if nothing is left.
+        /// </summary>
+        public static string CleanChat(string text)
+        {
+            if (text == null) return null;
+            var chars = new List<char>(Math.Min(text.Length, MaxChatLength));
+            bool space = false;
+            foreach (char c in text)
+            {
+                if (chars.Count >= MaxChatLength) break;
+                if (char.IsWhiteSpace(c) || char.IsControl(c))
+                {
+                    space = chars.Count > 0;
+                    continue;
+                }
+                // Rich-text tags would let a line restyle the chat: angle brackets go.
+                if (c == '<' || c == '>') continue;
+                // Room for the space before it, and for both halves of an emoji; otherwise the line ends here.
+                int need = (space ? 1 : 0) + (char.IsHighSurrogate(c) ? 2 : 1);
+                if (chars.Count + need > MaxChatLength) break;
+                if (space) chars.Add(' ');
+                space = false;
+                chars.Add(c);
+            }
+            return chars.Count == 0 ? null : new string(chars.ToArray());
+        }
+
         public static string CleanName(string name)
         {
             var chars = new List<char>();
@@ -67,6 +99,14 @@ namespace Oxfall.Core.Net
         Strike = 6,
         /// <summary>A blow at an animal, living (to kill it) or dead (to cut it up): its id, the tool in hand.</summary>
         StrikeAnimal = 7,
+        /// <summary>An arrow loosed from the bow: from where, which way (yaw and pitch, degrees).</summary>
+        Shoot = 8,
+        /// <summary>The player's oldest arrow still in the air landed: on what (none, a player, an animal) and which.</summary>
+        ArrowHit = 9,
+        /// <summary>Something said to everyone on the server. (Past 9 the server's own ids begin: more client ids carry on from 40.)</summary>
+        Chat = 40,
+        /// <summary>A blow at a sleeping survivor: their owner number, the tool in hand.</summary>
+        StrikeSleeper = 41,
 
         // Server to client
         Welcome = 10,
@@ -93,6 +133,14 @@ namespace Oxfall.Core.Net
         AnimalHit = 28,
         /// <summary>An animal hurt a player: who, what kind of animal, how much, and whether it killed them.</summary>
         Bitten = 29,
+        /// <summary>Someone loosed an arrow: who, from where, which way (for everyone else to see it fly).</summary>
+        Arrow = 30,
+        /// <summary>A line of chat: who said it (0: the server), their name, what.</summary>
+        ChatLine = 31,
+        /// <summary>Every survivor asleep on the island (owner, name, where they lie), whenever that changes.</summary>
+        Sleepers = 32,
+        /// <summary>A sleeper was hurt: whose body, by whom (id and name), how much, and whether it died.</summary>
+        SleeperHit = 33,
     }
 
     /// <summary>What a player does to their own belongings (inside an <see cref="MessageType.Act"/> message).</summary>
@@ -754,6 +802,160 @@ namespace Oxfall.Core.Net
         {
             target = r.UShort();
             kind = (AnimalKind)r.Byte();
+            damage = r.Byte();
+            killed = r.Bool();
+        }
+            // ---- Arrows
+
+        public static void Shoot(NetWriter w, float x, float y, float z, float yaw, float pitch)
+        {
+            w.Reset();
+            w.Byte((byte)MessageType.Shoot);
+            w.Float(x);
+            w.Float(y);
+            w.Float(z);
+            w.Float(yaw);
+            w.Float(pitch);
+        }
+
+        public static void ReadShoot(NetReader r, out float x, out float y, out float z, out float yaw, out float pitch)
+        {
+            x = r.Float();
+            y = r.Float();
+            z = r.Float();
+            yaw = r.Float();
+            pitch = r.Float();
+        }
+
+        public static void ArrowHit(NetWriter w, Rules.ArrowTarget kind, int target)
+        {
+            w.Reset();
+            w.Byte((byte)MessageType.ArrowHit);
+            w.Byte((byte)kind);
+            w.Int(target);
+        }
+
+        public static void ReadArrowHit(NetReader r, out Rules.ArrowTarget kind, out int target)
+        {
+            kind = (Rules.ArrowTarget)r.Byte();
+            target = r.Int();
+        }
+
+        public static void Arrow(NetWriter w, ushort shooter, float x, float y, float z, float yaw, float pitch)
+        {
+            w.Reset();
+            w.Byte((byte)MessageType.Arrow);
+            w.UShort(shooter);
+            w.Float(x);
+            w.Float(y);
+            w.Float(z);
+            w.Float(yaw);
+            w.Float(pitch);
+        }
+
+        public static void ReadArrow(NetReader r, out ushort shooter, out float x, out float y, out float z, out float yaw, out float pitch)
+        {
+            shooter = r.UShort();
+            x = r.Float();
+            y = r.Float();
+            z = r.Float();
+            yaw = r.Float();
+            pitch = r.Float();
+        }
+
+        // ---- Chat
+
+        public static void Chat(NetWriter w, string text)
+        {
+            w.Reset();
+            w.Byte((byte)MessageType.Chat);
+            w.String(text ?? "", 512);
+        }
+
+        public static string ReadChat(NetReader r) => r.String();
+
+        public static void ChatLine(NetWriter w, ushort from, string name, string text)
+        {
+            w.Reset();
+            w.Byte((byte)MessageType.ChatLine);
+            w.UShort(from);
+            w.String(name ?? "", 64);
+            w.String(text ?? "", 512);
+        }
+
+        public static void ReadChatLine(NetReader r, out ushort from, out string name, out string text)
+        {
+            from = r.UShort();
+            name = r.String();
+            text = r.String();
+        }
+
+        // ---- Sleepers
+
+        public static void Sleepers(NetWriter w, IReadOnlyList<SurvivorRecord> sleepers)
+        {
+            w.Reset();
+            w.Byte((byte)MessageType.Sleepers);
+            int count = Math.Min(sleepers.Count, MaxSleepers);
+            w.UShort((ushort)count);
+            for (int i = 0; i < count; i++)
+            {
+                var s = sleepers[i];
+                w.Int(s.Owner);
+                w.String(s.Name ?? "", Protocol.MaxNameBytes);
+                w.Float(s.Pose.X);
+                w.Float(s.Pose.Y);
+                w.Float(s.Pose.Z);
+                w.Byte((byte)((int)Math.Round(s.Pose.Yaw / 360f * 256f) & 0xFF));
+            }
+        }
+
+        /// <summary>More than this many asleep at once are not all drawn (the first ones are).</summary>
+        public const int MaxSleepers = 400;
+
+        public static void ReadSleepers(NetReader r, List<SleeperSnap> into)
+        {
+            into.Clear();
+            int count = r.UShort();
+            for (int i = 0; i < count; i++)
+            {
+                int owner = r.Int();
+                string name = r.String();
+                float x = r.Float(), y = r.Float(), z = r.Float();
+                into.Add(new SleeperSnap(owner, name, x, y, z, r.Byte() * (360f / 256f)));
+            }
+        }
+
+        public static void StrikeSleeper(NetWriter w, int owner, byte tool)
+        {
+            w.Reset();
+            w.Byte((byte)MessageType.StrikeSleeper);
+            w.Int(owner);
+            w.Byte(tool);
+        }
+
+        public static void ReadStrikeSleeper(NetReader r, out int owner, out byte tool)
+        {
+            owner = r.Int();
+            tool = r.Byte();
+        }
+
+        public static void SleeperHit(NetWriter w, int owner, ushort attacker, string by, float damage, bool killed)
+        {
+            w.Reset();
+            w.Byte((byte)MessageType.SleeperHit);
+            w.Int(owner);
+            w.UShort(attacker);
+            w.String(by ?? "", Protocol.MaxNameBytes);
+            w.Byte((byte)Math.Min(255, Math.Max(0, (int)Math.Round(damage))));
+            w.Bool(killed);
+        }
+
+        public static void ReadSleeperHit(NetReader r, out int owner, out ushort attacker, out string by, out int damage, out bool killed)
+        {
+            owner = r.Int();
+            attacker = r.UShort();
+            by = r.String();
             damage = r.Byte();
             killed = r.Bool();
         }

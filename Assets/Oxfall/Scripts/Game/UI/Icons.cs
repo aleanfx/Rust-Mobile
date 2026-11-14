@@ -151,6 +151,15 @@ namespace Oxfall.Game.UI
         public static Sprite Moon => Get("moon", p =>
             Mathf.Max(Circle(p, Vector2.zero, 0.66f), -Circle(p, new Vector2(0.34f, 0.22f), 0.56f)));
 
+        /// <summary>A speech bubble with three dots: "say something".</summary>
+        public static Sprite Chat => Get("chat", p =>
+        {
+            float bubble = Mathf.Min(RoundBox(p, new Vector2(0f, 0.1f), new Vector2(0.72f, 0.5f), 0.26f),
+                Polygon(p, new Vector2(-0.42f, -0.3f), new Vector2(-0.08f, -0.3f), new Vector2(-0.52f, -0.74f)));
+            float dots = Min(Circle(p, new Vector2(-0.34f, 0.1f), 0.1f), Circle(p, new Vector2(0f, 0.1f), 0.1f), Circle(p, new Vector2(0.34f, 0.1f), 0.1f));
+            return Mathf.Max(bubble, -dots);
+        });
+
         public static Sprite Close => Get("close", p =>
             Mathf.Min(Segment(p, new Vector2(-0.5f, -0.5f), new Vector2(0.5f, 0.5f), Stroke),
                 Segment(p, new Vector2(-0.5f, 0.5f), new Vector2(0.5f, -0.5f), Stroke)));

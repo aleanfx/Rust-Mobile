@@ -37,5 +37,7 @@ namespace Oxfall.Core.Items
         public const string SheetMetalDoor = "sheet_metal_door";
         public const string CodeLock = "code_lock";
         public const string WoodenSpear = "wooden_spear";
+        public const string WoodenBow = "wooden_bow";
+        public const string Arrow = "arrow";
     }
 }

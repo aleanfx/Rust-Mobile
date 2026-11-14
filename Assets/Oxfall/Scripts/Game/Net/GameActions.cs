@@ -79,6 +79,42 @@ namespace Oxfall.Game.Net
             AnimalHit?.Invoke(id, blow, damage);
         }
 
+        /// <summary>
+        /// Looses an arrow (it is spent at once): from where, which way. False with no bow or no arrow
+        /// (online, the server spends it and may still refuse).
+        /// </summary>
+        public bool Shoot(Vector3 origin, float yaw, float pitch)
+        {
+            if (_survivor.Vitals.IsDead || !_survivor.HasTool(ToolKind.Bow) || Inventory.Count(ItemIds.Arrow) < 1) return false;
+            if (Online)
+            {
+                _net.SendShoot(origin, yaw, pitch);
+                return true;
+            }
+            Inventory.Remove(ItemIds.Arrow, 1);
+            _shots.Enqueue(new Vector3(origin.x, origin.y, origin.z));
+            while (_shots.Count > 6) _shots.Dequeue();
+            return true;
+        }
+
+        private readonly System.Collections.Generic.Queue<Vector3> _shots = new System.Collections.Generic.Queue<Vector3>();
+
+        /// <summary>This player's oldest arrow in the air landed on something (a player online, an animal, or nothing).</summary>
+        public void ArrowHit(ArrowTarget kind, int target)
+        {
+            if (Online)
+            {
+                _net.SendArrowHit(kind, target);
+                return;
+            }
+            if (_shots.Count == 0) return;
+            var from = _shots.Dequeue();
+            if (kind != ArrowTarget.Animal || Fauna == null || !Fauna.TryGet(target, out var animal) || animal.IsDead) return;
+            float damage = Mathf.Min(Combat.ArrowDamage, animal.Health);
+            bool killed = Fauna.Hit(target, Combat.ArrowDamage, 0, from.x, from.z);
+            AnimalHit?.Invoke(target, killed ? AnimalBlow.Killed : AnimalBlow.Hurt, damage);
+        }
+
         /// <summary>Online: the server's answer to a blow at an animal.</summary>
         public void OnServerAnimalHit(int id, AnimalBlow blow, int damage) => AnimalHit?.Invoke(id, blow, damage);
 

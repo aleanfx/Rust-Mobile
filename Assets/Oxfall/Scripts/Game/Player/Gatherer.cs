@@ -62,6 +62,24 @@ namespace Oxfall.Game.Player
         private float _hintCooldown;
         private readonly StringBuilder _text = new StringBuilder();
 
+        // The bow: how long it has been drawn (-1: not drawing), its string, the arrow on it, and its recoil.
+        private float _draw = -1f;
+        private float _recoil = 10f;
+        private LineRenderer _string;
+        private Transform _nocked;
+        private Mesh _bowLimbs;
+        private static readonly Vector3[] StringPoints = new Vector3[3];
+
+        /// <summary>Where loosed arrows fly (and stick).</summary>
+        public ArrowFlights Arrows { get; set; }
+
+        /// <summary>Materials for the bow's string and the arrow on it.</summary>
+        public Material StringMaterial { get; set; }
+        public Material[] ArrowMaterials { get; set; }
+
+        /// <summary>The bow is drawn (for tests and the HUD).</summary>
+        public bool Drawing => _draw >= 0f;
+
         public void Init(PlayerInput input, Inventory inventory, Hotbar hotbar, ItemCatalog catalog, Transform head,
             IReadOnlyDictionary<string, ItemModel> models, Material flameMaterial, Vitals vitals, IslandShape shape)
         {
@@ -97,6 +115,10 @@ namespace Oxfall.Game.Player
             _handFilter.sharedMesh = _held.Mesh;
             _handRenderer.sharedMaterials = _held.Materials;
             _hand.localScale = Vector3.one * _held.HandScale;
+            _draw = -1f;
+            if (_held.Shoots) RigBow();
+            if (_string != null) _string.gameObject.SetActive(_held.Shoots);
+            if (_nocked != null) _nocked.gameObject.SetActive(false);
 
             // A torch burns while it is in hand: a small flame and a light that reaches about 9 m.
             if (_held.Burns && _fire == null)
@@ -134,6 +156,12 @@ namespace Oxfall.Game.Player
             _cooldown -= dt;
             _hintCooldown -= dt;
 
+            if (_held != null && _held.Shoots)
+            {
+                TickBow(dt);
+                AnimateHand(dt);
+                return;
+            }
             if (_input.Attack && _cooldown <= 0f && CanSwing)
             {
                 _cooldown = Mathf.Max(SwingSeconds, Combat.SwingSeconds(_hotbar.HeldTool));
@@ -157,6 +185,11 @@ namespace Oxfall.Game.Player
         /// <summary>One swing (or one bite) with what is in hand, as one press of attack. For tests.</summary>
         public void UseOnce()
         {
+            if (_held != null && _held.Shoots)
+            {
+                Loose();
+                return;
+            }
             _swing = 0f;
             if (CanSwing) Strike();
             else if (_hotbar.HeldDefinition?.Category == ItemCategory.Food) Eat(_hotbar.HeldDefinition);
@@ -170,6 +203,9 @@ namespace Oxfall.Game.Player
 
         /// <summary>A blow that lands on an animal, living or a carcass (its id, the tool in hand).</summary>
         public Action<int, ToolKind> StrikeAnimal;
+
+        /// <summary>Online, a blow that lands on a sleeping survivor (their owner number, the tool in hand).</summary>
+        public Action<int, ToolKind> StrikeSleeper;
 
         private void Strike()
         {
@@ -186,6 +222,12 @@ namespace Oxfall.Game.Player
             if (player != null)
             {
                 if (StrikePlayer != null && Combat.CanHurt(tool)) StrikePlayer(player.Id, tool);
+                return;
+            }
+            var sleeper = hit.collider.GetComponent<Net.SleeperTag>();
+            if (sleeper != null)
+            {
+                if (StrikeSleeper != null && Combat.CanHurt(tool)) StrikeSleeper(sleeper.Owner, tool);
                 return;
             }
             var animal = hit.collider.GetComponent<World.AnimalTag>();
@@ -311,9 +353,132 @@ namespace Oxfall.Game.Player
                 : SoundCue.Plant);
 
         /// <summary>A quick chop: the held item tips forward and down about the grip, then back.</summary>
+        // ---- The bow: hold attack to draw (and aim), let go to loose once it is fully drawn.
+
+        private bool HasArrow => _inventory.Count(ItemIds.Arrow) > 0;
+
+        private void TickBow(float dt)
+        {
+            if (_input.Attack && _cooldown <= 0f)
+            {
+                if (!HasArrow)
+                {
+                    if (_input.AttackPressed && _hintCooldown <= 0f)
+                    {
+                        _hintCooldown = 2.5f;
+                        Message?.Invoke("No te quedan flechas: fabrícalas con madera y piedra");
+                    }
+                    return;
+                }
+                if (_draw < 0f)
+                {
+                    _draw = 0f;
+                    Sound?.Invoke(SoundCue.BowDraw);
+                }
+                _draw += dt;
+                return;
+            }
+            if (_draw < 0f) return;
+            bool full = _draw >= Combat.DrawSeconds;
+            _draw = -1f;
+            if (full) Loose();
+        }
+
+        /// <summary>Lets the arrow fly along the crosshair; it lands where it lands and says on what.</summary>
+        private void Loose()
+        {
+            if (Actions == null || !HasArrow) return;
+            var forward = _head.forward;
+            var origin = _head.position + forward * 0.35f;
+            float yaw = Mathf.Atan2(forward.x, forward.z) * Mathf.Rad2Deg;
+            float pitch = Mathf.Asin(Mathf.Clamp(forward.y, -1f, 1f)) * Mathf.Rad2Deg;
+            if (!Actions.Shoot(origin, yaw, pitch)) return;
+            _draw = -1f;
+            _cooldown = 0.3f;
+            _recoil = 0f;
+            Sound?.Invoke(SoundCue.BowShot);
+            if (Arrows != null) Arrows.Launch(origin, forward, OnArrowLanded);
+            else Actions.ArrowHit(ArrowTarget.None, 0);
+        }
+
+        private void OnArrowLanded(Collider collider, Vector3 point)
+        {
+            if (Actions == null) return;
+            var player = collider != null ? collider.GetComponent<Net.PlayerTag>() : null;
+            var animal = collider != null ? collider.GetComponent<AnimalTag>() : null;
+            var sleeper = collider != null ? collider.GetComponent<Net.SleeperTag>() : null;
+            if (player != null) Actions.ArrowHit(ArrowTarget.Player, player.Id);
+            else if (animal != null) Actions.ArrowHit(ArrowTarget.Animal, animal.Id);
+            else if (sleeper != null) Actions.ArrowHit(ArrowTarget.Sleeper, sleeper.Owner);
+            else Actions.ArrowHit(ArrowTarget.None, 0);
+        }
+
+        /// <summary>The string (pulled back with the arrow as it is drawn) and the arrow on it.</summary>
+        private void RigBow()
+        {
+            if (_bowLimbs == null) _bowLimbs = MeshFactory.WoodenBow(false);
+            _handFilter.sharedMesh = _bowLimbs;
+            if (_string == null)
+            {
+                var go = new GameObject("Bow string");
+                go.transform.SetParent(_hand, false);
+                _string = go.AddComponent<LineRenderer>();
+                _string.useWorldSpace = false;
+                _string.positionCount = 3;
+                _string.widthMultiplier = 0.005f;
+                _string.numCapVertices = 0;
+                _string.shadowCastingMode = ShadowCastingMode.Off;
+                _string.receiveShadows = false;
+                if (StringMaterial != null) _string.sharedMaterial = StringMaterial;
+            }
+            if (_nocked == null && ArrowMaterials != null)
+            {
+                var go = new GameObject("Nocked arrow");
+                go.transform.SetParent(_hand, false);
+                go.AddComponent<MeshFilter>().sharedMesh = MeshFactory.Arrow();
+                var r = go.AddComponent<MeshRenderer>();
+                r.sharedMaterials = ArrowMaterials;
+                r.shadowCastingMode = ShadowCastingMode.Off;
+                r.receiveShadows = false;
+                _nocked = go.transform;
+            }
+        }
+
+        private void AnimateBow(float dt)
+        {
+            float drawn = _draw >= 0f ? Mathf.SmoothStep(0f, 1f, Mathf.Clamp01(_draw / Combat.DrawSeconds)) : 0f;
+            _recoil += dt;
+            float kick = Mathf.Exp(-_recoil * 14f) * (1f - Mathf.Clamp01(_recoil / 0.4f));
+            // Drawn: brought up to the middle and level, the arrow along the crosshair.
+            _hand.localPosition = Vector3.Lerp(_held.HandPosition, new Vector3(0.0f, -0.06f, 0.56f), drawn)
+                + new Vector3(0f, 0.015f, -0.05f) * kick;
+            _hand.localRotation = Quaternion.Slerp(_held.HandRotation, Quaternion.Euler(0f, 0f, 6f), drawn)
+                * Quaternion.AngleAxis(-6f * kick, Vector3.right);
+            float nockZ = Mathf.Lerp(MeshFactory.BowTipTop.z, -0.5f, drawn);
+            if (_string != null)
+            {
+                StringPoints[0] = MeshFactory.BowTipTop;
+                StringPoints[1] = new Vector3(0f, 0f, nockZ);
+                StringPoints[2] = MeshFactory.BowTipBottom;
+                _string.SetPositions(StringPoints);
+            }
+            if (_nocked != null)
+            {
+                bool show = HasArrow && _recoil > 0.25f;
+                if (_nocked.gameObject.activeSelf != show) _nocked.gameObject.SetActive(show);
+                _nocked.localPosition = new Vector3(0.018f, 0f, nockZ);
+                _nocked.localRotation = Quaternion.identity;
+            }
+        }
+
         private void AnimateHand(float dt)
         {
             if (_held == null) return;
+            if (_held.Shoots)
+            {
+                AnimateBow(dt);
+                return;
+            }
             _swing += dt;
             float t = Mathf.Clamp01(_swing / (SwingSeconds * 0.6f));
             float arc = Mathf.Sin(t * Mathf.PI);

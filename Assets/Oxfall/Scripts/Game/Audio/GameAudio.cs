@@ -20,6 +20,8 @@ namespace Oxfall.Game.Audio
         Denied,
         HitBody,
         Hurt,
+        BowDraw,
+        BowShot,
     }
 
     /// <summary>
@@ -126,6 +128,8 @@ namespace Oxfall.Game.Audio
                 case SoundCue.Denied: Shot(_bank.Denied, 0.85f, 0f); break;
                 case SoundCue.HitBody: Shot(_bank.HitBody, 1f, 0.08f); break;
                 case SoundCue.Hurt: Shot(_bank.Hurt, 1f, 0.06f); break;
+                case SoundCue.BowDraw: Shot(_bank.BowDraw, 0.5f, 0.05f); break;
+                case SoundCue.BowShot: Shot(_bank.BowShot, 0.9f, 0.06f); break;
             }
         }
 

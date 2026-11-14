@@ -140,10 +140,13 @@ namespace Oxfall.Core.Net
             }
 
             if (record == null) record = AddRecord(token, _nextOwner++, pose);
+            else if (!record.Survivor.Vitals.IsDead) SleepersChanged = true;
             record.Name = player.Name;
             record.Survivor.Looting = 0;
             record.PlayerId = player.Id;
             _online[player.Id] = record;
+            // Killed in their sleep (or gone while dead): they come back lying where they fell.
+            if (record.Survivor.Vitals.IsDead) Players.SetDown(player.Id, true);
             return record;
         }
 
@@ -153,6 +156,7 @@ namespace Oxfall.Core.Net
             record.Survivor.Crafting.Completed += (recipe, lost) => record.Crafted.Add((recipe.Id, lost));
             record.Survivor.Vitals.Died += () => DropBag(record);
             _records.Add(token, record);
+            _byOwner[owner] = record;
             return record;
         }
 
@@ -165,7 +169,7 @@ namespace Oxfall.Core.Net
                 Announcements.Add(BuildOp.Deploy(bag));
         }
 
-        /// <summary>A player goes away; their survivor stays, where they stood.</summary>
+        /// <summary>A player goes away; their survivor stays where they stood, asleep (see <see cref="Sleepers"/>).</summary>
         public void Leave(ushort playerId)
         {
             if (_online.TryGetValue(playerId, out var record))
@@ -174,6 +178,9 @@ namespace Oxfall.Core.Net
                 record.PlayerId = 0;
                 record.Survivor.Looting = 0;
                 _online.Remove(playerId);
+                _arrows.Remove(playerId);
+                // Alive, they fall asleep where they stood.
+                if (!record.Survivor.Vitals.IsDead) SleepersChanged = true;
             }
             Players.Leave(playerId);
         }
@@ -337,6 +344,8 @@ namespace Oxfall.Core.Net
             inventory.Add(ItemIds.MetalHatchet, 1);
             inventory.Add(ItemIds.MetalPickaxe, 1);
             inventory.Add(ItemIds.WoodenSpear, 1);
+            inventory.Add(ItemIds.WoodenBow, 1);
+            inventory.Add(ItemIds.Arrow, 30);
             inventory.Add(ItemIds.Wood, 1500);
             inventory.Add(ItemIds.Stone, 700);
             inventory.Add(ItemIds.MetalOre, 240);

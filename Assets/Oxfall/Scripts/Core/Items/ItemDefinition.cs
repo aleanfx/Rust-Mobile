@@ -9,6 +9,7 @@ namespace Oxfall.Core.Items
         Tool,
         Placeable,
         Food,
+        Ammo,
     }
 
     /// <summary>What a tool is good at. Gathering yields depend on it.</summary>
@@ -23,6 +24,7 @@ namespace Oxfall.Core.Items
         MetalHatchet,
         MetalPickaxe,
         Spear,
+        Bow,
     }
 
     /// <summary>

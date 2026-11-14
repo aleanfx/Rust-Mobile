@@ -403,14 +403,17 @@ namespace Oxfall.Game.World
                 case Oxfall.Core.Wildlife.AnimalKind.Wolf:
                     // Lean: a deep chest, a narrow waist, a long muzzle, ears up and a bushy tail low.
                     b.AddBlob(0, new Vector3(0f, 0.62f, -0.08f), new Vector3(0.14f, 0.15f, 0.38f), random, 0.1f);
-                    b.AddBlob(0, new Vector3(0f, 0.64f, 0.22f), new Vector3(0.16f, 0.2f, 0.21f), random, 0.12f);
-                    b.AddTube(0, new Vector3(0f, 0.68f, 0.33f), new Vector3(0f, 0.81f, 0.53f), 0.12f, 0.085f, 9);
-                    b.AddBlob(0, new Vector3(0f, 0.83f, 0.6f), new Vector3(0.1f, 0.1f, 0.12f), random, 0.06f);
-                    b.AddTube(0, new Vector3(0f, 0.8f, 0.67f), new Vector3(0f, 0.765f, 0.85f), 0.055f, 0.03f, 8, 1);
+                    b.AddBlob(0, new Vector3(0f, 0.64f, 0.22f), new Vector3(0.145f, 0.2f, 0.21f), random, 0.12f);
+                    b.AddTube(0, new Vector3(0f, 0.68f, 0.33f), new Vector3(0f, 0.81f, 0.53f), 0.12f, 0.09f, 9);
+                    // A broad skull with cheek ruffs, a short tapering muzzle and a dark nose.
+                    b.AddBlob(0, new Vector3(0f, 0.83f, 0.6f), new Vector3(0.125f, 0.11f, 0.12f), random, 0.06f);
+                    b.AddTube(0, new Vector3(0f, 0.8f, 0.68f), new Vector3(0f, 0.77f, 0.82f), 0.065f, 0.038f, 8, 1);
+                    b.AddBlob(1, new Vector3(0f, 0.775f, 0.825f), new Vector3(0.024f, 0.02f, 0.018f), random, 0f);
                     foreach (float x in new[] { -1f, 1f })
                     {
-                        b.AddCone(0, new Vector3(x * 0.055f, 0.89f, 0.57f), 0.035f, 0.1f, 5, 0f);
-                        b.AddBlob(1, new Vector3(x * 0.06f, 0.86f, 0.68f), new Vector3(0.014f, 0.012f, 0.014f), random, 0f);
+                        b.AddBlob(0, new Vector3(x * 0.1f, 0.78f, 0.56f), new Vector3(0.05f, 0.07f, 0.07f), random, 0.15f);
+                        b.AddCone(0, new Vector3(x * 0.07f, 0.9f, 0.56f), 0.042f, 0.11f, 5, 0f);
+                        b.AddBlob(1, new Vector3(x * 0.062f, 0.86f, 0.685f), new Vector3(0.014f, 0.012f, 0.014f), random, 0f);
                     }
                     b.AddTube(0, new Vector3(0f, 0.66f, -0.42f), new Vector3(0f, 0.5f, -0.7f), 0.065f, 0.045f, 7);
                     b.AddTube(1, new Vector3(0f, 0.5f, -0.7f), new Vector3(0f, 0.38f, -0.8f), 0.045f, 0.012f, 7);
@@ -619,6 +622,62 @@ namespace Oxfall.Game.World
             b.AddTube(2, new Vector3(0f, -0.09f, 0f), new Vector3(0f, 0.09f, 0f), 0.023f, 0.023f, 8, 2);
             b.AddTube(2, new Vector3(0f, 0.62f, 0f), new Vector3(0f, 0.68f, 0f), 0.021f, 0.021f, 8, 2);
             return b.Build("WoodenSpear", 55f);
+        }
+
+        /// <summary>Where a bow's string is tied, in the bow's own space (the tips of its limbs).</summary>
+        public static readonly Vector3 BowTipTop = new Vector3(0f, 0.56f, -0.11f), BowTipBottom = new Vector3(0f, -0.56f, -0.11f);
+
+        /// <summary>
+        /// A short bow held upright, its grip at the origin, the limbs curving back towards the archer
+        /// (-Z) and tipped with notches. With <paramref name="strung"/>, the string straight between the
+        /// tips (for its icon); in hand the string is drawn apart, so it can be pulled. Submeshes: wood, grip, string.
+        /// </summary>
+        public static Mesh WoodenBow(bool strung)
+        {
+            var b = new FlatMeshBuilder(3) { UvScale = 0.25f };
+            const int steps = 7;
+            for (int side = -1; side <= 1; side += 2)
+            {
+                var previous = new Vector3(0f, side * 0.07f, 0f);
+                for (int i = 1; i <= steps; i++)
+                {
+                    float t = i / (float)steps;
+                    float y = side * (0.07f + 0.49f * t);
+                    // Bends back more towards the tip, with a slight recurve at the very end.
+                    float z = -0.13f * t * t + (t > 0.85f ? (t - 0.85f) * 0.25f : 0f);
+                    var next = new Vector3(0f, y, z);
+                    float r0 = Mathf.Lerp(0.02f, 0.009f, (i - 1) / (float)steps), r1 = Mathf.Lerp(0.02f, 0.009f, t);
+                    b.AddTube(0, previous, next, r0, r1, 6, 0);
+                    previous = next;
+                }
+            }
+            // The grip, wrapped in cloth.
+            b.AddTube(1, new Vector3(0f, -0.09f, 0f), new Vector3(0f, 0.09f, 0f), 0.025f, 0.025f, 8, 1);
+            if (strung) b.AddTube(2, BowTipTop, BowTipBottom, 0.004f, 0.004f, 4);
+            return b.Build(strung ? "WoodenBow" : "WoodenBowLimbs", 50f);
+        }
+
+        /// <summary>An arrow along +Z, the nock at the origin: a thin shaft, three feathers, a knapped stone head. Submeshes: shaft, head, feathers.</summary>
+        public static Mesh Arrow()
+        {
+            var b = new FlatMeshBuilder(3) { UvScale = 0.2f };
+            b.AddTube(0, new Vector3(0f, 0f, 0f), new Vector3(0f, 0f, 0.66f), 0.0065f, 0.0065f, 5, 0);
+            b.AddTube(1, new Vector3(0f, 0f, 0.64f), new Vector3(0f, 0f, 0.68f), 0.012f, 0.018f, 4);
+            b.AddTube(1, new Vector3(0f, 0f, 0.68f), new Vector3(0f, 0f, 0.76f), 0.018f, 0.0008f, 4);
+            for (int i = 0; i < 3; i++)
+            {
+                float a = i * 120f * Mathf.Deg2Rad;
+                var out1 = new Vector3(Mathf.Cos(a), Mathf.Sin(a), 0f);
+                var root0 = new Vector3(0f, 0f, 0.03f) + out1 * 0.005f;
+                var root1 = new Vector3(0f, 0f, 0.15f) + out1 * 0.005f;
+                var tip0 = new Vector3(0f, 0f, 0.04f) + out1 * 0.026f;
+                var tip1 = new Vector3(0f, 0f, 0.12f) + out1 * 0.012f;
+                b.Triangle(2, root0, tip0, tip1);
+                b.Triangle(2, root0, tip1, root1);
+                b.Triangle(2, root0, tip1, tip0);
+                b.Triangle(2, root0, root1, tip1);
+            }
+            return b.Build("Arrow", 40f);
         }
 
         public static Mesh Torch()
