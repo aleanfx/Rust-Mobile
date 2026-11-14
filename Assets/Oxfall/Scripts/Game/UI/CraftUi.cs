@@ -21,6 +21,9 @@ namespace Oxfall.Game.UI
         private const int Columns = 4;
         private const int MaxIngredients = 4;
 
+        /// <summary>Tall enough for three rows of tiles above the queue.</summary>
+        private const float PanelHeight = 760f;
+
         private readonly Hud _hud;
         private readonly ItemCatalog _catalog;
         private readonly Inventory _inventory;
@@ -167,7 +170,7 @@ namespace Oxfall.Game.UI
             const float detailsWidth = 520f;
 
             Panel = UiFactory.NewRect("Craft panel", hud.SafeArea, centre, centre, new Vector2(0f, 30f),
-                new Vector2(detailsX + detailsWidth + 40f, 740f));
+                new Vector2(detailsX + detailsWidth + 40f, PanelHeight));
             UiFactory.AddImage(Panel, UiFactory.Rounded, UiTheme.PanelSolid);
             hud.Blockers.Add(Panel);
 
@@ -211,24 +214,24 @@ namespace Oxfall.Game.UI
                 hud.TapTargets.Add(new Hud.TapTarget { Rect = tile.Rect, OnTap = () => Select(recipe) });
             }
 
-            // Under the grid: the queue.
-            _queueRoot = UiFactory.NewRect("Queue", Panel, new Vector2(0f, 0f), new Vector2(0f, 0f), new Vector2(left, 36f), new Vector2(gridWidth, 150f));
-            var queueTitle = UiFactory.NewRect("Title", _queueRoot, topLeft, topLeft, Vector2.zero, new Vector2(gridWidth, 34f));
-            _queueText = UiFactory.AddText(queueTitle, "", 24, TextAnchor.MiddleLeft, UiTheme.TextMuted, true);
-            var track = UiFactory.NewRect("Track", _queueRoot, topLeft, topLeft, new Vector2(0f, -44f), new Vector2(gridWidth, 8f));
+            // Under the grid (three rows of tiles at most): the queue, compact.
+            _queueRoot = UiFactory.NewRect("Queue", Panel, new Vector2(0f, 0f), new Vector2(0f, 0f), new Vector2(left, 28f), new Vector2(gridWidth, 108f));
+            var queueTitle = UiFactory.NewRect("Title", _queueRoot, topLeft, topLeft, Vector2.zero, new Vector2(gridWidth, 30f));
+            _queueText = UiFactory.AddText(queueTitle, "", 22, TextAnchor.MiddleLeft, UiTheme.TextMuted, true);
+            var track = UiFactory.NewRect("Track", _queueRoot, topLeft, topLeft, new Vector2(0f, -36f), new Vector2(gridWidth, 8f));
             UiFactory.AddImage(track, UiFactory.Soft, UiTheme.Slot);
             _queueFill = UiFactory.NewRect("Fill", track, new Vector2(0f, 0.5f), new Vector2(0f, 0.5f), Vector2.zero, new Vector2(0f, 8f));
             UiFactory.AddImage(_queueFill, UiFactory.Soft, UiTheme.Accent);
             for (int i = 0; i < _queueIcons.Length; i++)
             {
-                var slot = UiFactory.NewRect("Job", _queueRoot, topLeft, topLeft, new Vector2(i * 70f, -64f), new Vector2(64f, 64f));
+                var slot = UiFactory.NewRect("Job", _queueRoot, topLeft, topLeft, new Vector2(i * 64f, -52f), new Vector2(56f, 56f));
                 UiFactory.AddImage(slot, UiFactory.Soft, UiTheme.Slot);
-                _queueIcons[i] = UiFactory.AddIcon(slot, null, Vector2.zero, 56f, Color.white);
+                _queueIcons[i] = UiFactory.AddIcon(slot, null, Vector2.zero, 48f, Color.white);
                 slot.gameObject.SetActive(false);
             }
 
             // Right: the chosen item.
-            var details = UiFactory.NewRect("Details", Panel, topLeft, topLeft, new Vector2(detailsX, -26f), new Vector2(detailsWidth, 690f));
+            var details = UiFactory.NewRect("Details", Panel, topLeft, topLeft, new Vector2(detailsX, -26f), new Vector2(detailsWidth, PanelHeight - 52f));
             UiFactory.AddImage(details, UiFactory.Soft, new Color(1f, 1f, 1f, 0.035f));
             var art = UiFactory.NewRect("Art", details, topLeft, topLeft, new Vector2(24f, -24f), new Vector2(170f, 170f));
             UiFactory.AddImage(art, UiFactory.Soft, UiTheme.Slot);

@@ -259,6 +259,11 @@ namespace Oxfall.Game
             _map = new MapUi(_hud, (RectTransform)_hud.transform, _world.Shape);
             StartCoroutine(_map.Paint());
             _hud.MapTapped += _map.Toggle;
+            _map.MarkerChanged += at =>
+            {
+                _hud.Marker = at;
+                Debug.Log("[Oxfall] Marker: " + (at.HasValue ? $"{at.Value.x:0},{at.Value.z:0} {MapUi.Square(at.Value)}" : "none"));
+            };
 
             // First steps, one at a time, under the vitals.
             _guide = new GuideUi(_hud, _inventory, _settlement)
@@ -429,7 +434,7 @@ namespace Oxfall.Game
             _interactor.Init(_settlement, player.Head, _hud);
             _interactor.Actions = _actions;
             _interactor.Busy = () => (_keypad != null && _keypad.IsOpen) || (_cupboard != null && _cupboard.IsOpen) || (_inventoryUi != null && _inventoryUi.IsOpen)
-                || (_team != null && _team.IsOpen);
+                || (_team != null && _team.IsOpen) || _hud.CraftPanelOpen;
             _interactor.DoorUsed += () => audio.Play(SoundCue.Wood);
             _interactor.OpenBox += OpenBox;
             _interactor.OpenCupboard += OpenCupboard;
@@ -1207,6 +1212,16 @@ namespace Oxfall.Game
             _map.Refresh(_player.transform.position, _player.Yaw, _mapPins);
         }
 
+        private void MarkMap(string where)
+        {
+            var parts = where.Split(',');
+            var culture = System.Globalization.CultureInfo.InvariantCulture;
+            if (parts.Length == 2 && float.TryParse(parts[0], System.Globalization.NumberStyles.Float, culture, out float x)
+                && float.TryParse(parts[1], System.Globalization.NumberStyles.Float, culture, out float z))
+                _map.SetMarker(new Vector3(x, 0f, z));
+            else _map.SetMarker(null);
+        }
+
         private void OnDied()
         {
             Debug.Log("[Oxfall] The player died.");
@@ -1721,6 +1736,8 @@ namespace Oxfall.Game
                         _inventoryUi.TapBoxSlot(boxTap);
                     // time-H jumps to hour H (0 to 23).
                     else if (command.StartsWith("view-ruin:")) ViewRuin(command.Substring(10));
+                    // map-mark:X,Z sets the map marker there; map-mark:none takes it away.
+                    else if (command.StartsWith("map-mark:")) MarkMap(command.Substring(9));
                     else if (command.StartsWith("rain-") && float.TryParse(command.Substring(5), System.Globalization.NumberStyles.Float,
                                  System.Globalization.CultureInfo.InvariantCulture, out float forcedRain))
                         _weather.Force(forcedRain, Mathf.Max(forcedRain * 0.65f, _weather.Fog));

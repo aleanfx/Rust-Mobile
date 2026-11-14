@@ -111,7 +111,8 @@ namespace Oxfall.Game.Controls
             {
                 if (modalOpen && !target.Rect.IsChildOf(modal)) continue;
                 if (!target.Rect.gameObject.activeInHierarchy || !Inside(target.Rect, pos)) continue;
-                target.OnTap?.Invoke();
+                if (target.OnTapAt != null) target.OnTapAt(pos);
+                else target.OnTap?.Invoke();
                 Tapped?.Invoke();
                 return true;
             }

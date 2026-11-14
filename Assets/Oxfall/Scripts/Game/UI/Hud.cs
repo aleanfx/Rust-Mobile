@@ -80,6 +80,9 @@ namespace Oxfall.Game.UI
         /// <summary>Whose heading the compass shows (the player's head).</summary>
         public Transform HeadingSource;
 
+        /// <summary>The place the player marked on the map, shown on the compass with its distance.</summary>
+        public Vector3? Marker;
+
         private Text _attackLabel;
         private Image _attackIcon;
         private Color _attackIdle = UiTheme.Button;
@@ -308,6 +311,9 @@ namespace Oxfall.Game.UI
         {
             public RectTransform Rect;
             public System.Action OnTap;
+
+            /// <summary>Instead of <see cref="OnTap"/>: told where on the screen the tap landed.</summary>
+            public System.Action<Vector2> OnTapAt;
         }
 
         /// <summary>Everything tappable besides the stick, attack and jump. Hidden ones are skipped.</summary>
@@ -619,7 +625,16 @@ namespace Oxfall.Game.UI
                 if (_hurtAlpha <= 0f) _hurt.enabled = false;
             }
 
-            if (HeadingSource != null) _compass.SetHeading(HeadingSource.eulerAngles.y);
+            if (HeadingSource != null)
+            {
+                if (Marker.HasValue)
+                {
+                    var to = Marker.Value - HeadingSource.position;
+                    _compass.SetMarker(true, Mathf.Atan2(to.x, to.z) * Mathf.Rad2Deg, new Vector2(to.x, to.z).magnitude);
+                }
+                else _compass.SetMarker(false, 0f, 0f);
+                _compass.SetHeading(HeadingSource.eulerAngles.y);
+            }
             _feed.Tick(dt);
             _craft?.Tick();
         }
@@ -648,6 +663,12 @@ namespace Oxfall.Game.UI
         private readonly List<float> _angles = new List<float>();
         private Text _degrees;
         private float _shown = float.NaN;
+        private RectTransform _marker;
+        private Image _markerIcon;
+        private Text _markerText;
+        private bool _markerOn;
+        private float _markerBearing;
+        private int _markerMetres = -1;
 
         /// <summary>The whole compass, to tap for the map.</summary>
         public RectTransform Root { get; private set; }
@@ -691,6 +712,15 @@ namespace Oxfall.Game.UI
             UiFactory.AddImage(pointer, null, UiTheme.Accent);
             var degrees = UiFactory.NewRect("Degrees", root, top, top, new Vector2(0f, -50f), new Vector2(120f, 26f));
             c._degrees = UiFactory.AddText(degrees, "", 20, TextAnchor.MiddleCenter, UiTheme.TextMuted, true);
+            // The player's map marker: a pin on the strip where it lies, its distance under it; at
+            // the strip's end, dimmed, while it is behind.
+            c._marker = UiFactory.NewRect("Marker", root, top, new Vector2(0.5f, 0.5f), new Vector2(0f, -22f), new Vector2(34f, 34f));
+            var markerBack = UiFactory.NewRect("Back", c._marker, new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), Vector2.zero, new Vector2(40f, 40f));
+            UiFactory.AddImage(markerBack, Icons.Glow, new Color(0f, 0f, 0f, 0.55f));
+            c._markerIcon = UiFactory.AddIcon(c._marker, Icons.Marker, Vector2.zero, 32f, MapUi.MarkerColour);
+            var markerText = UiFactory.NewRect("Distance", c._marker, new Vector2(0.5f, 0.5f), new Vector2(0.5f, 1f), new Vector2(0f, -20f), new Vector2(100f, 26f));
+            c._markerText = UiFactory.AddText(markerText, "", 20, TextAnchor.MiddleCenter, MapUi.MarkerColour, true);
+            c._marker.gameObject.SetActive(false);
             return c;
         }
 
@@ -707,6 +737,41 @@ namespace Oxfall.Game.UI
                 if (show) _marks[i].anchoredPosition = new Vector2(x, 0f);
             }
             _degrees.text = Mathf.RoundToInt(Mathf.Repeat(yaw, 360f)).ToString();
+            PlaceMarker();
+        }
+
+        /// <summary>Where the map marker lies from the player (bearing in degrees from north) and how far, or none.</summary>
+        public void SetMarker(bool show, float bearing, float metres)
+        {
+            if (_marker.gameObject.activeSelf != show) _marker.gameObject.SetActive(show);
+            if (!show)
+            {
+                if (_markerOn) _degrees.enabled = true;
+                _markerOn = false;
+                return;
+            }
+            int shown = Mathf.RoundToInt(metres);
+            if (shown != _markerMetres)
+            {
+                _markerMetres = shown;
+                _markerText.text = shown < 1000 ? shown + " m" : (shown / 1000f).ToString("0.0", System.Globalization.CultureInfo.InvariantCulture) + " km";
+            }
+            bool moved = !_markerOn || Mathf.Abs(Mathf.DeltaAngle(_markerBearing, bearing)) > 0.1f;
+            _markerOn = true;
+            _markerBearing = bearing;
+            if (moved) PlaceMarker();
+        }
+
+        private void PlaceMarker()
+        {
+            if (!_markerOn || float.IsNaN(_shown)) return;
+            float x = Mathf.DeltaAngle(_shown, _markerBearing) * PixelsPerDegree;
+            float edge = Width * 0.5f - 18f;
+            bool ahead = Mathf.Abs(x) <= edge;
+            _marker.anchoredPosition = new Vector2(Mathf.Clamp(x, -edge, edge), -22f);
+            _markerIcon.color = MapUi.MarkerColour.WithAlpha(ahead ? 1f : 0.55f);
+            // The heading under the middle gives way to the marker's distance.
+            _degrees.enabled = Mathf.Abs(x) > 70f;
         }
     }
 

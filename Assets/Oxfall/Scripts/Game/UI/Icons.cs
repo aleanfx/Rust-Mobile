@@ -222,6 +222,12 @@ namespace Oxfall.Game.UI
         public static Sprite Pointer => Get("pointer", p =>
             Polygon(p, new Vector2(0f, 0.8f), new Vector2(0.56f, -0.62f), new Vector2(0f, -0.3f), new Vector2(-0.56f, -0.62f)));
 
+        /// <summary>A map pin, round head with a hole and a point: a place the player marked.</summary>
+        public static Sprite Marker => Get("marker", p =>
+            Mathf.Max(Mathf.Min(Circle(p, new Vector2(0f, 0.22f), 0.5f),
+                    Polygon(p, new Vector2(-0.438f, -0.02f), new Vector2(0f, -0.82f), new Vector2(0.438f, -0.02f), new Vector2(0f, 0.22f))),
+                -Circle(p, new Vector2(0f, 0.22f), 0.2f)));
+
         /// <summary>A small house with a door: a base.</summary>
         public static Sprite Home => Get("home", p =>
             Mathf.Max(Polygon(p, new Vector2(-0.6f, -0.62f), new Vector2(0.6f, -0.62f), new Vector2(0.6f, 0.12f), new Vector2(0f, 0.7f), new Vector2(-0.6f, 0.12f)),

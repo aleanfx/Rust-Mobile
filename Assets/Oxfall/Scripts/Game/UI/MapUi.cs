@@ -10,7 +10,9 @@ namespace Oxfall.Game.UI
     /// The island seen from above, as the PC game's map: painted from the ground itself (sea and
     /// shallows, beaches, grass and woods, bare rock, ponds), shaded by its hills, under a lettered
     /// grid; where the player stands and faces, their sleeping bags and cupboards, and where they
-    /// last died. Opened by tapping the compass; any tap closes it.
+    /// last died. Opened by tapping the compass. A tap on the island sets the player's marker there
+    /// (shown on the compass with its distance, as on the PC game), a tap on the marker takes it away,
+    /// and a tap anywhere else closes the map.
     /// </summary>
     public sealed class MapUi
     {
@@ -31,6 +33,9 @@ namespace Oxfall.Game.UI
         private readonly RectTransform _you;
         private readonly Text _where;
         private readonly RectTransform _pinLayer;
+        private readonly RectTransform _mark;
+        private readonly Text _markLabel;
+        private readonly Text _hint;
         private readonly List<(RectTransform Rect, Image Icon, Text Label)> _pins = new List<(RectTransform, Image, Text)>();
         private Texture2D _texture;
         private bool _painting;
@@ -55,6 +60,15 @@ namespace Oxfall.Game.UI
 
         public bool IsOpen => _root.gameObject.activeSelf;
 
+        /// <summary>The player's marker: cyan, apart from every other mark on the map.</summary>
+        public static readonly Color MarkerColour = new Color(0.3f, 0.92f, 0.96f);
+
+        /// <summary>Where the player marked the map (height 0), if anywhere.</summary>
+        public Vector3? Marker { get; private set; }
+
+        /// <summary>The marker was set, moved or taken away (null).</summary>
+        public event System.Action<Vector3?> MarkerChanged;
+
         public MapUi(Hud hud, RectTransform parent, IslandShape shape)
         {
             _hud = hud;
@@ -64,7 +78,6 @@ namespace Oxfall.Game.UI
             _root = UiFactory.NewRect("Map", parent, centre, centre, Vector2.zero, Vector2.zero);
             UiFactory.Fill(_root);
             UiFactory.AddImage(_root, null, new Color(0.02f, 0.025f, 0.03f, 0.86f));
-            hud.TapTargets.Add(new Hud.TapTarget { Rect = _root, OnTap = Close });
 
             // The sheet: a thin frame round the painted island.
             var frame = UiFactory.NewRect("Frame", _root, centre, centre, new Vector2(0f, -6f), new Vector2(MapPixels + 16f, MapPixels + 16f));
@@ -86,6 +99,17 @@ namespace Oxfall.Game.UI
 
             _pinLayer = UiFactory.NewRect("Pins", _map, centre, centre, Vector2.zero, Vector2.zero);
             UiFactory.Fill(_pinLayer);
+            // The marker: a pin whose point is the place, its distance above it.
+            _mark = UiFactory.NewRect("Marker", _map, centre, centre, Vector2.zero, new Vector2(10f, 10f));
+            var markGlow = UiFactory.NewRect("Glow", _mark, centre, centre, new Vector2(0f, 4f), new Vector2(84f, 84f));
+            UiFactory.AddImage(markGlow, Icons.Glow, MarkerColour.WithAlpha(0.35f));
+            UiFactory.AddIcon(_mark, Icons.Marker, new Vector2(0f, 21f), 56f, MarkerColour);
+            var markLabel = UiFactory.NewRect("Label", _mark, centre, new Vector2(0.5f, 0f), new Vector2(0f, 52f), new Vector2(220f, 30f));
+            _markLabel = UiFactory.AddText(markLabel, "", 22, TextAnchor.MiddleCenter, MarkerColour, true);
+            _mark.gameObject.SetActive(false);
+            // Taps on the island mark it; anywhere else they close the map (the island is tried first).
+            hud.TapTargets.Add(new Hud.TapTarget { Rect = _map, OnTapAt = TapIsland });
+            hud.TapTargets.Add(new Hud.TapTarget { Rect = _root, OnTap = Close });
             _you = UiFactory.NewRect("You", _map, centre, centre, Vector2.zero, new Vector2(44f, 44f));
             var halo = UiFactory.NewRect("Halo", _you, centre, centre, Vector2.zero, new Vector2(72f, 72f));
             UiFactory.AddImage(halo, Icons.Glow, UiTheme.Accent.WithAlpha(0.55f));
@@ -106,8 +130,10 @@ namespace Oxfall.Game.UI
             AddLegend(_root, left, new Vector2(60f, 110f), Icons.Home, new Color(1f, 0.82f, 0.4f), "Tu base");
             AddLegend(_root, left, new Vector2(60f, 65f), Icons.Ruins, RuinsColour, "Ruinas: botín y bandidos");
             AddLegend(_root, left, new Vector2(60f, 20f), Icons.Close, UiTheme.Bad, "Donde moriste");
-            var hint = UiFactory.NewRect("Hint", _root, new Vector2(0.5f, 0f), centre, new Vector2(0f, 16f), new Vector2(600f, 30f));
-            UiFactory.AddText(hint, "Toca para cerrar", 22, TextAnchor.MiddleCenter, UiTheme.TextFaint);
+            AddLegend(_root, left, new Vector2(60f, -25f), Icons.Marker, MarkerColour, "Tu marca");
+            var hint = UiFactory.NewRect("Hint", _root, new Vector2(0.5f, 0f), centre, new Vector2(0f, 16f), new Vector2(900f, 30f));
+            _hint = UiFactory.AddText(hint, "", 22, TextAnchor.MiddleCenter, UiTheme.TextFaint);
+            ShowHint();
             var close = UiFactory.NewRect("Close", _root, new Vector2(1f, 1f), new Vector2(1f, 1f), new Vector2(-24f, -20f), new Vector2(64f, 64f));
             UiFactory.AddImage(close, UiFactory.Soft, UiTheme.Panel);
             UiFactory.AddIcon(close, Icons.Close, Vector2.zero, 30f, UiTheme.Text);
@@ -238,6 +264,33 @@ namespace Oxfall.Game.UI
             _modalBefore = null;
         }
 
+        /// <summary>Sets the marker (or takes it away, with null).</summary>
+        public void SetMarker(Vector3? at)
+        {
+            if (at.HasValue) at = new Vector3(at.Value.x, 0f, at.Value.z);
+            Marker = at;
+            _mark.gameObject.SetActive(at.HasValue);
+            if (at.HasValue) _mark.anchoredPosition = Clamp(ToMap(at.Value));
+            ShowHint();
+            MarkerChanged?.Invoke(at);
+        }
+
+        private void TapIsland(Vector2 screen)
+        {
+            if (!RectTransformUtility.ScreenPointToLocalPointInRectangle(_map, screen, null, out var local)) return;
+            // On the marker (its pin stands above the place): taken away. Anywhere else: moved there.
+            if (Marker.HasValue && (local - (ToMap(Marker.Value) + new Vector2(0f, 20f))).magnitude < 48f) SetMarker(null);
+            else SetMarker(FromMap(local));
+        }
+
+        private void ShowHint() =>
+            _hint.text = Marker.HasValue
+                ? "Toca la isla para mover tu marca · toca la marca para quitarla · fuera para cerrar"
+                : "Toca la isla para poner una marca · fuera para cerrar";
+
+        /// <summary>The point on the island under a spot on the map (map pixels from its middle).</summary>
+        public static Vector3 FromMap(Vector2 map) => new Vector3(map.x, 0f, map.y) / MapPixels * Extent;
+
         /// <summary>Where a point on the island falls on the map, in map pixels from its middle.</summary>
         public static Vector2 ToMap(Vector3 world) => new Vector2(world.x, world.z) / Extent * MapPixels;
 
@@ -277,6 +330,13 @@ namespace Oxfall.Game.UI
                 view.Label.text = pin.Label ?? "";
             }
             for (int i = pins.Count; i < _pins.Count; i++) _pins[i].Rect.gameObject.SetActive(false);
+            if (Marker.HasValue)
+            {
+                var to = Marker.Value - player;
+                int metres = Mathf.RoundToInt(new Vector2(to.x, to.z).magnitude);
+                _markLabel.text = $"{Square(Marker.Value)} · {metres} m";
+                _mark.SetAsLastSibling();
+            }
             _you.SetAsLastSibling();
         }
 
