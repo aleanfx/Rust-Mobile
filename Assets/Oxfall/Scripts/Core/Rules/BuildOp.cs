@@ -26,6 +26,10 @@ namespace Oxfall.Core.Rules
         LockAuthorize = 16,
         SetLocked = 17,
         RemoveLock = 18,
+        /// <summary>A piece's or a door's health is now this (after a blast or a repair); at 0 it falls.</summary>
+        Health = 19,
+        /// <summary>Mend a piece or a door with the hammer (asked for; the server answers with <see cref="Health"/>).</summary>
+        Repair = 20,
     }
 
     /// <summary>
@@ -77,6 +81,31 @@ namespace Oxfall.Core.Rules
         public static BuildOp Upgrade(PieceRef piece, BuildingTier tier) => OnPiece(BuildOpKind.Upgrade, piece, tier);
 
         public static BuildOp Remove(PieceRef piece) => OnPiece(BuildOpKind.Remove, piece, BuildingTier.Twig);
+
+        /// <summary>A piece's health is now <paramref name="health"/> (0 or less: it fell).</summary>
+        public static BuildOp Health(PieceRef piece, float health) =>
+            piece.IsEdge
+                ? new BuildOp(BuildOpKind.Health, piece.Type, piece.Edge.X, piece.Edge.Z, piece.Edge.Axis, top: health)
+                : new BuildOp(BuildOpKind.Health, piece.Type, piece.Cell.X, piece.Cell.Z, default, top: health);
+
+        /// <summary>The door in a doorway has <paramref name="health"/> left (0 or less: it broke).</summary>
+        public static BuildOp DoorHealth(Edge edge, float health) =>
+            new BuildOp(BuildOpKind.Health, PieceType.Doorway, edge.X, edge.Z, edge.Axis, open: true, top: health);
+
+        /// <summary>Mends a piece to full health, for some of what it is made of.</summary>
+        public static BuildOp Repair(PieceRef piece) => piece.IsEdge
+            ? new BuildOp(BuildOpKind.Repair, piece.Type, piece.Edge.X, piece.Edge.Z, piece.Edge.Axis)
+            : new BuildOp(BuildOpKind.Repair, piece.Type, piece.Cell.X, piece.Cell.Z, default);
+
+        /// <summary>Mends the door in a doorway.</summary>
+        public static BuildOp RepairDoor(Edge edge) =>
+            new BuildOp(BuildOpKind.Repair, PieceType.Doorway, edge.X, edge.Z, edge.Axis, open: true);
+
+        /// <summary>For <see cref="BuildOpKind.Health"/> and <see cref="BuildOpKind.Repair"/>: about the door, not the piece.</summary>
+        public bool OnDoor => Open;
+
+        /// <summary>For <see cref="BuildOpKind.Health"/>: the health now.</summary>
+        public float HealthLeft => Top;
 
         public static BuildOp Door(Edge edge, DoorKind kind = DoorKind.Wood) =>
             new BuildOp(BuildOpKind.Door, PieceType.Doorway, edge.X, edge.Z, edge.Axis, code: (int)kind);
@@ -175,6 +204,8 @@ namespace Oxfall.Core.Rules
                 case BuildOpKind.LockAuthorize: return $"LockAuthorize {Deployed.Owner} on {Lock}";
                 case BuildOpKind.SetLocked: return $"SetLocked {Lock} {(Open ? "locked" : "open")}";
                 case BuildOpKind.RemoveLock: return $"RemoveLock {Lock}";
+                case BuildOpKind.Health: return $"Health {(OnDoor ? "door " + EdgeAt : Piece.ToString())} {Top:0.#}";
+                case BuildOpKind.Repair: return $"Repair {(OnDoor ? "door " + EdgeAt : Piece.ToString())}";
                 default: return $"{Kind} {Type} ({X},{Z}{(PieceRef.IsEdgeType(Type) ? "," + Axis : "")})";
             }
         }
@@ -258,6 +289,15 @@ namespace Oxfall.Core.Rules
                     break;
                 case BuildOpKind.RemoveLock:
                     WriteLock(w);
+                    break;
+                case BuildOpKind.Health:
+                case BuildOpKind.Repair:
+                    w.Byte((byte)Type);
+                    w.Int(X);
+                    w.Int(Z);
+                    w.Byte((byte)Axis);
+                    w.Bool(Open);
+                    if (Kind == BuildOpKind.Health) w.Float(Top);
                     break;
                 default:
                     throw new InvalidOperationException("Unknown build op " + Kind);
@@ -356,6 +396,20 @@ namespace Oxfall.Core.Rules
                 }
                 case BuildOpKind.RemoveLock:
                     return RemoveLock(ReadLock(r));
+                case BuildOpKind.Health:
+                case BuildOpKind.Repair:
+                {
+                    var type = ReadType(r);
+                    int x = Coordinate(r), z = Coordinate(r);
+                    var axis = ReadAxis(r);
+                    bool door = r.Bool();
+                    var piece = PieceRef.IsEdgeType(type) ? PieceRef.OnEdge(new Edge(x, z, axis), type)
+                        : type == PieceType.Roof ? PieceRef.Roof(new Cell(x, z)) : PieceRef.Foundation(new Cell(x, z));
+                    if (door && type != PieceType.Doorway) throw new ProtocolException("Only a doorway has a door.");
+                    if (kind == BuildOpKind.Repair) return door ? RepairDoor(piece.Edge) : Repair(piece);
+                    float health = Finite(r.Float());
+                    return door ? DoorHealth(piece.Edge, health) : Health(piece, health);
+                }
                 default:
                     throw new ProtocolException("Unknown build op " + (byte)kind + ".");
             }
@@ -460,6 +514,19 @@ namespace Oxfall.Core.Rules
                     return true;
                 case BuildOpKind.RemoveLock:
                     return settlement.RemoveLock(op.Lock);
+                case BuildOpKind.Health:
+                    if (op.OnDoor)
+                    {
+                        if (!grid.HasDoor(op.EdgeAt)) return false;
+                        grid.SetDoorHealth(op.EdgeAt, op.HealthLeft);
+                        return true;
+                    }
+                    {
+                        var piece = Stored(grid, op.Piece);
+                        if (!grid.Exists(piece)) return false;
+                        grid.SetHealth(piece, op.HealthLeft);
+                        return true;
+                    }
                 default:
                     return false;
             }
@@ -492,11 +559,14 @@ namespace Oxfall.Core.Rules
                 Tier(PieceRef.Roof(cell));
             }
             ops.AddRange(upgrades);
+            // What blasts took off (after the upgrades, which mend a piece to its new tier's full health).
+            foreach (var hurt in grid.Damaged) ops.Add(BuildOp.Health(hurt.Key, hurt.Value));
             foreach (var d in grid.Doors)
             {
                 ops.Add(BuildOp.Door(d.Key, grid.DoorKindOf(d.Key)));
                 if (d.Value) ops.Add(BuildOp.ToggleDoor(d.Key, true));
             }
+            foreach (var hurt in grid.DamagedDoors) ops.Add(BuildOp.DoorHealth(hurt.Key, hurt.Value));
             foreach (var d in settlement.Deployables)
             {
                 ops.Add(BuildOp.Deploy(d));

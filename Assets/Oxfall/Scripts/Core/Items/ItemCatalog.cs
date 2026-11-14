@@ -53,6 +53,12 @@ namespace Oxfall.Core.Items
                 description: "Lo que deja la madera al arder en el horno."),
             new ItemDefinition(ItemIds.Leather, "Cuero", ItemCategory.Resource, 1000,
                 description: "Sale de los animales que cazas. Para ropa y armaduras."),
+            new ItemDefinition(ItemIds.SulfurOre, "Mineral de azufre", ItemCategory.Resource, 1000,
+                description: "De las rocas con vetas amarillas. Se funde en el horno para sacar azufre."),
+            new ItemDefinition(ItemIds.Sulfur, "Azufre", ItemCategory.Resource, 1000,
+                description: "Sale del horno. Con carbón se hace pólvora."),
+            new ItemDefinition(ItemIds.Gunpowder, "Pólvora", ItemCategory.Resource, 1000,
+                description: "Carbón y azufre molidos juntos. Para las cargas explosivas."),
 
             new ItemDefinition(ItemIds.Berries, "Moras", ItemCategory.Food, 20,
                 description: "Llévalas en la mano y toca COMER: algo de comida y de agua.",
@@ -82,6 +88,9 @@ namespace Oxfall.Core.Items
                 description: "Un palo largo con la punta endurecida al fuego: llega más lejos y hace más daño que cualquier herramienta."),
             new ItemDefinition(ItemIds.WoodenBow, "Arco de madera", ItemCategory.Tool, 1, ToolKind.Bow, skinnable: true,
                 description: "Tira flechas: para cazar lo que corre más que tú y pelear de lejos. Apunta un poco por encima: la flecha cae."),
+            new ItemDefinition(ItemIds.SatchelCharge, "Carga explosiva", ItemCategory.Tool, 10, ToolKind.Explosive,
+                description: "Lánzala a una pared o una puerta: explota a los 5 segundos. Madera: 2 cargas; piedra: 4; metal: 8. "
+                    + "Puerta de madera: 1; de chapa: 2. Aléjate."),
             new ItemDefinition(ItemIds.Arrow, "Flecha", ItemCategory.Ammo, 64,
                 description: "Madera con punta de piedra. El arco las gasta una a una."),
 
@@ -110,7 +119,7 @@ namespace Oxfall.Core.Items
             new ItemDefinition(ItemIds.StorageBox, "Caja de almacenaje", ItemCategory.Placeable, 1,
                 description: "Guarda 12 casillas de lo que quieras. Ponla dentro de tu casa."),
             new ItemDefinition(ItemIds.Furnace, "Horno", ItemCategory.Placeable, 1,
-                description: "Mete madera y mineral de metal y enciéndelo: saca fragmentos de metal y carbón."),
+                description: "Mete madera y mineral y enciéndelo: el de metal da fragmentos, el de azufre da azufre, y la madera, carbón."),
             new ItemDefinition(ItemIds.SleepingBag, "Saco de dormir", ItemCategory.Placeable, 1,
                 description: "Al morir puedes despertar en él en vez de en la playa (cada 2 minutos)."),
             new ItemDefinition(ItemIds.ToolCupboard, "Armario de herramientas", ItemCategory.Placeable, 1,

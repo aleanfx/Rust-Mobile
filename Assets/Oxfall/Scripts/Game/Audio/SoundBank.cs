@@ -39,6 +39,12 @@ namespace Oxfall.Game.Audio
         public AudioClip Grunt { get; }
         public AudioClip Bark { get; }
         public AudioClip FireLoop { get; }
+
+        /// <summary>A satchel charge going off: a sharp crack, a deep boom that rolls on, debris pattering down.</summary>
+        public AudioClip Explosion { get; }
+
+        /// <summary>A lit fuse: a hiss full of spitting sparks (a loop).</summary>
+        public AudioClip FuseLoop { get; }
         public AudioClip WindLoop { get; }
         public AudioClip WavesLoop { get; }
 
@@ -116,6 +122,20 @@ namespace Oxfall.Game.Audio
                 Thump(t, 85f, 0.08f) * 0.55f + Noise() * Env(t, 0.001f, 0.02f) * 0.35f
                 + (Tone(t, 310f) * 0.35f + Tone(t, 523f) * 0.22f + Tone(t, 887f) * 0.14f + Tone(t, 1391f) * 0.08f) * Env(t, 0.001f, 0.22f));
             FireLoop = MakeLoop("fire", 3f, FireSample);
+            var falls = new float[14];
+            for (int k = 0; k < falls.Length; k++) falls[k] = 0.35f + (float)_random.NextDouble() * 1.5f;
+            Explosion = Make("explosion", 2.8f, (t, i) =>
+            {
+                float crack = Noise() * Env(t, 0.0005f, 0.025f) * 1.6f;
+                float boom = Thump(t, 48f, 0.42f) * 1.3f + Tone(t, 31f) * Env(t, 0.004f, 0.6f) * 0.8f;
+                float roll = Dark(0.08f) * Env(t, 0.01f, 0.9f) * 1.6f;
+                float debris = 0f;
+                foreach (float at in falls) debris += Noise() * Env(t - at, 0.0008f, 0.018f) * 0.22f;
+                float s = crack + boom + roll + debris;
+                // Driven into soft clipping: loud and torn, as a blast should sound up close.
+                return (float)Math.Tanh(s * 2.2f);
+            });
+            FuseLoop = MakeLoop("fuse", 1.6f, FuseSample);
             WindLoop = MakeLoop("wind", 6f, WindSample);
             WavesLoop = MakeLoop("waves", 8f, WavesSample);
         }
@@ -185,6 +205,18 @@ namespace Oxfall.Game.Audio
             return sample;
         }
         private float _pop, _crackle;
+
+        private float _hissLow, _spit;
+        private float FuseSample(float t, int i)
+        {
+            // Bright hiss (noise less its low end) with sparks spitting at random.
+            float n = Noise();
+            _hissLow += (n - _hissLow) * 0.2f;
+            if (_random.NextDouble() < 0.004) _spit = 1f;
+            float sample = (n - _hissLow) * (0.45f + 0.15f * Mathf.Sin(t * 23f)) + Noise() * _spit * 0.7f;
+            _spit *= 0.93f;
+            return sample;
+        }
 
         private float _wind;
         private float WindSample(float t, int i)

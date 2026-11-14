@@ -14,7 +14,8 @@ namespace Oxfall.Game.Construction
     /// The hammer in hand: aim at something built and attack (MEJORAR) raises it a tier, twig to
     /// wood to stone, for its cost; the button above attack (DEMOLER, tapped twice) takes it down and
     /// gives back half of what went into it and everything that stood on it. Aimed at something set
-    /// down (a box, a furnace), the same button (RECOGER) picks it back up.
+    /// down (a box, a furnace), the same button (RECOGER) picks it back up. Something a blast hurt
+    /// (a piece or a door) shows its health, and attack (REPARAR) mends it for part of what it cost.
     /// </summary>
     public sealed class HammerTool : MonoBehaviour
     {
@@ -30,6 +31,9 @@ namespace Oxfall.Game.Construction
 
         private PieceRef _aimed;
         private bool _hasAim;
+        /// <summary>Aimed at the door in a doorway rather than the frame.</summary>
+        private bool _onDoor;
+        private float _shownHealth = -1f;
         private string _info;
         private float _confirmUntil = -1f;
         private PieceRef _confirming;
@@ -79,7 +83,7 @@ namespace Oxfall.Game.Construction
             Aim();
         }
 
-        /// <summary>Upgrades what is aimed at to the next tier, if it can be paid for.</summary>
+        /// <summary>Upgrades what is aimed at to the next tier, if it can be paid for; mends it first if a blast hurt it.</summary>
         public void Upgrade()
         {
             if (!Active) return;
@@ -92,6 +96,16 @@ namespace Oxfall.Game.Construction
             if (!_hasAim)
             {
                 _hud.ShowToast("Apunta a algo que construiste");
+                return;
+            }
+            if (Damaged(out _, out _))
+            {
+                Repair();
+                return;
+            }
+            if (_onDoor)
+            {
+                _hud.ShowToast("Las puertas no se mejoran: haz una de chapa");
                 return;
             }
             _grid.TryGetTier(_aimed, out var tier);
@@ -114,6 +128,52 @@ namespace Oxfall.Game.Construction
             }
             _hud.ShowToast($"{BuildSystem.Name(_aimed.Type)} de {BuildingTiers.Name(next).ToLowerInvariant()}");
             Debug.Log($"[Oxfall] Upgraded {_aimed} to {next}");
+            Upgraded?.Invoke();
+        }
+
+        /// <summary>Whether what is aimed at has lost health, and how much it has and can have.</summary>
+        private bool Damaged(out float health, out float max)
+        {
+            if (_onDoor)
+            {
+                health = _grid.DoorHealth(_aimed.Edge);
+                max = DoorKinds.MaxHealth(_grid.DoorKindOf(_aimed.Edge));
+            }
+            else
+            {
+                health = _grid.Health(_aimed);
+                max = _grid.MaxHealth(_aimed);
+            }
+            return max > 0f && health < max - 0.01f;
+        }
+
+        /// <summary>What mending what is aimed at would cost now.</summary>
+        private System.Collections.Generic.IReadOnlyList<Oxfall.Core.Crafting.Ingredient> RepairCost(float health, float max)
+        {
+            if (_onDoor) return Repairs.DoorCost(_grid.DoorKindOf(_aimed.Edge), 1f - health / max);
+            _grid.TryGetTier(_aimed, out var tier);
+            return Repairs.Cost(_aimed.Type, tier, 1f - health / max);
+        }
+
+        /// <summary>Mends what is aimed at to full health.</summary>
+        private void Repair()
+        {
+            Damaged(out float health, out float max);
+            var cost = RepairCost(health, max);
+            if (!BuildCosts.CanAfford(_inventory, cost))
+            {
+                _hud.ShowToast("Faltan materiales: " + BuildCosts.Describe(cost, _catalog));
+                return;
+            }
+            var result = Actions.Build(_onDoor ? BuildOp.RepairDoor(_aimed.Edge) : BuildOp.Repair(_aimed));
+            if (result != ActionResult.Ok)
+            {
+                _hud.ShowToast(GameActions.Explain(result));
+                return;
+            }
+            _info = null;
+            _hud.ShowToast("Reparado");
+            Debug.Log($"[Oxfall] Repaired {(_onDoor ? "door " + _aimed.Edge : _aimed.ToString())}");
             Upgraded?.Invoke();
         }
 
@@ -176,7 +236,7 @@ namespace Oxfall.Game.Construction
         private void Aim()
         {
             var ray = new Ray(_head.position, _head.forward);
-            bool found = false;
+            bool found = false, door = false;
             PieceRef piece = default;
             int deployable = 0;
             if (Physics.Raycast(ray, out var hit, Reach, Physics.DefaultRaycastLayers, QueryTriggerInteraction.Ignore))
@@ -186,6 +246,7 @@ namespace Oxfall.Game.Construction
                 {
                     found = true;
                     piece = tag.Piece;
+                    door = tag.IsDoor && tag.Piece.IsEdge && _grid.HasDoor(tag.Piece.Edge);
                 }
                 var placed = hit.collider.GetComponent<DeployableTag>();
                 if (placed != null && Settlement != null && Settlement.TryGet(placed.Id, out _)) deployable = placed.Id;
@@ -205,9 +266,14 @@ namespace Oxfall.Game.Construction
                 return;
             }
 
-            if (found != _hasAim || (found && !piece.Equals(_aimed))) _info = null;
+            if (found != _hasAim || (found && (!piece.Equals(_aimed) || door != _onDoor))) _info = null;
             _hasAim = found;
             _aimed = piece;
+            _onDoor = door;
+            // A blast (or a repair) changed its health while in sight: show it anew.
+            float now = found ? (door ? _grid.DoorHealth(piece.Edge) : _grid.Health(piece)) : -1f;
+            if (now != _shownHealth) _info = null;
+            _shownHealth = now;
             if (_info != null) return;
 
             if (!found)
@@ -219,6 +285,27 @@ namespace Oxfall.Game.Construction
                 return;
             }
 
+            if (Damaged(out float health, out float max))
+            {
+                var repair = RepairCost(health, max);
+                string what = door ? DoorKinds.Name(_grid.DoorKindOf(piece.Edge))
+                    : $"{BuildSystem.Name(piece.Type)} de {(_grid.TryGetTier(piece, out var t) ? BuildingTiers.Name(t).ToLowerInvariant() : "")}";
+                _info = $"{what}  ·  {Mathf.CeilToInt(health)}/{Mathf.RoundToInt(max)}  ·  reparar: {BuildCosts.Describe(repair, _catalog)}";
+                _hud.SetAimInfo(_info);
+                _hud.SetAttackLabel("REPARAR");
+                _hud.SetPieceButton("DEMOLER");
+                _hud.SetPlaceValid(BuildCosts.CanAfford(_inventory, repair));
+                return;
+            }
+            _hud.SetAttackLabel("MEJORAR");
+            if (door)
+            {
+                _info = $"{DoorKinds.Name(_grid.DoorKindOf(piece.Edge))}  ·  {Mathf.RoundToInt(_grid.DoorHealth(piece.Edge))} de vida";
+                _hud.SetAimInfo(_info);
+                _hud.SetPieceButton("DEMOLER");
+                _hud.SetPlaceValid(false);
+                return;
+            }
             _grid.TryGetTier(piece, out var tier);
             string name = $"{BuildSystem.Name(piece.Type)} de {BuildingTiers.Name(tier).ToLowerInvariant()}";
             bool canPay = false;

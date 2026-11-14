@@ -105,6 +105,20 @@ namespace Oxfall.Game.Rendering
         public Material Bone { get; }
         public Material Leather { get; }
 
+        /// <summary>Sulfur rocks: grey stone with a sickly yellow cast, and the bright crystals crusted on them.</summary>
+        public Material SulfurRock { get; }
+        public Material Sulfur { get; }
+        /// <summary>Gunpowder: grey-black grains.</summary>
+        public Material Gunpowder { get; }
+        /// <summary>A satchel charge's olive canvas.</summary>
+        public Material Satchel { get; }
+
+        /// <summary>Blasts: the fireball (additive) and the smoke and dust (alpha-blended), each puff tinted as it goes.</summary>
+        public Material Fireball { get; }
+        public Material Smoke { get; }
+        /// <summary>Whether those are the real puff materials (false: plain stand-ins, kept small and brief).</summary>
+        public bool HasPuffs { get; }
+
         public MaterialLibrary()
         {
             _base = Resources.Load<Material>(BaseMaterialResource);
@@ -219,6 +233,16 @@ namespace Oxfall.Game.Rendering
             CookedMeat = Make("Cooked meat", new Color(0.40f, 0.21f, 0.10f), 0.35f);
             Bone = Make("Bone", new Color(0.88f, 0.84f, 0.74f), 0.25f);
             Leather = Make("Leather", new Color(0.47f, 0.31f, 0.18f), 0.22f);
+            SulfurRock = Tinted(Stone, "Sulfur rock", Stone.HasProperty(BaseMap) && Stone.GetTexture(BaseMap) != null
+                ? new Color(1.02f, 0.95f, 0.62f) : new Color(0.52f, 0.49f, 0.36f));
+            Sulfur = Make("Sulfur", new Color(0.86f, 0.74f, 0.16f), 0.45f);
+            Gunpowder = Make("Gunpowder", new Color(0.16f, 0.16f, 0.17f), 0.12f);
+            Satchel = Make("Satchel", new Color(0.33f, 0.34f, 0.22f), 0.06f);
+            var fireball = Resources.Load<Material>("OxfallFireball");
+            var smoke = Resources.Load<Material>("OxfallSmoke");
+            HasPuffs = fireball != null && smoke != null;
+            Fireball = fireball ?? Make("Fireball", new Color(1f, 0.55f, 0.15f), 0f);
+            Smoke = smoke ?? Make("Smoke", new Color(0.3f, 0.29f, 0.28f), 0f);
             Pond = new Material(Water) { name = "Pond" };
             if (Pond.HasProperty("_DepthMap"))
             {

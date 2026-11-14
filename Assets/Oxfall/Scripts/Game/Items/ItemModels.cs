@@ -185,6 +185,38 @@ namespace Oxfall.Game.Items
                     Materials = new[] { m.Stone },
                     IconRotation = Tilt(-30f, 20f),
                 },
+                [ItemIds.SulfurOre] = new ItemModel
+                {
+                    Mesh = MeshFactory.StonePile(19),
+                    Materials = new[] { m.Sulfur },
+                    IconRotation = Tilt(-30f, 40f),
+                },
+                [ItemIds.Sulfur] = new ItemModel
+                {
+                    Mesh = MeshFactory.PowderHeap(),
+                    Materials = new[] { m.Sulfur },
+                    IconRotation = Tilt(-34f, 20f),
+                    IconZoom = 1.1f,
+                },
+                [ItemIds.Gunpowder] = new ItemModel
+                {
+                    Mesh = MeshFactory.PowderHeap(),
+                    Materials = new[] { m.Gunpowder },
+                    IconRotation = Tilt(-34f, 70f),
+                    IconZoom = 1.1f,
+                },
+                [ItemIds.SatchelCharge] = new ItemModel
+                {
+                    Mesh = MeshFactory.SatchelCharge(),
+                    Materials = new[] { m.Satchel, m.Rope, m.Metal, m.Char },
+                    ShowInHand = true,
+                    // Held low on the right by its handle, the fuse up, ready to throw.
+                    HandPosition = new Vector3(0.3f, -0.34f, 0.5f),
+                    HandRotation = Quaternion.Euler(8f, 205f, -6f),
+                    HandScale = 1.5f,
+                    IconRotation = Tilt(-14f, 200f),
+                    IconZoom = 1.25f,
+                },
                 [ItemIds.MetalOre] = new ItemModel
                 {
                     Mesh = MeshFactory.StonePile(8),

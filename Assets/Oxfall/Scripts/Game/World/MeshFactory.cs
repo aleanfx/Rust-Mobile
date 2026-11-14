@@ -296,6 +296,98 @@ namespace Oxfall.Game.World
             return b.Build("Rock", 50f);
         }
 
+        /// <summary>
+        /// A sulfur boulder: the same weathered stone, crusted on top and sides with lumps of yellow
+        /// crystal. Submeshes: rock, crystal.
+        /// </summary>
+        public static Mesh SulfurRock(System.Random random)
+        {
+            var b = new FlatMeshBuilder(2) { UvScale = 1.1f };
+            var centre = new Vector3(0f, 0.25f, 0f);
+            b.AddRock(0, centre, new Vector3(1f, 0.7f, 1f), random);
+            int lumps = 9 + random.Next(4);
+            for (int i = 0; i < lumps; i++)
+            {
+                // Mostly on the upper half, where the light catches them.
+                var d = RandomDirection(random);
+                d.y = Mathf.Abs(d.y) * 0.9f + 0.1f;
+                d.Normalize();
+                var at = centre + new Vector3(d.x * 0.62f, d.y * 0.44f, d.z * 0.62f);
+                float s = Rand(random, 0.09f, 0.2f);
+                b.AddRock(1, at, new Vector3(s, s * Rand(random, 0.5f, 0.9f), s * Rand(random, 0.8f, 1.2f)), random);
+            }
+            return b.Build("SulfurRock", 50f);
+        }
+
+        /// <summary>A small heap of powder or grit, a few grains loose round it.</summary>
+        public static Mesh PowderHeap()
+        {
+            var b = new FlatMeshBuilder(1) { UvScale = 0.2f };
+            var random = new System.Random(41);
+            b.AddBlob(0, new Vector3(0f, 0.035f, 0f), new Vector3(0.16f, 0.07f, 0.15f), random, 0.12f);
+            b.AddBlob(0, new Vector3(0.03f, 0.09f, -0.01f), new Vector3(0.09f, 0.05f, 0.09f), random, 0.15f);
+            for (int i = 0; i < 6; i++)
+            {
+                float a = i * 1.1f;
+                b.AddRock(0, new Vector3(Mathf.Cos(a) * 0.19f, 0.012f, Mathf.Sin(a) * 0.17f), Vector3.one * Rand(random, 0.012f, 0.022f), random);
+            }
+            return b.Build("PowderHeap", 60f);
+        }
+
+        /// <summary>Where a satchel charge's fuse ends (on its mesh), for the sparks.</summary>
+        public static readonly Vector3 SatchelFuseTip = new Vector3(0.105f, 0.19f, 0.07f);
+
+        /// <summary>
+        /// A satchel charge: a squat canvas bag with a flap, strapped shut, a rope handle on top and a
+        /// short fuse out of a metal cap. Its back lies on the plane z = 0, its front towards +Z, up +Y
+        /// (so it can be set against a wall facing out). Submeshes: canvas, strap and rope, metal, fuse.
+        /// </summary>
+        public static Mesh SatchelCharge()
+        {
+            var b = new FlatMeshBuilder(4) { UvScale = 0.3f };
+            var random = new System.Random(77);
+            // The bag, a little rounded, and its flap folded over the top front.
+            b.AddBlob(0, new Vector3(0f, 0f, 0.05f), new Vector3(0.15f, 0.11f, 0.055f), random, 0.05f);
+            b.AddBox(0, new Vector3(-0.13f, -0.09f, 0.005f), new Vector3(0.13f, 0.09f, 0.085f));
+            b.AddBox(0, new Vector3(-0.14f, 0.015f, 0.082f), new Vector3(0.14f, 0.1f, 0.1f));
+            // A strap round it, and its buckle.
+            b.AddBox(1, new Vector3(-0.03f, -0.105f, 0.0f), new Vector3(0.03f, 0.105f, 0.106f));
+            b.AddBox(2, new Vector3(-0.04f, -0.035f, 0.104f), new Vector3(0.04f, 0.015f, 0.114f));
+            // A rope handle over the top.
+            b.AddTube(1, new Vector3(-0.09f, 0.09f, 0.045f), new Vector3(-0.05f, 0.155f, 0.045f), 0.011f, 0.011f, 5);
+            b.AddTube(1, new Vector3(-0.05f, 0.155f, 0.045f), new Vector3(0.03f, 0.155f, 0.045f), 0.011f, 0.011f, 5);
+            b.AddTube(1, new Vector3(0.03f, 0.155f, 0.045f), new Vector3(0.06f, 0.09f, 0.045f), 0.011f, 0.011f, 5);
+            // The detonator cap, and the fuse out of it.
+            b.AddCylinder(2, new Vector3(0.1f, 0.085f, 0.06f), 0.018f, 0.016f, 0.045f, 8, 0f);
+            b.AddTube(3, new Vector3(0.1f, 0.128f, 0.06f), new Vector3(0.108f, 0.165f, 0.068f), 0.006f, 0.006f, 5);
+            b.AddTube(3, new Vector3(0.108f, 0.165f, 0.068f), SatchelFuseTip, 0.006f, 0.005f, 5);
+            return b.Build("SatchelCharge", 45f);
+        }
+
+        /// <summary>A broken lump about a metre across (scaled down for rubble), faceted like a fresh break.</summary>
+        public static Mesh Rubble(int seed)
+        {
+            var b = new FlatMeshBuilder(1) { UvScale = 0.5f };
+            b.AddRock(0, Vector3.zero, new Vector3(0.55f, 0.42f, 0.5f), new System.Random(seed));
+            return b.Build("Rubble");
+        }
+
+        /// <summary>A quad in the XY plane, 1 m across, UVs 0 to 1: the card a camera-facing puff is drawn on.</summary>
+        public static Mesh PuffCard()
+        {
+            var mesh = new Mesh { name = "PuffCard" };
+            mesh.SetVertices(new List<Vector3>
+            {
+                new Vector3(-0.5f, -0.5f, 0f), new Vector3(-0.5f, 0.5f, 0f), new Vector3(0.5f, 0.5f, 0f), new Vector3(0.5f, -0.5f, 0f),
+            });
+            mesh.SetNormals(new List<Vector3> { Vector3.back, Vector3.back, Vector3.back, Vector3.back });
+            mesh.SetUVs(0, new List<Vector2> { new Vector2(0f, 0f), new Vector2(0f, 1f), new Vector2(1f, 1f), new Vector2(1f, 0f) });
+            mesh.SetTriangles(new[] { 0, 1, 2, 0, 2, 3 }, 0);
+            // Billboarded in the shader: bounds big enough that it is never culled for facing away.
+            mesh.bounds = new Bounds(Vector3.zero, Vector3.one * 1.5f);
+            return mesh;
+        }
+
         /// <summary>A hemp plant: a few stalks topped with leaves.</summary>
         public static Mesh Hemp(System.Random random)
         {

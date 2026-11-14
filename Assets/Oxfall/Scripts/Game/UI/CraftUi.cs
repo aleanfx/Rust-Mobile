@@ -47,6 +47,8 @@ namespace Oxfall.Game.UI
                 case ItemIds.WoodenSpear:
                 case ItemIds.WoodenBow:
                 case ItemIds.Arrow:
+                case ItemIds.Gunpowder:
+                case ItemIds.SatchelCharge:
                     return 1;
                 case ItemIds.BurlapHeadwrap:
                 case ItemIds.BurlapShirt:

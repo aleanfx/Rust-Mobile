@@ -99,6 +99,66 @@ namespace Oxfall.Game.Net
 
         private readonly System.Collections.Generic.Queue<Vector3> _shots = new System.Collections.Generic.Queue<Vector3>();
 
+        // ---- Satchel charges
+
+        private readonly System.Collections.Generic.List<LiveCharge> _charges = new System.Collections.Generic.List<LiveCharge>();
+        private int _nextCharge = 1;
+        private float _lastThrow = -10f;
+
+        /// <summary>Alone: a charge this player threw is stuck and fizzing (seconds left). Online the server says so.</summary>
+        public event System.Action<LiveCharge, float> ChargeArmed;
+
+        /// <summary>Alone: a charge is going off, just before its blast reaches the building.</summary>
+        public event System.Action<LiveCharge> ChargeBlast;
+
+        /// <summary>
+        /// Throws a charge that sticks at <paramref name="at"/> to <paramref name="target"/>. Online the
+        /// server judges it; alone it is checked here, spent, and its fuse lit. False if refused at once.
+        /// </summary>
+        public bool Throw(ChargeTarget target, Vector3 at, Vector3 normal)
+        {
+            if (_survivor.Vitals.IsDead || Inventory.Count(ItemIds.SatchelCharge) < 1) return false;
+            if (Online)
+            {
+                _net.SendThrow(target, at, normal);
+                return true;
+            }
+            float now = Time.time;
+            if (now - _lastThrow < Explosives.ThrowSeconds * 0.75f) return false;
+            if (!Explosives.CanStick(_settlement.Grid, target, at.x, at.y, at.z)) return false;
+            Inventory.Remove(ItemIds.SatchelCharge, 1);
+            _lastThrow = now;
+            var n = normal.sqrMagnitude > 1e-4f ? normal.normalized : Vector3.up;
+            var charge = new LiveCharge(_nextCharge++, 0, at.x, at.y, at.z, n.x, n.y, n.z, target, now + Explosives.FuseSeconds);
+            _charges.Add(charge);
+            ChargeArmed?.Invoke(charge, Explosives.FuseSeconds);
+            return true;
+        }
+
+        /// <summary>Alone: burns fuses down; one that reaches its end goes off (shown first, then the building takes the blast).</summary>
+        public void TickCharges()
+        {
+            if (_charges.Count == 0) return;
+            if (Online)
+            {
+                _charges.Clear();
+                return;
+            }
+            float now = Time.time;
+            for (int i = 0; i < _charges.Count;)
+            {
+                var c = _charges[i];
+                if (now < c.GoesOffAt)
+                {
+                    i++;
+                    continue;
+                }
+                _charges.RemoveAt(i);
+                ChargeBlast?.Invoke(c);
+                Explosives.Blast(_settlement.Grid, c.Target, null);
+            }
+        }
+
         /// <summary>This player's oldest arrow in the air landed on something (a player online, an animal, or nothing).</summary>
         public void ArrowHit(ArrowTarget kind, int target)
         {
@@ -317,6 +377,8 @@ namespace Oxfall.Game.Net
                 case ActionResult.Locked: return "Cerrado con candado";
                 case ActionResult.WrongCode: return $"Código incorrecto: descarga de {CodeLocks.WrongCodeShock:0} de vida";
                 case ActionResult.NoLock: return "No tiene candado con código";
+                case ActionResult.NotDamaged: return "Está entero";
+                case ActionResult.RecentlyDamaged: return "Recién dañado: espera unos segundos para repararlo";
                 default: return "No se puede";
             }
         }

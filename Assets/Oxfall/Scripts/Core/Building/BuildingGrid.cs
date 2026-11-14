@@ -107,6 +107,9 @@ namespace Oxfall.Core.Building
         }
 
         public static string Name(DoorKind kind) => kind == DoorKind.Metal ? "Puerta de chapa" : "Puerta de madera";
+
+        /// <summary>A door's health: a wooden one falls to one charge, a sheet metal one to two.</summary>
+        public static float MaxHealth(DoorKind kind) => kind == DoorKind.Metal ? 250f : 125f;
     }
 
     public static class BuildingTiers
@@ -191,6 +194,7 @@ namespace Oxfall.Core.Building
         private readonly Dictionary<PieceRef, PieceState> _states = new Dictionary<PieceRef, PieceState>();
         private readonly Dictionary<Edge, bool> _doors = new Dictionary<Edge, bool>();
         private readonly Dictionary<Edge, DoorKind> _doorKinds = new Dictionary<Edge, DoorKind>();
+        private readonly Dictionary<Edge, float> _doorHealth = new Dictionary<Edge, float>();
 
         private sealed class PieceState
         {
@@ -210,6 +214,10 @@ namespace Oxfall.Core.Building
         public event Action<Edge> DoorRemoved;
         /// <summary>A door opened (true) or closed (false).</summary>
         public event Action<Edge, bool> DoorToggled;
+        /// <summary>A piece's health changed and it still stands (hurt by a blast, or repaired): the health it has now.</summary>
+        public event Action<PieceRef, float> PieceHealthChanged;
+        /// <summary>The same for a door.</summary>
+        public event Action<Edge, float> DoorHealthChanged;
 
         public int FoundationCount => _foundations.Count;
         public IEnumerable<KeyValuePair<Cell, float>> Foundations => _foundations;
@@ -257,7 +265,28 @@ namespace Oxfall.Core.Building
         }
 
         /// <summary>Health left, or 0 if there is no such piece.</summary>
-        public float Health(PieceRef piece) => _states.TryGetValue(piece, out var state) ? state.Health : 0f;
+        public float Health(PieceRef piece) => _states.TryGetValue(Key(piece), out var state) ? state.Health : 0f;
+
+        /// <summary>A piece's health when whole (its tier's), or 0 if there is no such piece.</summary>
+        public float MaxHealth(PieceRef piece) =>
+            _states.TryGetValue(Key(piece), out var state) ? BuildingTiers.MaxHealth(state.Tier) : 0f;
+
+        /// <summary>A door's health, or 0 if there is no door.</summary>
+        public float DoorHealth(Edge edge) =>
+            !_doors.ContainsKey(edge) ? 0f : _doorHealth.TryGetValue(edge, out float h) ? h : DoorKinds.MaxHealth(DoorKindOf(edge));
+
+        /// <summary>The pieces and doors not at full health, with what they have left.</summary>
+        public IEnumerable<KeyValuePair<PieceRef, float>> Damaged
+        {
+            get
+            {
+                foreach (var pair in _states)
+                    if (pair.Value.Health < BuildingTiers.MaxHealth(pair.Value.Tier))
+                        yield return new KeyValuePair<PieceRef, float>(pair.Key, pair.Value.Health);
+            }
+        }
+
+        public IEnumerable<KeyValuePair<Edge, float>> DamagedDoors => _doorHealth;
 
         /// <summary>Height of the floor a wall on this edge stands on: the higher of its foundations.</summary>
         public float EdgeBaseHeight(Edge edge)
@@ -388,11 +417,49 @@ namespace Oxfall.Core.Building
         /// <summary>Takes health off a piece; at zero it falls, with what stood on it. True if it fell.</summary>
         public bool Damage(PieceRef piece, float amount)
         {
-            if (amount <= 0f || !_states.TryGetValue(piece, out var state)) return false;
-            state.Health -= amount;
-            if (state.Health > 0f) return false;
-            Remove(Key(piece));
-            return true;
+            if (amount <= 0f || !_states.TryGetValue(Key(piece), out var state)) return false;
+            return SetHealth(piece, state.Health - amount);
+        }
+
+        /// <summary>
+        /// Sets a piece's health (at most its tier's). At zero or less it falls, with what stood on it:
+        /// true then. False if it still stands, or there is no such piece.
+        /// </summary>
+        public bool SetHealth(PieceRef piece, float health)
+        {
+            var key = Key(piece);
+            if (!_states.TryGetValue(key, out var state)) return false;
+            if (health <= 0f)
+            {
+                Remove(key);
+                return true;
+            }
+            health = Math.Min(health, BuildingTiers.MaxHealth(state.Tier));
+            if (health == state.Health) return false;
+            state.Health = health;
+            PieceHealthChanged?.Invoke(key, health);
+            return false;
+        }
+
+        /// <summary>Takes health off a door; at zero it is gone (its lock with it). True if it broke.</summary>
+        public bool DamageDoor(Edge edge, float amount) => amount > 0f && HasDoor(edge) && SetDoorHealth(edge, DoorHealth(edge) - amount);
+
+        /// <summary>Sets a door's health (at most its kind's); at zero or less it is gone. True if it broke.</summary>
+        public bool SetDoorHealth(Edge edge, float health)
+        {
+            if (!HasDoor(edge)) return false;
+            if (health <= 0f)
+            {
+                RemoveDoor(edge);
+                return true;
+            }
+            float max = DoorKinds.MaxHealth(DoorKindOf(edge));
+            health = Math.Min(health, max);
+            if (health == DoorHealth(edge)) return false;
+            if (health >= max) _doorHealth.Remove(edge);
+            else _doorHealth[edge] = health;
+            DoorHealthChanged?.Invoke(edge, health);
+            return false;
         }
 
         public PlaceResult CanPlaceDoor(Edge edge)
@@ -426,6 +493,7 @@ namespace Oxfall.Core.Building
             if (!_doors.Remove(edge)) return false;
             DoorRemoved?.Invoke(edge);
             _doorKinds.Remove(edge);
+            _doorHealth.Remove(edge);
             return true;
         }
 

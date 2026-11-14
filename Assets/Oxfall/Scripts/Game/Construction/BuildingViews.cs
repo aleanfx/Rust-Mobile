@@ -87,6 +87,43 @@ namespace Oxfall.Game.Construction
             {
                 if (_doors.TryGetValue(edge, out var door)) door.SetOpen(open, Viewer != null ? Viewer.position : door.transform.position);
             };
+            // Blasted pieces and doors darken, scorched, the more the less health they have left.
+            grid.PieceHealthChanged += (piece, health) =>
+            {
+                if (_pieces.TryGetValue(piece, out var go)) Scorch(go.GetComponent<MeshRenderer>(), health / Mathf.Max(1f, grid.MaxHealth(piece)));
+            };
+            grid.DoorHealthChanged += (edge, health) =>
+            {
+                if (_doors.TryGetValue(edge, out var door))
+                    Scorch(door.GetComponent<MeshRenderer>(), health / DoorKinds.MaxHealth(grid.DoorKindOf(edge)));
+            };
+        }
+
+        /// <summary>A piece or door is coming down: where it stood (its bounds) and what it was made of, just before it goes.</summary>
+        public event System.Action<Bounds, Material> Fell;
+
+        private MaterialPropertyBlock _scorch;
+        private static readonly int BaseColorId = Shader.PropertyToID("_BaseColor");
+
+        private void Scorch(MeshRenderer renderer, float health01)
+        {
+            if (renderer == null) return;
+            var materials = renderer.sharedMaterials;
+            if (health01 >= 0.999f)
+            {
+                for (int i = 0; i < materials.Length; i++) renderer.SetPropertyBlock(null, i);
+                return;
+            }
+            if (_scorch == null) _scorch = new MaterialPropertyBlock();
+            float shade = Mathf.Lerp(0.4f, 0.92f, Mathf.Clamp01(health01));
+            for (int i = 0; i < materials.Length; i++)
+            {
+                if (materials[i] == null || !materials[i].HasProperty(BaseColorId)) continue;
+                var c = materials[i].GetColor(BaseColorId);
+                _scorch.Clear();
+                _scorch.SetColor(BaseColorId, new Color(c.r * shade, c.g * shade * 0.97f, c.b * shade * 0.94f, c.a));
+                renderer.SetPropertyBlock(_scorch, i);
+            }
         }
 
         /// <summary>The solid shape of a piece, for the placing ghost.</summary>
@@ -157,6 +194,8 @@ namespace Oxfall.Game.Construction
             int i = (int)piece.Type;
             go.GetComponent<MeshFilter>().sharedMesh = tier == BuildingTier.Twig ? _twig[i] : _solid[i];
             var renderer = go.GetComponent<MeshRenderer>();
+            // A new tier is whole again: no scorch.
+            renderer.SetPropertyBlock(null, 0);
             renderer.sharedMaterial = tier == BuildingTier.Twig ? _materials.Twig
                 : tier == BuildingTier.Stone ? _materials.StoneWall
                 : tier == BuildingTier.Metal ? _materials.SheetMetal : _materials.WoodWall;
@@ -169,6 +208,8 @@ namespace Oxfall.Game.Construction
         {
             if (!_pieces.TryGetValue(piece, out var go)) return;
             _pieces.Remove(piece);
+            var renderer = go.GetComponent<MeshRenderer>();
+            if (renderer != null) Fell?.Invoke(renderer.bounds, renderer.sharedMaterial);
             Object.Destroy(go);
         }
 
@@ -197,6 +238,8 @@ namespace Oxfall.Game.Construction
         {
             if (!_doors.TryGetValue(edge, out var door)) return;
             _doors.Remove(edge);
+            var renderer = door.GetComponent<MeshRenderer>();
+            if (renderer != null) Fell?.Invoke(renderer.bounds, renderer.sharedMaterial);
             Object.Destroy(door.gameObject);
         }
 

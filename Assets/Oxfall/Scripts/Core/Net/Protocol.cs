@@ -12,7 +12,7 @@ namespace Oxfall.Core.Net
     public static class Protocol
     {
         /// <summary>Raised whenever a message changes shape; a client of another version is turned away.</summary>
-        public const ushort Version = 7;
+        public const ushort Version = 8;
 
         /// <summary>Snapshots per second the server sends.</summary>
         public const int TickRate = 20;
@@ -107,6 +107,8 @@ namespace Oxfall.Core.Net
         Chat = 40,
         /// <summary>A blow at a sleeping survivor: their owner number, the tool in hand.</summary>
         StrikeSleeper = 41,
+        /// <summary>A satchel charge thrown: what it stuck to, where, and which way that surface faces.</summary>
+        Throw = 42,
 
         // Server to client
         Welcome = 10,
@@ -143,6 +145,10 @@ namespace Oxfall.Core.Net
         SleeperHit = 33,
         /// <summary>What a player wears (head, chest, legs, feet; empty for nothing), whenever it changes.</summary>
         Outfit = 34,
+        /// <summary>A charge stuck somewhere, fizzing: its id, whose, where, which way it faces, seconds left.</summary>
+        ChargeArmed = 35,
+        /// <summary>A charge went off: its id and where.</summary>
+        Blast = 36,
     }
 
     /// <summary>What a player does to their own belongings (inside an <see cref="MessageType.Act"/> message).</summary>
@@ -865,6 +871,91 @@ namespace Oxfall.Core.Net
             z = r.Float();
             yaw = r.Float();
             pitch = r.Float();
+        }
+
+        // ---- Satchel charges
+
+        public static void Throw(NetWriter w, Rules.ChargeTarget target, float x, float y, float z, float nx, float ny, float nz)
+        {
+            w.Reset();
+            w.Byte((byte)MessageType.Throw);
+            target.Write(w);
+            w.Float(x);
+            w.Float(y);
+            w.Float(z);
+            WriteDirection(w, nx, ny, nz);
+        }
+
+        public static void ReadThrow(NetReader r, out Rules.ChargeTarget target, out float x, out float y, out float z,
+            out float nx, out float ny, out float nz)
+        {
+            target = Rules.ChargeTarget.Read(r);
+            x = r.Float();
+            y = r.Float();
+            z = r.Float();
+            ReadDirection(r, out nx, out ny, out nz);
+        }
+
+        public static void ChargeArmed(NetWriter w, Rules.LiveCharge c, float secondsLeft)
+        {
+            w.Reset();
+            w.Byte((byte)MessageType.ChargeArmed);
+            w.Int(c.Id);
+            w.UShort(c.Thrower);
+            w.Float(c.X);
+            w.Float(c.Y);
+            w.Float(c.Z);
+            WriteDirection(w, c.NX, c.NY, c.NZ);
+            w.Float(secondsLeft);
+        }
+
+        public static Rules.LiveCharge ReadChargeArmed(NetReader r, out float secondsLeft)
+        {
+            int id = r.Int();
+            ushort thrower = r.UShort();
+            float x = r.Float(), y = r.Float(), z = r.Float();
+            ReadDirection(r, out float nx, out float ny, out float nz);
+            secondsLeft = r.Float();
+            return new Rules.LiveCharge(id, thrower, x, y, z, nx, ny, nz, Rules.ChargeTarget.Ground, secondsLeft);
+        }
+
+        public static void Blast(NetWriter w, int id, float x, float y, float z)
+        {
+            w.Reset();
+            w.Byte((byte)MessageType.Blast);
+            w.Int(id);
+            w.Float(x);
+            w.Float(y);
+            w.Float(z);
+        }
+
+        public static void ReadBlast(NetReader r, out int id, out float x, out float y, out float z)
+        {
+            id = r.Int();
+            x = r.Float();
+            y = r.Float();
+            z = r.Float();
+        }
+
+        /// <summary>A unit direction in three bytes (each axis to about 1%).</summary>
+        private static void WriteDirection(NetWriter w, float x, float y, float z)
+        {
+            w.Byte(Signed(x));
+            w.Byte(Signed(y));
+            w.Byte(Signed(z));
+        }
+
+        private static void ReadDirection(NetReader r, out float x, out float y, out float z)
+        {
+            x = (sbyte)r.Byte() / 127f;
+            y = (sbyte)r.Byte() / 127f;
+            z = (sbyte)r.Byte() / 127f;
+        }
+
+        private static byte Signed(float v)
+        {
+            if (float.IsNaN(v)) v = 0f;
+            return (byte)(sbyte)Math.Max(-127, Math.Min(127, (int)Math.Round(v * 127f)));
         }
 
         // ---- Chat

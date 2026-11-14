@@ -54,6 +54,10 @@ namespace Oxfall.Game
         private CupboardUi _cupboard;
         private LockViews _lockViews;
         private LockPlacer _lockPlacer;
+        private ChargeThrower _thrower;
+        private Explosions _explosions;
+        /// <summary>When the last blast went off (a hurt just after one is the blast's).</summary>
+        private float _lastBlast = -10f;
         private KeypadUi _keypad;
         private GameAudio _audio;
         private DayNight _dayNight;
@@ -310,6 +314,21 @@ namespace Oxfall.Game
                 _keypad.ExpectNew(target);
             };
 
+            // Satchel charges: thrown at a wall or a door, they stick, fizz and go off; what falls
+            // to a blast goes in rubble.
+            _explosions = Explosions.Create(materials, audio.Bank, camera.transform, (x, z) => _world.Shape.Height(x, z));
+            _buildings.Fell += _explosions.Fell;
+            _thrower = playerObject.AddComponent<ChargeThrower>();
+            _thrower.Init(grid, input, player.Head, _hud, _inventory, _explosions);
+            _thrower.Actions = _actions;
+            _thrower.Thrown += () =>
+            {
+                _gatherer.PlaySwing();
+                audio.Play(SoundCue.Swing);
+            };
+            _actions.ChargeArmed += (charge, left) => _explosions.Arm(charge, left, true);
+            _actions.ChargeBlast += OnSoloBlast;
+
             // The use button: doors, boxes, furnaces, cupboards.
             _interactor = playerObject.AddComponent<Interactor>();
             _interactor.Init(_settlement, player.Head, _hud);
@@ -450,6 +469,13 @@ namespace Oxfall.Game
             _net.AnimalsSeen += animals => _animalViews.Apply(animals);
             _net.SleepersSeen += sleepers => _sleeperViews.Apply(sleepers, _net.Owner);
             _net.SleeperHit += OnSleeperHit;
+            _net.ChargeArmed += (charge, left) => _explosions.Arm(charge, left, charge.Thrower == _net.PlayerId);
+            _net.Blasted += (id, at) =>
+            {
+                _lastBlast = Time.time;
+                _explosions.Blast(id, at);
+                Debug.Log($"[Oxfall] Blast {id} at ({at.x:0.0}, {at.y:0.0}, {at.z:0.0})");
+            };
             _net.ArrowSeen += (origin, yaw, pitch) =>
             {
                 var direction = Quaternion.Euler(-pitch, yaw, 0f) * Vector3.forward;
@@ -583,6 +609,8 @@ namespace Oxfall.Game
             bool hammer = _hotbar.IsHolding(ItemIds.Hammer);
             bool door = DoorKinds.TryKindOf(held?.Id, out var doorKind);
             bool codeLock = _hotbar.IsHolding(ItemIds.CodeLock);
+            bool satchel = held?.Tool == ToolKind.Explosive;
+            if (!satchel) _thrower.SetActive(false);
             if (!plan) _build.SetActive(false);
             if (!deploy) _placer.Hold(null);
             if (!hammer) _hammer.SetActive(false);
@@ -593,11 +621,13 @@ namespace Oxfall.Game
             if (hammer) { _hammer.SetActive(true); _hammer.Refresh(); }
             if (door) _doorPlacer.SetActive(true, doorKind);
             if (codeLock) _lockPlacer.SetActive(true);
+            if (satchel) _thrower.SetActive(true);
             bool food = held?.Category == ItemCategory.Food;
             bool bow = held?.Tool == ToolKind.Bow;
             int arrows = bow ? _inventory.Count(ItemIds.Arrow) : 0;
             _hud.SetAttackLabel(plan || deploy || door || codeLock ? "COLOCAR" : hammer ? "MEJORAR" : food ? "COMER"
-                : bow ? (arrows > 0 ? $"FLECHAS {arrows}" : "SIN FLECHAS") : "GOLPEAR");
+                : bow ? (arrows > 0 ? $"FLECHAS {arrows}" : "SIN FLECHAS")
+                : satchel ? $"LANZAR {_inventory.Count(ItemIds.SatchelCharge)}" : "GOLPEAR");
             _hud.SetAttackIcon(held != null ? ItemIcons.Get(held.Id) : null);
         }
 
@@ -723,12 +753,19 @@ namespace Oxfall.Game
         {
             string by = _net.NameOf(attacker) ?? "Alguien";
             string whom = _net.NameOf(target) ?? "alguien";
-            Debug.Log($"[Oxfall] Hurt: {whom} by {by}, -{damage}{(killed ? ", killed" : "")}");
+            bool blast = Time.time - _lastBlast < 0.6f;
+            Debug.Log($"[Oxfall] Hurt: {whom} by {by}, -{damage}{(killed ? ", killed" : "")}{(blast ? " (blast)" : "")}");
             if (target == _net.PlayerId)
             {
                 _hud.ShowHurt(damage);
                 _audio.Play(SoundCue.Hurt);
-                if (killed) _killer = by;
+                if (blast)
+                {
+                    string whose = attacker == target ? "tu propia carga explosiva" : $"una carga de {by}";
+                    if (killed) _killer = whose;
+                    else _hud.ShowToast($"Te alcanza {whose}  −{damage}");
+                }
+                else if (killed) _killer = by;
                 else _hud.ShowToast($"{by} te golpea  −{damage}");
             }
             else if (attacker == _net.PlayerId)
@@ -737,6 +774,26 @@ namespace Oxfall.Game
                 _audio.Play(SoundCue.HitBody);
                 if (killed) _hud.ShowToast($"Has derribado a {whom}");
             }
+        }
+
+        /// <summary>Alone: one of this player's charges goes off; standing too near hurts.</summary>
+        private void OnSoloBlast(LiveCharge charge)
+        {
+            var at = new Vector3(charge.X, charge.Y, charge.Z);
+            _lastBlast = Time.time;
+            _explosions.Blast(charge.Id, at);
+            Debug.Log($"[Oxfall] Blast {charge.Id} at ({at.x:0.0}, {at.y:0.0}, {at.z:0.0}) on {charge.Target}");
+            if (_vitals.IsDead) return;
+            float amount = Explosives.DamageToPlayer(Vector3.Distance(at, _player.transform.position + Vector3.up * 0.9f));
+            if (amount <= 0f) return;
+            // Named before the blow lands, in case it is the last.
+            _killer = "tu propia carga explosiva";
+            int damage = Mathf.RoundToInt(_survivor.TakeHit(amount));
+            _hud.ShowHurt(damage);
+            _audio.Play(SoundCue.Hurt);
+            if (_vitals.IsDead) return;
+            _killer = null;
+            _hud.ShowToast($"Te alcanza tu propia carga  −{damage}");
         }
 
         /// <summary>A sleeper was hurt: it jolts, the attacker sees the hit; it may be this player's own body, long ago.</summary>
@@ -1098,6 +1155,9 @@ namespace Oxfall.Game
                 case "nearest-ore": FaceNearest(ResourceNodeType.MetalOre); break;
                 case "nearest-hemp": FaceNearest(ResourceNodeType.Hemp); break;
                 case "nearest-barrel": FaceNearest(ResourceNodeType.Barrel); break;
+                case "nearest-sulfur": FaceNearest(ResourceNodeType.Sulfur); break;
+                case "satchel": HoldItem(ItemIds.SatchelCharge); break;
+                case "throw": _thrower.Throw(); break;
                 case "nearest-berries": FaceNearest(ResourceNodeType.BerryBush); break;
                 case "quality-low": SetQuality(QualityTier.Low); break;
                 case "quality-medium": SetQuality(QualityTier.Medium); break;
@@ -1115,6 +1175,12 @@ namespace Oxfall.Game
                 case "give-all" when _actions.Online:
                     // A test server hands out the kit itself (a real one refuses).
                     _net.SendAct(ActKind.DevGive);
+                    break;
+                case "give-raid" when _actions.Online:
+                    _net.SendAct(ActKind.DevGive, 1);
+                    break;
+                case "give-raid":
+                    ServerWorld.GiveTestKit(_inventory, 1);
                     break;
                 case "give":
                     _inventory.Add(ItemIds.Wood, 1000);
@@ -1231,6 +1297,7 @@ namespace Oxfall.Game
                               $"pieces={_buildings.Grid.PieceCount} views={_buildings.Count} doorLook={_interactor.LookingAtDoor} lookAt={_interactor.LookingAt} " +
                               $"locks={_lockViews.Count} keypad={(_keypad.IsOpen ? _keypad.Current.ToString() : "closed")} " +
                               $"metal={_inventory.Count(ItemIds.MetalFragments)} animals={_animalViews.Count} sleepers={_sleeperViews.Count} arrows={_inventory.Count(ItemIds.Arrow)} armour={Mathf.RoundToInt(_inventory.Protection * 100f)} " +
+                              $"satchels={_inventory.Count(ItemIds.SatchelCharge)} charges={_explosions.Live} sulfur={_inventory.Count(ItemIds.Sulfur)} " +
                               $"meat={_inventory.Count(ItemIds.RawMeat)} cooked={_inventory.Count(ItemIds.CookedMeat)} leather={_inventory.Count(ItemIds.Leather)} " +
                               $"pos={_player.transform.position} quality={GraphicsQuality.Name(_quality.Tier)} " +
                               $"screen={Screen.width}x{Screen.height} grass={_grass.BladeCount} " +
@@ -1493,6 +1560,8 @@ namespace Oxfall.Game
             TickAnimals(Time.deltaTime);
             _chat?.Tick(Time.unscaledDeltaTime);
 
+            // Charges thrown alone burn down here (online the server sets them off).
+            _actions?.TickCharges();
             // Trees and rocks grow back on their own timers; checking once a second is plenty.
             _crafting?.Tick(Time.deltaTime);
             // Furnaces burn here alone; online the server burns them and says what came out.

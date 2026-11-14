@@ -69,6 +69,8 @@ namespace Oxfall.Core.World
                 float berryChance = grassy && forest > 0.3f && forest < 0.7f ? 0.035f : 0f;
                 // Old barrels where people once went: the beaches' edge and open grass, rarely the woods.
                 float barrelChance = h < 17f && flatness > 0.88f ? (forest < 0.45f ? 0.024f : 0.008f) : 0f;
+                // Sulfur on the higher, rougher ground, like metal ore but a little rarer.
+                float sulfurChance = h > 4f ? (flatness < 0.9f ? 0.026f : 0.014f) : 0f;
 
                 int id = gz * Cells + gx + 1;
                 if ((roll -= treeChance) < 0f)
@@ -87,6 +89,9 @@ namespace Oxfall.Core.World
                 // Last, so no cell that held something before holds anything else now.
                 else if ((roll -= barrelChance) < 0f)
                     spawns.Add(new NodeSpawn(id, ResourceNodeType.Barrel, x, h, z, yaw, 1f, variant, false));
+                // Added after the others, for the same reason.
+                else if ((roll -= sulfurChance) < 0f)
+                    spawns.Add(new NodeSpawn(id, ResourceNodeType.Sulfur, x, h, z, yaw, 1.1f + dice.Next() * 0.7f, variant, false));
             }
             return spawns;
         }

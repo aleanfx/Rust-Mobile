@@ -127,6 +127,12 @@ namespace Oxfall.Core.Crafting
                 new Ingredient(ItemIds.MetalFragments, 150)),
             new Recipe("code_lock", ItemIds.CodeLock, 1, 10f,
                 new Ingredient(ItemIds.MetalFragments, 100)),
+            // Raiding: the same mix as the PC game's gunpowder, and a charge cheaper than its satchel
+            // (a small island and a weekly wipe), so a stone wall costs a night's mining, not a week's.
+            new Recipe("gunpowder", ItemIds.Gunpowder, 10, 5f,
+                new Ingredient(ItemIds.Charcoal, 30), new Ingredient(ItemIds.Sulfur, 20)),
+            new Recipe("satchel_charge", ItemIds.SatchelCharge, 1, 15f,
+                new Ingredient(ItemIds.Gunpowder, 40), new Ingredient(ItemIds.Cloth, 10), new Ingredient(ItemIds.MetalFragments, 20)),
         });
     }
 }

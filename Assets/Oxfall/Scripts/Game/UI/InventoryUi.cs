@@ -290,8 +290,8 @@ namespace Oxfall.Game.UI
                 _lightLabel.text = lit ? "APAGAR" : "ENCENDER";
                 _lightFill.color = lit ? UiTheme.Panel : UiTheme.Accent;
                 _lootStatus.text = lit
-                    ? $"Ardiendo · madera {_boxInventory.Count(ItemIds.Wood)} · mineral {_boxInventory.Count(ItemIds.MetalOre)}"
-                    : "Mete madera y mineral de metal, y enciéndelo";
+                    ? $"Ardiendo · madera {_boxInventory.Count(ItemIds.Wood)} · mineral {_boxInventory.Count(ItemIds.MetalOre) + _boxInventory.Count(ItemIds.SulfurOre)}"
+                    : "Mete madera y mineral (metal o azufre), y enciéndelo";
                 _lootStatus.color = lit ? UiTheme.Accent : UiTheme.TextMuted;
             }
             if (_boxKind == DeployableKind.Campfire)

@@ -145,6 +145,10 @@ namespace Oxfall.Game.World
             var hemps = new Mesh[2];
             for (int i = 0; i < hemps.Length; i++) hemps[i] = MeshFactory.Hemp(shapes);
             var barrel = MeshFactory.Barrel();
+            // Sulfur rocks from a random source of their own, so the other shapes stay as they were.
+            var sulfurShapes = new System.Random(seed * 31 + 7);
+            var sulfurRocks = new Mesh[3];
+            for (int i = 0; i < sulfurRocks.Length; i++) sulfurRocks[i] = MeshFactory.SulfurRock(sulfurShapes);
             var bushes = new Mesh[2];
             for (int i = 0; i < bushes.Length; i++) bushes[i] = MeshFactory.BerryBush(shapes, leafCards);
 
@@ -232,6 +236,15 @@ namespace Oxfall.Game.World
                         capsule.radius = 0.31f;
                         capsule.height = 0.9f;
                         AddView(world, go, spawn.Id, ResourceNodeType.Barrel);
+                        break;
+                    }
+                    case ResourceNodeType.Sulfur:
+                    {
+                        float sc = spawn.Scale;
+                        var go = MakeNode("Sulfur", sulfurRocks[v % sulfurRocks.Length], new[] { materials.SulfurRock, materials.Sulfur },
+                            position - new Vector3(0f, 0.2f * sc, 0f), yaw, new Vector3(sc, sc * 0.9f, sc), parent);
+                        AddSphere(go, new Vector3(0f, 0.25f, 0f), 0.85f, false);
+                        AddView(world, go, spawn.Id, ResourceNodeType.Sulfur);
                         break;
                     }
                 }

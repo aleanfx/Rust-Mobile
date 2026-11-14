@@ -41,6 +41,8 @@ namespace Oxfall.Core.Rules
         private readonly Dictionary<LockTarget, CodeLockState> _locks = new Dictionary<LockTarget, CodeLockState>();
         private readonly List<int> _scratch = new List<int>();
         private int _nextId = 1;
+        private readonly Dictionary<PieceRef, float> _hurtAt = new Dictionary<PieceRef, float>();
+        private readonly Dictionary<Edge, float> _doorHurtAt = new Dictionary<Edge, float>();
 
         public Settlement(IslandGround ground, ItemCatalog catalog)
         {
@@ -51,7 +53,29 @@ namespace Oxfall.Core.Rules
             Grid.PieceRemoved += (piece, tier) => _owners.Remove(piece);
             // A lock goes with the door it is on.
             Grid.DoorRemoved += edge => RemoveLock(LockTarget.Door(edge));
+            // When each piece and door was last hurt (it cannot be mended for a while after).
+            Grid.PieceHealthChanged += (piece, health) =>
+            {
+                if (health < Grid.MaxHealth(piece)) _hurtAt[piece] = Clock;
+                else _hurtAt.Remove(piece);
+            };
+            Grid.DoorHealthChanged += (edge, health) =>
+            {
+                if (health < DoorKinds.MaxHealth(Grid.DoorKindOf(edge))) _doorHurtAt[edge] = Clock;
+                else _doorHurtAt.Remove(edge);
+            };
+            Grid.PieceRemoved += (piece, tier) => _hurtAt.Remove(piece);
+            Grid.PieceUpgraded += (piece, tier) => _hurtAt.Remove(piece);
+            Grid.DoorRemoved += edge => _doorHurtAt.Remove(edge);
         }
+
+        /// <summary>Seconds this settlement has been ticked (the clock for mending after a blast).</summary>
+        public float Clock { get; private set; }
+
+        /// <summary>Whether a blast hit this piece too recently for it to be mended.</summary>
+        public bool RecentlyHurt(PieceRef piece) => _hurtAt.TryGetValue(piece, out float t) && Clock - t < Repairs.Delay;
+
+        public bool RecentlyHurtDoor(Edge edge) => _doorHurtAt.TryGetValue(edge, out float t) && Clock - t < Repairs.Delay;
 
         public IslandGround Ground { get; }
         public ItemCatalog Catalog { get; }
@@ -319,6 +343,7 @@ namespace Oxfall.Core.Rules
         public void Tick(float dt, List<int> wentOut = null, List<int> rotted = null)
         {
             if (dt <= 0f) return;
+            Clock += dt;
             if (_rotting.Count > 0)
             {
                 _scratch.Clear();
@@ -365,13 +390,24 @@ namespace Oxfall.Core.Rules
                 while (furnace.Smelt >= SmeltSeconds)
                 {
                     furnace.Smelt -= SmeltSeconds;
-                    if (!box.Has(ItemIds.MetalOre, 1) || box.SpaceFor(ItemIds.MetalFragments) < 1)
+                    // Metal ore and sulfur ore side by side, one of each at a time.
+                    bool metal = box.Has(ItemIds.MetalOre, 1) && box.SpaceFor(ItemIds.MetalFragments) >= 1;
+                    bool sulfur = box.Has(ItemIds.SulfurOre, 1) && box.SpaceFor(ItemIds.Sulfur) >= 1;
+                    if (!metal && !sulfur)
                     {
                         furnace.Smelt = 0f;
                         break;
                     }
-                    box.Remove(ItemIds.MetalOre, 1);
-                    box.Add(ItemIds.MetalFragments, 1);
+                    if (metal)
+                    {
+                        box.Remove(ItemIds.MetalOre, 1);
+                        box.Add(ItemIds.MetalFragments, 1);
+                    }
+                    if (sulfur)
+                    {
+                        box.Remove(ItemIds.SulfurOre, 1);
+                        box.Add(ItemIds.Sulfur, 1);
+                    }
                 }
             }
         }

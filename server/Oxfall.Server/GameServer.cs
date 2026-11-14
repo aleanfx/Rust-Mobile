@@ -143,6 +143,26 @@ namespace Oxfall.Server
                         Broadcast(writer.ToArray());
                     }
                     _world.Bites.Clear();
+                    // Charges that went off: the bang, who it hurt; what fell follows with the announcements.
+                    foreach (var blast in _world.Blasts)
+                    {
+                        Messages.Blast(writer, blast.Id, blast.X, blast.Y, blast.Z);
+                        Broadcast(writer.ToArray());
+                    }
+                    _world.Blasts.Clear();
+                    foreach (var (target, by, damage, killed) in _world.BlastHurts)
+                    {
+                        Messages.Hurt(writer, target, by, damage, killed);
+                        Broadcast(writer.ToArray());
+                        if (killed) _log.LogInformation("Player {Id} killed by a charge of {By}", target, by);
+                    }
+                    _world.BlastHurts.Clear();
+                    foreach (var (owner, by, byName, damage, killed) in _world.BlastSleeperHits)
+                    {
+                        Messages.SleeperHit(writer, owner, by, byName, damage, killed);
+                        Broadcast(writer.ToArray());
+                    }
+                    _world.BlastSleeperHits.Clear();
                     // A furnace that burned out, for everyone to see.
                     if (_world.Announcements.Count > 0)
                     {
@@ -367,6 +387,16 @@ namespace Oxfall.Server
                     }
                     break;
                 }
+                case MessageType.Throw:
+                {
+                    Messages.ReadThrow(reader, out var target, out float x, out float y, out float z, out float nx, out float ny, out float nz);
+                    if (!_world.Throw(id, target, x, y, z, nx, ny, nz, now, out var charge)) break;
+                    // Everyone sees it stuck there and fizzing, the thrower too (their throw only flew it there).
+                    Messages.ChargeArmed(writer, charge, Explosives.FuseSeconds);
+                    Broadcast(writer.ToArray());
+                    _log.LogInformation("Player {Id} '{Name}' threw a charge at {Target}", id, session.Record.Name, target);
+                    break;
+                }
                 case MessageType.Chat:
                 {
                     string text = Protocol.CleanChat(Messages.ReadChat(reader));
@@ -500,6 +530,12 @@ namespace Oxfall.Server
                 // Who sleeps where (this player no longer among them).
                 Messages.Sleepers(writer, _world.Sleepers);
                 connection.Send(writer.ToArray());
+                // Charges fizzing right now, with what is left of their fuses.
+                foreach (var charge in _world.LiveCharges)
+                {
+                    Messages.ChargeArmed(writer, charge, Math.Max(0f, charge.GoesOffAt - _world.Time));
+                    connection.Send(writer.ToArray());
+                }
                 // Killed in their sleep while away: they learn by whom before they see themselves dead.
                 string killedBy = _world.TakeKilledAsleep(record.Owner);
                 if (killedBy != null)

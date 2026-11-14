@@ -11,6 +11,9 @@ namespace Oxfall.Core.Items
         public const string MetalFragments = "metal_fragments";
         public const string Charcoal = "charcoal";
         public const string Leather = "leather";
+        public const string SulfurOre = "sulfur_ore";
+        public const string Sulfur = "sulfur";
+        public const string Gunpowder = "gunpowder";
 
         // Food
         public const string Berries = "berries";
@@ -48,5 +51,8 @@ namespace Oxfall.Core.Items
         public const string HideVest = "hide_vest";
         public const string HidePants = "hide_pants";
         public const string HideBoots = "hide_boots";
+
+        // Raiding
+        public const string SatchelCharge = "satchel_charge";
     }
 }

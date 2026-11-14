@@ -37,6 +37,8 @@ namespace Oxfall.Core.Items
         MetalPickaxe,
         Spear,
         Bow,
+        /// <summary>A satchel charge: thrown at a wall or a door, it goes off a few seconds later.</summary>
+        Explosive,
     }
 
     /// <summary>

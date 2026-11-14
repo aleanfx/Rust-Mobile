@@ -17,6 +17,7 @@ namespace Oxfall.Editor
         {
             // Fire needs no texture: made whether or not the photos are there.
             MakeFlame();
+            MakePuffs();
             if (!AssetDatabase.IsValidFolder(TexturesFolder))
             {
                 Debug.LogWarning($"[Oxfall] {TexturesFolder} is missing; the game keeps its plain colours.");
@@ -221,6 +222,35 @@ namespace Oxfall.Editor
             material.SetFloat("_Lick", 0.03f);
             material.renderQueue = (int)RenderQueue.Transparent;
             EditorUtility.SetDirty(material);
+            AssetDatabase.SaveAssets();
+        }
+
+        /// <summary>
+        /// The fireball (additive) and the smoke and dust (alpha-blended) of a blast: Oxfall/Puff,
+        /// each puff's colour set by the game as it goes.
+        /// </summary>
+        private static void MakePuffs()
+        {
+            var shader = Shader.Find("Oxfall/Puff");
+            if (shader == null)
+            {
+                Debug.LogWarning("[Oxfall] Shader Oxfall/Puff not found; blasts use plain colours.");
+                return;
+            }
+            var fire = LoadOrCreate("OxfallFireball", shader);
+            fire.SetColor("_Color", new Color(1f, 0.55f, 0.2f, 1f));
+            fire.SetFloat("_Additive", 1f);
+            fire.SetFloat("_SrcBlend", (float)BlendMode.One);
+            fire.SetFloat("_DstBlend", (float)BlendMode.One);
+            fire.renderQueue = (int)RenderQueue.Transparent + 2;
+            EditorUtility.SetDirty(fire);
+            var smoke = LoadOrCreate("OxfallSmoke", shader);
+            smoke.SetColor("_Color", new Color(0.35f, 0.33f, 0.31f, 0.8f));
+            smoke.SetFloat("_Additive", 0f);
+            smoke.SetFloat("_SrcBlend", (float)BlendMode.SrcAlpha);
+            smoke.SetFloat("_DstBlend", (float)BlendMode.OneMinusSrcAlpha);
+            smoke.renderQueue = (int)RenderQueue.Transparent + 1;
+            EditorUtility.SetDirty(smoke);
             AssetDatabase.SaveAssets();
         }
 

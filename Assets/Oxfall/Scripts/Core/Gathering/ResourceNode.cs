@@ -13,6 +13,8 @@ namespace Oxfall.Core.Gathering
         BerryBush,
         /// <summary>An old oil drum: broken open with a few blows, it gives what was inside (see <see cref="LootTable"/>).</summary>
         Barrel,
+        /// <summary>A boulder veined with yellow: sulfur ore, for gunpowder.</summary>
+        Sulfur,
     }
 
     public readonly struct Yield
@@ -37,6 +39,7 @@ namespace Oxfall.Core.Gathering
                 case ResourceNodeType.Hemp: return 10;
                 case ResourceNodeType.BerryBush: return 4;
                 case ResourceNodeType.Barrel: return 3;
+                case ResourceNodeType.Sulfur: return 240;
                 default: throw new ArgumentOutOfRangeException(nameof(type));
             }
         }
@@ -52,6 +55,7 @@ namespace Oxfall.Core.Gathering
                 case ResourceNodeType.Hemp: return 120f;
                 case ResourceNodeType.BerryBush: return 150f;
                 case ResourceNodeType.Barrel: return 600f;
+                case ResourceNodeType.Sulfur: return 480f;
                 default: throw new ArgumentOutOfRangeException(nameof(type));
             }
         }
@@ -82,6 +86,7 @@ namespace Oxfall.Core.Gathering
                         default: return 0;
                     }
                 case ResourceNodeType.MetalOre:
+                case ResourceNodeType.Sulfur:
                     switch (tool)
                     {
                         case ToolKind.MetalPickaxe: return 40;
@@ -124,6 +129,7 @@ namespace Oxfall.Core.Gathering
                 case ResourceNodeType.Hemp: return ItemIds.Cloth;
                 case ResourceNodeType.BerryBush: return ItemIds.Berries;
                 case ResourceNodeType.Barrel: return ItemIds.MetalFragments;
+                case ResourceNodeType.Sulfur: return ItemIds.SulfurOre;
                 default: throw new ArgumentOutOfRangeException(nameof(type));
             }
         }

@@ -145,7 +145,7 @@ namespace Oxfall.Game.Player
             {
                 var def = _hotbar.HeldDefinition;
                 // The hammer builds (HammerTool) instead of gathering.
-                return def == null || (def.Category == ItemCategory.Tool && def.Tool != ToolKind.Hammer);
+                return def == null || (def.Category == ItemCategory.Tool && def.Tool != ToolKind.Hammer && def.Tool != ToolKind.Explosive);
             }
         }
 
@@ -351,7 +351,7 @@ namespace Oxfall.Game.Player
 
         private void PlayHitSound(ResourceNodeType type) =>
             Sound?.Invoke(type == ResourceNodeType.Tree ? SoundCue.Wood
-                : type == ResourceNodeType.Stone || type == ResourceNodeType.MetalOre ? SoundCue.Stone
+                : type == ResourceNodeType.Stone || type == ResourceNodeType.MetalOre || type == ResourceNodeType.Sulfur ? SoundCue.Stone
                 : type == ResourceNodeType.Barrel ? SoundCue.Metal
                 : SoundCue.Plant);
 

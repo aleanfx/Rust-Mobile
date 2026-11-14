@@ -96,17 +96,23 @@ namespace Oxfall.Game.Audio
         {
             var clip = kind == Oxfall.Core.Wildlife.AnimalKind.Wolf ? _bank.Growl
                 : kind == Oxfall.Core.Wildlife.AnimalKind.Boar ? _bank.Grunt : _bank.Bark;
-            var go = new GameObject("Animal call");
+            PlayAt(clip, at, 0.9f, 2f, 45f, 0.08f);
+        }
+
+        /// <summary>A sound from somewhere in the world, fading with distance out to <paramref name="maxDistance"/>.</summary>
+        public static void PlayAt(AudioClip clip, Vector3 at, float volume, float minDistance, float maxDistance, float pitchJitter = 0f)
+        {
+            var go = new GameObject(clip.name);
             go.transform.position = at;
             var source = go.AddComponent<AudioSource>();
             source.clip = clip;
             source.spatialBlend = 1f;
             source.rolloffMode = AudioRolloffMode.Linear;
-            source.minDistance = 2f;
-            source.maxDistance = 45f;
+            source.minDistance = minDistance;
+            source.maxDistance = maxDistance;
             source.dopplerLevel = 0f;
-            source.volume = 0.9f;
-            source.pitch = 1f + Random.Range(-0.08f, 0.08f);
+            source.volume = volume;
+            source.pitch = 1f + Random.Range(-pitchJitter, pitchJitter);
             source.Play();
             Destroy(go, clip.length / source.pitch + 0.1f);
         }

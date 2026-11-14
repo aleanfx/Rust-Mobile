@@ -312,7 +312,7 @@ namespace Oxfall.Core.Net
                 case ActKind.MoveInBox: return PlayerActions.MoveInBox(Settlement, s, a, b);
                 case ActKind.DevGive:
                     if (!DevMode) return ActionResult.Invalid;
-                    GiveTestKit(s.Inventory);
+                    GiveTestKit(s.Inventory, a);
                     return ActionResult.Ok;
                 case ActKind.DevSpawnAnimal:
                 {
@@ -326,9 +326,21 @@ namespace Oxfall.Core.Net
             }
         }
 
-        /// <summary>What the game's "give-all" test command hands out, for test servers.</summary>
-        public static void GiveTestKit(Inventory inventory)
+        /// <summary>
+        /// What the game's "give-all" test command hands out, for test servers (kit 1, "give-raid":
+        /// satchel charges and what they are made from).
+        /// </summary>
+        public static void GiveTestKit(Inventory inventory, int kit = 0)
         {
+            if (kit == 1)
+            {
+                inventory.Add(ItemIds.SatchelCharge, 8);
+                inventory.Add(ItemIds.Gunpowder, 80);
+                inventory.Add(ItemIds.Sulfur, 40);
+                inventory.Add(ItemIds.SulfurOre, 60);
+                inventory.Add(ItemIds.Charcoal, 60);
+                return;
+            }
             inventory.Add(ItemIds.StoneHatchet, 1);
             inventory.Add(ItemIds.StonePickaxe, 1);
             inventory.Add(ItemIds.BuildingPlan, 1);
@@ -375,6 +387,7 @@ namespace Oxfall.Core.Net
         {
             if (deltaSeconds <= 0f) return;
             Time += deltaSeconds;
+            TickCharges();
             Day.Tick(deltaSeconds);
             _wentOut.Clear();
             _rotted.Clear();

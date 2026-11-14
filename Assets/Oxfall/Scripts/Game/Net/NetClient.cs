@@ -30,7 +30,12 @@ namespace Oxfall.Game.Net
         private readonly ServerClock _clock = new ServerClock();
         private float _sendTimer;
         private bool _teleportPending;
-        private float _connectStarted;
+        /// <summary>
+        /// How long the connection has been trying, counting at most a fifth of a second per frame: a
+        /// slow phone that stalls for seconds while the island loads must not give up on a server that
+        /// would have answered.
+        /// </summary>
+        private float _connectWaited;
 
         public Status State { get; private set; }
         public ushort PlayerId { get; private set; }
@@ -116,6 +121,12 @@ namespace Oxfall.Game.Net
         /// <summary>Someone else loosed an arrow: from where, which way (yaw, pitch), for it to be seen flying.</summary>
         public event Action<Vector3, float, float> ArrowSeen;
 
+        /// <summary>A satchel charge stuck somewhere and fizzing (anyone's, this player's own too), and the seconds left on its fuse.</summary>
+        public event Action<LiveCharge, float> ChargeArmed;
+
+        /// <summary>A charge went off: its id and where.</summary>
+        public event Action<int, Vector3> Blasted;
+
         private readonly List<(int, ItemStack)> _loot = new List<(int, ItemStack)>();
 
         private readonly List<(int Id, int Remaining)> _nodeStates = new List<(int, int)>();
@@ -158,6 +169,13 @@ namespace Oxfall.Game.Net
         {
             if (State != Status.Online || _socket == null) return;
             Messages.Shoot(_writer, origin.x, origin.y, origin.z, yaw, pitch);
+            _socket.Send(_writer.Buffer, _writer.Length);
+        }
+
+        public void SendThrow(ChargeTarget target, Vector3 at, Vector3 normal)
+        {
+            if (State != Status.Online || _socket == null) return;
+            Messages.Throw(_writer, target, at.x, at.y, at.z, normal.x, normal.y, normal.z);
             _socket.Send(_writer.Buffer, _writer.Length);
         }
 
@@ -209,7 +227,7 @@ namespace Oxfall.Game.Net
             FailReason = null;
             _helloSent = false;
             _socket = GameSocket.Open(url);
-            _connectStarted = Time.unscaledTime;
+            _connectWaited = 0f;
             SetState(Status.Connecting);
             Debug.Log("[Oxfall] Connecting to " + url);
         }
@@ -256,7 +274,7 @@ namespace Oxfall.Game.Net
             if (_socket == null) return;
 
             if (State == Status.Connecting && _socket.State == GameSocket.Status.Connecting
-                && Time.unscaledTime - _connectStarted > 8f)
+                && (_connectWaited += Mathf.Min(Time.unscaledDeltaTime, 0.2f)) > 8f)
             {
                 Fail("No se pudo conectar con el servidor.");
                 return;
@@ -445,6 +463,18 @@ namespace Oxfall.Game.Net
                 {
                     Messages.ReadArrow(reader, out ushort shooter, out float ax, out float ay, out float az, out float yaw, out float pitch);
                     if (shooter != PlayerId) ArrowSeen?.Invoke(new Vector3(ax, ay, az), yaw, pitch);
+                    break;
+                }
+                case MessageType.ChargeArmed:
+                {
+                    var charge = Messages.ReadChargeArmed(reader, out float left);
+                    ChargeArmed?.Invoke(charge, left);
+                    break;
+                }
+                case MessageType.Blast:
+                {
+                    Messages.ReadBlast(reader, out int id, out float bx, out float by, out float bz);
+                    Blasted?.Invoke(id, new Vector3(bx, by, bz));
                     break;
                 }
                 case MessageType.Bitten:

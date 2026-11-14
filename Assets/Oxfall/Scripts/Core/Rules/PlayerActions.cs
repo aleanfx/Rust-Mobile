@@ -41,6 +41,10 @@ namespace Oxfall.Core.Rules
         Locked,
         WrongCode,
         NoLock,
+        /// <summary>The hammer: nothing to mend, it is whole.</summary>
+        NotDamaged,
+        /// <summary>The hammer: hit by a blast moments ago, it cannot be mended yet.</summary>
+        RecentlyDamaged,
     }
 
     /// <summary>
@@ -409,6 +413,39 @@ namespace Oxfall.Core.Rules
                         settlement.LockRemoved -= ReturnLock;
                     }
                     done = BuildOp.Remove(piece);
+                    return ActionResult.Ok;
+                }
+                case BuildOpKind.Repair:
+                {
+                    if (op.OnDoor)
+                    {
+                        var edge = op.EdgeAt;
+                        if (!grid.HasDoor(edge)) return ActionResult.NoDoor;
+                        if (!Near(x, y, z, EdgePoint(grid, edge), BuildReach)) return ActionResult.TooFar;
+                        if (!Privileged(settlement, owner, EdgePoint(grid, edge))) return ActionResult.BuildingBlocked;
+                        var kind = grid.DoorKindOf(edge);
+                        float full = DoorKinds.MaxHealth(kind), now = grid.DoorHealth(edge);
+                        if (now >= full) return ActionResult.NotDamaged;
+                        if (settlement.RecentlyHurtDoor(edge)) return ActionResult.RecentlyDamaged;
+                        var doorCost = Repairs.DoorCost(kind, 1f - now / full);
+                        if (!BuildCosts.CanAfford(s.Inventory, doorCost)) return ActionResult.NotEnoughResources;
+                        BuildCosts.TryPay(s.Inventory, doorCost);
+                        grid.SetDoorHealth(edge, full);
+                        done = BuildOp.DoorHealth(edge, full);
+                        return ActionResult.Ok;
+                    }
+                    var piece = BuildOps.Stored(grid, op.Piece);
+                    if (!grid.TryGetTier(piece, out var tier)) return ActionResult.NoPiece;
+                    if (!Near(x, y, z, PiecePoint(grid, piece), BuildReach)) return ActionResult.TooFar;
+                    if (!Privileged(settlement, owner, PiecePoint(grid, piece))) return ActionResult.BuildingBlocked;
+                    float max = BuildingTiers.MaxHealth(tier), health = grid.Health(piece);
+                    if (health >= max) return ActionResult.NotDamaged;
+                    if (settlement.RecentlyHurt(piece)) return ActionResult.RecentlyDamaged;
+                    var cost = Repairs.Cost(piece.Type, tier, 1f - health / max);
+                    if (!BuildCosts.CanAfford(s.Inventory, cost)) return ActionResult.NotEnoughResources;
+                    BuildCosts.TryPay(s.Inventory, cost);
+                    grid.SetHealth(piece, max);
+                    done = BuildOp.Health(piece, max);
                     return ActionResult.Ok;
                 }
                 case BuildOpKind.Door:
