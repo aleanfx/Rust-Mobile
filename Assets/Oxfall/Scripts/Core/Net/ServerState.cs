@@ -28,6 +28,7 @@ namespace Oxfall.Core.Net
             /// <summary>False until the client has said where it is (its first move is taken as is).</summary>
             public bool Placed { get; internal set; }
             public int RejectedMoves { get; internal set; }
+            public float LastHitTime { get; internal set; } = -100f;
         }
 
         private readonly Dictionary<ushort, Player> _players = new Dictionary<ushort, Player>();

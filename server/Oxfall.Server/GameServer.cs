@@ -6,6 +6,7 @@ using System.Threading;
 using System.Threading.Channels;
 using System.Threading.Tasks;
 using Microsoft.Extensions.Logging;
+using Oxfall.Core.Items;
 using Oxfall.Core.Net;
 
 namespace Oxfall.Server
@@ -20,6 +21,7 @@ namespace Oxfall.Server
         private static readonly TimeSpan HelloTimeout = TimeSpan.FromSeconds(10);
         private const float CorrectionInterval = 0.5f;
 
+        private readonly ServerWorld _world;
         private readonly ServerState _state;
         private readonly object _lock = new object();
         private readonly Dictionary<ushort, Connection> _connections = new Dictionary<ushort, Connection>();
@@ -28,8 +30,10 @@ namespace Oxfall.Server
 
         public GameServer(int seed, ILogger log)
         {
-            _state = new ServerState(seed);
+            _world = new ServerWorld(seed);
+            _state = _world.Players;
             _log = log;
+            _log.LogInformation("Island {Seed}: {Nodes} trees, rocks and plants", seed, _world.NodeCount);
         }
 
         public int Seed => _state.Seed;
@@ -47,19 +51,36 @@ namespace Oxfall.Server
             var writer = new NetWriter(2048);
             var period = TimeSpan.FromSeconds(1.0 / Protocol.TickRate);
             using var timer = new PeriodicTimer(period);
+            float lastRespawn = Now;
             while (await timer.WaitForNextTickAsync(stop))
             {
-                byte[] snapshot;
+                byte[] snapshot, regrown = null;
                 Connection[] targets;
                 lock (_lock)
                 {
+                    // Trees and rocks grow back whether anyone is online or not; once a second is plenty.
+                    float now = Now;
+                    if (now - lastRespawn >= 1f)
+                    {
+                        var back = _world.TickRespawn(now - lastRespawn);
+                        lastRespawn = now;
+                        if (back.Count > 0)
+                        {
+                            Messages.NodeStates(writer, back);
+                            regrown = writer.ToArray();
+                        }
+                    }
                     if (_connections.Count == 0) continue;
-                    Messages.Snapshot(writer, Now, _state.Snapshot());
+                    Messages.Snapshot(writer, now, _state.Snapshot());
                     snapshot = writer.ToArray();
                     targets = new Connection[_connections.Count];
                     _connections.Values.CopyTo(targets, 0);
                 }
-                foreach (var c in targets) c.Send(snapshot);
+                foreach (var c in targets)
+                {
+                    c.Send(snapshot);
+                    if (regrown != null) c.Send(regrown);
+                }
             }
         }
 
@@ -103,6 +124,22 @@ namespace Oxfall.Server
                                 connection.Send(writer.ToArray());
                             }
                             break;
+                        case MessageType.Hit:
+                        {
+                            Messages.ReadHit(new NetReader(buffer, 1, n - 1), out int nodeId, out byte tool);
+                            lock (_lock)
+                            {
+                                var got = _world.Hit(id, nodeId, (ToolKind)tool, Now);
+                                if (got.Count == 0) break;
+                                Messages.Gathered(writer, nodeId, got);
+                                connection.Send(writer.ToArray());
+                                _world.TryGetNode(nodeId, out var node, out _, out _);
+                                Messages.NodeStates(writer, new[] { (node.Id, node.Remaining) });
+                                var state = writer.ToArray();
+                                foreach (var c in _connections.Values) c.Send(state);
+                            }
+                            break;
+                        }
                         default:
                             throw new ProtocolException("A client may not send " + buffer[0] + ".");
                     }
@@ -142,6 +179,13 @@ namespace Oxfall.Server
                 id = player.Id;
                 Messages.Welcome(writer, player.Id, _state.Seed, Now);
                 connection.Send(writer.ToArray());
+                // What has been cut or mined and not grown back yet.
+                var damaged = _world.NotFull();
+                if (damaged.Count > 0)
+                {
+                    Messages.NodeStates(writer, damaged);
+                    connection.Send(writer.ToArray());
+                }
                 // The newcomer learns who is here; everyone else learns about the newcomer.
                 foreach (var other in _state.Players)
                 {

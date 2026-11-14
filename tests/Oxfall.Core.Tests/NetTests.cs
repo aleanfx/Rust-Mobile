@@ -260,3 +260,91 @@ namespace Oxfall.Core.Tests
         }
     }
 }
+
+namespace Oxfall.Core.Tests
+{
+    using System.Linq;
+    using Oxfall.Core.Gathering;
+    using Oxfall.Core.Items;
+    using Oxfall.Core.World;
+
+    public class ServerWorldTests
+    {
+        private static (ServerWorld world, ServerState.Player player, NodeSpawn tree) Setup()
+        {
+            var world = new ServerWorld(20261113);
+            var tree = ResourceLayout.Generate(world.Ground).First(s => s.Type == ResourceNodeType.Tree);
+            var player = world.Players.Join(Protocol.Version, "Ale", 0f, out _);
+            world.Players.ApplyMove(player.Id, new Pose(tree.X + 1.5f, tree.Y, tree.Z, 0f), false, 0f);
+            return (world, player, tree);
+        }
+
+        [Test]
+        public void TheServerHasTheSameNodesAsTheGame()
+        {
+            var world = new ServerWorld(20261113);
+            Assert.AreEqual(ResourceLayout.Generate(new IslandGround(20261113)).Count, world.NodeCount);
+        }
+
+        [Test]
+        public void AHitInReachGivesWood()
+        {
+            var (world, player, tree) = Setup();
+            var got = world.Hit(player.Id, tree.Id, ToolKind.Hatchet, 1f);
+            Assert.AreEqual(1, got.Count);
+            Assert.AreEqual(ItemIds.Wood, got[0].ItemId);
+            Assert.AreEqual(GatherTable.PerHit(ResourceNodeType.Tree, ToolKind.Hatchet), got[0].Amount);
+        }
+
+        [Test]
+        public void SwingingTooFastOrTooFarGivesNothing()
+        {
+            var (world, player, tree) = Setup();
+            Assert.AreEqual(1, world.Hit(player.Id, tree.Id, ToolKind.Rock, 1f).Count);
+            Assert.AreEqual(0, world.Hit(player.Id, tree.Id, ToolKind.Rock, 1.1f).Count, "faster than a swing");
+            world.Players.ApplyMove(player.Id, new Pose(tree.X + 30f, tree.Y, tree.Z, 0f), true, 2f);
+            Assert.AreEqual(0, world.Hit(player.Id, tree.Id, ToolKind.Rock, 3f).Count, "30 m away");
+            Assert.AreEqual(0, world.Hit(player.Id, -5, ToolKind.Rock, 4f).Count, "no such node");
+            Assert.AreEqual(0, world.Hit(player.Id, tree.Id, (ToolKind)99, 5f).Count, "no such tool");
+        }
+
+        [Test]
+        public void ADepletedNodeGrowsBackAndJoinersHearAboutDamage()
+        {
+            var (world, player, tree) = Setup();
+            float t = 1f;
+            while (world.TryGetNode(tree.Id, out var node, out _, out _) && !node.IsDepleted)
+            {
+                world.Hit(player.Id, tree.Id, ToolKind.Hatchet, t);
+                t += 1f;
+            }
+            Assert.IsTrue(world.NotFull().Any(n => n.Id == tree.Id && n.Remaining == 0));
+            Assert.AreEqual(0, world.TickRespawn(1f).Count);
+            var back = world.TickRespawn(GatherTable.RespawnSeconds(ResourceNodeType.Tree));
+            Assert.IsTrue(back.Any(n => n.Id == tree.Id));
+            Assert.IsFalse(world.NotFull().Any(n => n.Id == tree.Id));
+        }
+
+        [Test]
+        public void NodeMessagesRoundTrip()
+        {
+            var w = new NetWriter();
+            Messages.Hit(w, 1234, (byte)ToolKind.Pickaxe);
+            var bytes = w.ToArray();
+            Messages.ReadHit(new NetReader(bytes, 1, bytes.Length - 1), out var id, out var tool);
+            Assert.AreEqual((1234, (byte)ToolKind.Pickaxe), (id, tool));
+
+            Messages.NodeStates(w, new List<(int, int)> { (5, 0), (6, 300) });
+            bytes = w.ToArray();
+            var states = new List<(int Id, int Remaining)>();
+            Messages.ReadNodeStates(new NetReader(bytes, 1, bytes.Length - 1), states);
+            CollectionAssert.AreEqual(new List<(int, int)> { (5, 0), (6, 300) }, states);
+
+            Messages.Gathered(w, 7, new List<(string, int)> { ("metal_ore", 5), ("stone", 5) });
+            bytes = w.ToArray();
+            var items = new List<(string ItemId, int Amount)>();
+            Assert.AreEqual(7, Messages.ReadGathered(new NetReader(bytes, 1, bytes.Length - 1), items));
+            CollectionAssert.AreEqual(new List<(string, int)> { ("metal_ore", 5), ("stone", 5) }, items);
+        }
+    }
+}

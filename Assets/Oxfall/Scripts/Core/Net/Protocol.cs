@@ -11,7 +11,7 @@ namespace Oxfall.Core.Net
     public static class Protocol
     {
         /// <summary>Raised whenever a message changes shape; a client of another version is turned away.</summary>
-        public const ushort Version = 1;
+        public const ushort Version = 2;
 
         /// <summary>Snapshots per second the server sends.</summary>
         public const int TickRate = 20;
@@ -46,6 +46,7 @@ namespace Oxfall.Core.Net
         // Client to server
         Hello = 1,
         Move = 2,
+        Hit = 3,
 
         // Server to client
         Welcome = 10,
@@ -54,6 +55,8 @@ namespace Oxfall.Core.Net
         Left = 13,
         Snapshot = 14,
         Correction = 15,
+        NodeStates = 16,
+        Gathered = 17,
     }
 
     /// <summary>Where a player stands and which way the body faces (degrees about up).</summary>
@@ -137,7 +140,65 @@ namespace Oxfall.Core.Net
             teleport = r.Bool();
         }
 
+        /// <summary>The player swung at a tree, rock or plant with this tool.</summary>
+        public static void Hit(NetWriter w, int nodeId, byte tool)
+        {
+            w.Reset();
+            w.Byte((byte)MessageType.Hit);
+            w.Int(nodeId);
+            w.Byte(tool);
+        }
+
+        public static void ReadHit(NetReader r, out int nodeId, out byte tool)
+        {
+            nodeId = r.Int();
+            tool = r.Byte();
+        }
+
         // ---- Server to client
+
+        /// <summary>How much is left in some nodes (0: gone until it grows back).</summary>
+        public static void NodeStates(NetWriter w, IReadOnlyList<(int Id, int Remaining)> nodes)
+        {
+            w.Reset();
+            w.Byte((byte)MessageType.NodeStates);
+            w.UShort((ushort)nodes.Count);
+            foreach (var (id, remaining) in nodes)
+            {
+                w.Int(id);
+                w.UShort((ushort)Math.Max(0, Math.Min(ushort.MaxValue, remaining)));
+            }
+        }
+
+        public static void ReadNodeStates(NetReader r, List<(int Id, int Remaining)> into)
+        {
+            into.Clear();
+            int n = r.UShort();
+            for (int i = 0; i < n; i++) into.Add((r.Int(), r.UShort()));
+        }
+
+        /// <summary>What a hit gave this player.</summary>
+        public static void Gathered(NetWriter w, int nodeId, IReadOnlyList<(string ItemId, int Amount)> items)
+        {
+            w.Reset();
+            w.Byte((byte)MessageType.Gathered);
+            w.Int(nodeId);
+            w.Byte((byte)items.Count);
+            foreach (var (item, amount) in items)
+            {
+                w.String(item, 64);
+                w.UShort((ushort)amount);
+            }
+        }
+
+        public static int ReadGathered(NetReader r, List<(string ItemId, int Amount)> into)
+        {
+            into.Clear();
+            int id = r.Int();
+            int n = r.Byte();
+            for (int i = 0; i < n; i++) into.Add((r.String(), r.UShort()));
+            return id;
+        }
 
         public static void Welcome(NetWriter w, ushort playerId, int seed, float serverTime)
         {

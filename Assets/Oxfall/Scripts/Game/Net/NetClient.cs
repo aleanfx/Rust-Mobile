@@ -45,6 +45,23 @@ namespace Oxfall.Game.Net
         /// <summary>The server put the player back (a move it did not believe).</summary>
         public event Action<Pose> Corrected;
 
+        /// <summary>How much is left in some trees, rocks or plants (0: gone until they grow back).</summary>
+        public event Action<List<(int Id, int Remaining)>> NodesChanged;
+
+        /// <summary>What one of this player's hits gave.</summary>
+        public event Action<List<(string ItemId, int Amount)>> Gathered;
+
+        private readonly List<(int Id, int Remaining)> _nodeStates = new List<(int, int)>();
+        private readonly List<(string ItemId, int Amount)> _gathered = new List<(string, int)>();
+
+        /// <summary>A swing at a node; the server answers with what it gave.</summary>
+        public void SendHit(int nodeId, Oxfall.Core.Items.ToolKind tool)
+        {
+            if (State != Status.Online || _socket == null) return;
+            Messages.Hit(_writer, nodeId, (byte)tool);
+            _socket.Send(_writer.Buffer, _writer.Length);
+        }
+
         public void Init(MaterialLibrary materials, Transform localPlayer)
         {
             _materials = materials;
@@ -196,6 +213,14 @@ namespace Oxfall.Game.Net
                         if (_players.TryGetValue(id, out var player)) player.Poses.Add(time, pose);
                     break;
                 }
+                case MessageType.NodeStates:
+                    Messages.ReadNodeStates(reader, _nodeStates);
+                    NodesChanged?.Invoke(_nodeStates);
+                    break;
+                case MessageType.Gathered:
+                    Messages.ReadGathered(reader, _gathered);
+                    Gathered?.Invoke(_gathered);
+                    break;
                 case MessageType.Correction:
                 {
                     var pose = Messages.ReadCorrection(reader);

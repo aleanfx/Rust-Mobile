@@ -43,6 +43,22 @@ namespace Oxfall.Game.World
             return yields;
         }
 
+        /// <summary>A little shudder, as when hit.</summary>
+        public void Shake()
+        {
+            if (Node.IsDepleted) return;
+            _shake = ShakeSeconds;
+            enabled = true;
+        }
+
+        /// <summary>Takes what the server says is left (0: gone until it grows back).</summary>
+        public void Sync(int remaining)
+        {
+            bool wasDepleted = Node.IsDepleted;
+            Node.Restore(remaining, GatherTable.RespawnSeconds(Node.Type));
+            if (Node.IsDepleted != wasDepleted) SetVisible(!Node.IsDepleted);
+        }
+
         /// <summary>Called by the world once a second or so, with the time since the last call.</summary>
         public void TickRespawn(float deltaSeconds)
         {

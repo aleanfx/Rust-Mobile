@@ -1,5 +1,6 @@
 using System.Collections.Generic;
 using Oxfall.Core.Gathering;
+using Oxfall.Core.World;
 using Oxfall.Game.Rendering;
 using UnityEngine;
 using UnityEngine.Rendering;
@@ -13,6 +14,7 @@ namespace Oxfall.Game.World
         public Transform Root;
         public Light Sun;
         public readonly List<ResourceNodeView> Nodes = new List<ResourceNodeView>();
+        public readonly Dictionary<int, ResourceNodeView> NodesById = new Dictionary<int, ResourceNodeView>();
         public Vector3 SpawnPosition;
         public float SpawnYaw;
     }
@@ -128,7 +130,6 @@ namespace Oxfall.Game.World
 
         private static void PlaceResources(WorldInstance world, MaterialLibrary materials, int seed)
         {
-            var random = new System.Random(seed * 31 + 7);
             var shape = world.Shape;
 
             // Meshes draw from their own random numbers, so where things stand (which every player
@@ -149,88 +150,75 @@ namespace Oxfall.Game.World
             var parent = new GameObject("Resources").transform;
             parent.SetParent(world.Root, false);
 
-            const float cell = 6f;
-            int cells = Mathf.RoundToInt(IslandShape.WorldSize / cell);
-            int nextId = 1;
-
-            for (int gz = 0; gz < cells; gz++)
-            for (int gx = 0; gx < cells; gx++)
+            // Where everything stands comes from the shared layout (the server computes the same);
+            // only how each one looks is decided here.
+            foreach (var spawn in ResourceLayout.Generate(shape.Ground))
             {
-                float x = -IslandShape.HalfSize + (gx + 0.15f + 0.7f * (float)random.NextDouble()) * cell;
-                float z = -IslandShape.HalfSize + (gz + 0.15f + 0.7f * (float)random.NextDouble()) * cell;
-                float h = shape.Height(x, z);
-                if (h < 1.3f || shape.PondBank(x, z) > 0f) continue;
-
-                float flatness = shape.Normal(x, z).y;
-                float forest = shape.Forest(x, z);
-                float roll = (float)random.NextDouble();
-                bool grassy = h > 2.4f && h < 17f && flatness > 0.88f;
-
-                float treeChance = grassy ? Mathf.Clamp01((forest - 0.44f) * 3.2f) * 0.55f + 0.02f : 0f;
-                float stoneChance = 0.035f + (flatness < 0.9f ? 0.08f : 0f);
-                float oreChance = h > 5f ? 0.022f : 0f;
-                float hempChance = grassy && forest < 0.5f ? 0.05f : 0f;
-                float berryChance = grassy && forest > 0.3f && forest < 0.7f ? 0.035f : 0f;
-
-                var position = new Vector3(x, h, z);
-                float yaw = (float)random.NextDouble() * 360f;
-
-                if (roll < treeChance)
+                var position = new Vector3(spawn.X, spawn.Y, spawn.Z);
+                float yaw = spawn.Yaw;
+                int v = spawn.Variant;
+                switch (spawn.Type)
                 {
-                    bool pine = forest > 0.55f || random.NextDouble() < 0.5;
-                    var mesh = pine ? pines[random.Next(pines.Length)] : broadleaves[random.Next(broadleaves.Length)];
-                    var leaves = pine ? materials.Needles[random.Next(materials.Needles.Length)]
-                                      : materials.Leaves[random.Next(materials.Leaves.Length)];
-                    float scale = 0.8f + (float)random.NextDouble() * 0.5f;
-                    Material[] treeMaterials;
-                    if (pine && needleCards)
-                        treeMaterials = new[] { materials.Bark, leaves, materials.NeedleCards[nextId % materials.NeedleCards.Length] };
-                    else if (!pine && leafCards)
-                        treeMaterials = new[] { materials.Bark, leaves, materials.LeafCards[nextId % materials.LeafCards.Length] };
-                    else
-                        treeMaterials = new[] { materials.Bark, leaves };
-                    var go = MakeNode(pine ? "Pine" : "Tree", mesh, treeMaterials,
-                        position - new Vector3(0f, 0.2f, 0f), yaw, Vector3.one * scale, parent);
-                    var capsule = go.AddComponent<CapsuleCollider>();
-                    capsule.center = new Vector3(0f, 2.5f, 0f);
-                    capsule.radius = 0.4f;
-                    capsule.height = 5f;
-                    AddView(world, go, nextId++, ResourceNodeType.Tree);
-                }
-                else if (roll < treeChance + stoneChance)
-                {
-                    float s = 1.3f + (float)random.NextDouble() * 1.0f;
-                    var go = MakeNode("Stone", rocks[random.Next(rocks.Length)], new[] { materials.Stone },
-                        position - new Vector3(0f, 0.25f * s, 0f), yaw, new Vector3(s, s * 0.85f, s), parent);
-                    AddSphere(go, new Vector3(0f, 0.25f, 0f), 0.85f, false);
-                    AddView(world, go, nextId++, ResourceNodeType.Stone);
-                }
-                else if (roll < treeChance + stoneChance + oreChance)
-                {
-                    float s = 1.1f + (float)random.NextDouble() * 0.7f;
-                    var go = MakeNode("Metal ore", rocks[random.Next(rocks.Length)], new[] { materials.MetalOre },
-                        position - new Vector3(0f, 0.2f * s, 0f), yaw, new Vector3(s, s, s), parent);
-                    AddSphere(go, new Vector3(0f, 0.25f, 0f), 0.85f, false);
-                    AddView(world, go, nextId++, ResourceNodeType.MetalOre);
-                }
-                else if (roll < treeChance + stoneChance + oreChance + hempChance)
-                {
-                    var go = MakeNode("Hemp", hemps[random.Next(hemps.Length)], new[] { materials.Hemp },
-                        position, yaw, Vector3.one, parent);
-                    // A trigger: the player walks through plants but can still aim at them.
-                    AddSphere(go, new Vector3(0f, 0.6f, 0f), 0.6f, true);
-                    AddView(world, go, nextId++, ResourceNodeType.Hemp);
-                }
-                else if (roll < treeChance + stoneChance + oreChance + hempChance + berryChance)
-                {
-                    var bushMaterials = leafCards
-                        ? new[] { materials.Berries, materials.Leaves[0], materials.LeafCards[nextId % materials.LeafCards.Length] }
-                        : new[] { materials.Berries, materials.Leaves[0] };
-                    float s = 0.85f + (float)random.NextDouble() * 0.4f;
-                    var go = MakeNode("Berry bush", bushes[random.Next(bushes.Length)], bushMaterials,
-                        position - new Vector3(0f, 0.05f, 0f), yaw, Vector3.one * s, parent);
-                    AddSphere(go, new Vector3(0f, 0.45f, 0f), 0.6f, true);
-                    AddView(world, go, nextId++, ResourceNodeType.BerryBush);
+                    case ResourceNodeType.Tree:
+                    {
+                        bool pine = spawn.Pine;
+                        var mesh = pine ? pines[v % pines.Length] : broadleaves[v % broadleaves.Length];
+                        var leaves = pine ? materials.Needles[(v / 7) % materials.Needles.Length]
+                                          : materials.Leaves[(v / 7) % materials.Leaves.Length];
+                        Material[] treeMaterials;
+                        if (pine && needleCards)
+                            treeMaterials = new[] { materials.Bark, leaves, materials.NeedleCards[spawn.Id % materials.NeedleCards.Length] };
+                        else if (!pine && leafCards)
+                            treeMaterials = new[] { materials.Bark, leaves, materials.LeafCards[spawn.Id % materials.LeafCards.Length] };
+                        else
+                            treeMaterials = new[] { materials.Bark, leaves };
+                        var go = MakeNode(pine ? "Pine" : "Tree", mesh, treeMaterials,
+                            position - new Vector3(0f, 0.2f, 0f), yaw, Vector3.one * spawn.Scale, parent);
+                        var capsule = go.AddComponent<CapsuleCollider>();
+                        capsule.center = new Vector3(0f, 2.5f, 0f);
+                        capsule.radius = 0.4f;
+                        capsule.height = 5f;
+                        AddView(world, go, spawn.Id, ResourceNodeType.Tree);
+                        break;
+                    }
+                    case ResourceNodeType.Stone:
+                    {
+                        float sc = spawn.Scale;
+                        var go = MakeNode("Stone", rocks[v % rocks.Length], new[] { materials.Stone },
+                            position - new Vector3(0f, 0.25f * sc, 0f), yaw, new Vector3(sc, sc * 0.85f, sc), parent);
+                        AddSphere(go, new Vector3(0f, 0.25f, 0f), 0.85f, false);
+                        AddView(world, go, spawn.Id, ResourceNodeType.Stone);
+                        break;
+                    }
+                    case ResourceNodeType.MetalOre:
+                    {
+                        float sc = spawn.Scale;
+                        var go = MakeNode("Metal ore", rocks[v % rocks.Length], new[] { materials.MetalOre },
+                            position - new Vector3(0f, 0.2f * sc, 0f), yaw, new Vector3(sc, sc, sc), parent);
+                        AddSphere(go, new Vector3(0f, 0.25f, 0f), 0.85f, false);
+                        AddView(world, go, spawn.Id, ResourceNodeType.MetalOre);
+                        break;
+                    }
+                    case ResourceNodeType.Hemp:
+                    {
+                        var go = MakeNode("Hemp", hemps[v % hemps.Length], new[] { materials.Hemp },
+                            position, yaw, Vector3.one, parent);
+                        // A trigger: the player walks through plants but can still aim at them.
+                        AddSphere(go, new Vector3(0f, 0.6f, 0f), 0.6f, true);
+                        AddView(world, go, spawn.Id, ResourceNodeType.Hemp);
+                        break;
+                    }
+                    case ResourceNodeType.BerryBush:
+                    {
+                        var bushMaterials = leafCards
+                            ? new[] { materials.Berries, materials.Leaves[0], materials.LeafCards[spawn.Id % materials.LeafCards.Length] }
+                            : new[] { materials.Berries, materials.Leaves[0] };
+                        var go = MakeNode("Berry bush", bushes[v % bushes.Length], bushMaterials,
+                            position - new Vector3(0f, 0.05f, 0f), yaw, Vector3.one * spawn.Scale, parent);
+                        AddSphere(go, new Vector3(0f, 0.45f, 0f), 0.6f, true);
+                        AddView(world, go, spawn.Id, ResourceNodeType.BerryBush);
+                        break;
+                    }
                 }
             }
 
@@ -262,6 +250,7 @@ namespace Oxfall.Game.World
             var view = go.AddComponent<ResourceNodeView>();
             view.Init(new ResourceNode(id, type));
             world.Nodes.Add(view);
+            world.NodesById[id] = view;
         }
 
         /// <summary>A spot on the beach, facing inland. Walks in from the sea until it finds sand.</summary>

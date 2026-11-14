@@ -233,6 +233,17 @@ namespace Oxfall.Game
             _net.Init(materials, player.transform);
             _net.StatusChanged += OnNetStatus;
             _net.Corrected += pose => _player.Teleport(new Vector3(pose.X, pose.Y, pose.Z), pose.Yaw, 0f);
+            _net.NodesChanged += nodes =>
+            {
+                foreach (var (id, remaining) in nodes)
+                    if (_world.NodesById.TryGetValue(id, out var view)) view.Sync(remaining);
+            };
+            _net.Gathered += items =>
+            {
+                bool full = false;
+                foreach (var (item, amount) in items) full |= _inventory.Add(item, amount) > 0;
+                if (full) _hud.ShowToast("Inventario lleno: parte se perdió");
+            };
             _nameTags = new NameTags(_hud);
             var server = NetClient.ChosenServer(out var playerName);
             if (!string.IsNullOrEmpty(server)) _net.Connect(server, playerName);
@@ -323,14 +334,18 @@ namespace Oxfall.Game
                     break;
                 case NetClient.Status.Online:
                     _hud.ShowToast("Conectado al servidor");
+                    // From now on the server decides what trees and rocks give, and when they grow back.
+                    _gatherer.RemoteHit = _net.SendHit;
                     if (_net.Seed != DefaultSeed)
                         Debug.LogWarning($"[Oxfall] The server's island (seed {_net.Seed}) is not this one ({DefaultSeed}).");
                     break;
                 case NetClient.Status.Failed:
+                    _gatherer.RemoteHit = null;
                     _hud.SetOnline("SIN CONEXIÓN", false);
                     _hud.ShowToast(_net.FailReason);
                     break;
                 default:
+                    _gatherer.RemoteHit = null;
                     _hud.SetOnline(null, false);
                     break;
             }
@@ -699,6 +714,8 @@ namespace Oxfall.Game
             _crafting?.Tick(Time.deltaTime);
             _respawnTimer += Time.deltaTime;
             if (_respawnTimer < RespawnTickSeconds || _world == null) return;
+            // Online, the server grows things back and says so.
+            if (_net != null && _net.State == NetClient.Status.Online) { _respawnTimer = 0f; return; }
             foreach (var node in _world.Nodes) node.TickRespawn(_respawnTimer);
             _respawnTimer = 0f;
         }

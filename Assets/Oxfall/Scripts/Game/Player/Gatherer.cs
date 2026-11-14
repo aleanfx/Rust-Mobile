@@ -224,16 +224,38 @@ namespace Oxfall.Game.Player
             return false;
         }
 
+        /// <summary>
+        /// Online, the server decides what a hit gives: this sends the swing (node id, tool) instead of
+        /// taking from the node here. Null when playing alone.
+        /// </summary>
+        public Action<int, ToolKind> RemoteHit;
+
         private void Gather(ResourceNodeView node)
         {
-            var yields = node.Hit(_hotbar.HeldTool);
-            if (yields.Count > 0 || !node.Node.IsDepleted)
+            if (RemoteHit != null)
             {
-                var type = node.Node.Type;
-                Sound?.Invoke(type == ResourceNodeType.Tree ? SoundCue.Wood
-                    : type == ResourceNodeType.Stone || type == ResourceNodeType.MetalOre ? SoundCue.Stone
-                    : SoundCue.Plant);
+                // The swing is felt at once (sound, shake); what it gave arrives from the server.
+                var tool = _hotbar.HeldTool;
+                if (node.Node.IsDepleted) return;
+                if (GatherTable.PerHit(node.Node.Type, tool) <= 0)
+                {
+                    if (_hintCooldown <= 0f)
+                    {
+                        _hintCooldown = 2.5f;
+                        Message?.Invoke(tool == ToolKind.None
+                            ? "Elige una herramienta en la barra (la roca sirve)"
+                            : "Esta herramienta no sirve aquí");
+                    }
+                    return;
+                }
+                PlayHitSound(node.Node.Type);
+                node.Shake();
+                RemoteHit(node.Node.Id, tool);
+                return;
             }
+
+            var yields = node.Hit(_hotbar.HeldTool);
+            if (yields.Count > 0 || !node.Node.IsDepleted) PlayHitSound(node.Node.Type);
             if (yields.Count == 0)
             {
                 // Bare hands or a torch on a tree or a rock: say once in a while what is missing.
@@ -253,6 +275,11 @@ namespace Oxfall.Game.Player
             foreach (var y in yields) full |= _inventory.Add(y.ItemId, y.Amount) > 0;
             if (full) Message?.Invoke("Inventario lleno: parte se perdió");
         }
+
+        private void PlayHitSound(ResourceNodeType type) =>
+            Sound?.Invoke(type == ResourceNodeType.Tree ? SoundCue.Wood
+                : type == ResourceNodeType.Stone || type == ResourceNodeType.MetalOre ? SoundCue.Stone
+                : SoundCue.Plant);
 
         /// <summary>A quick chop: the held item tips forward and down about the grip, then back.</summary>
         private void AnimateHand(float dt)
