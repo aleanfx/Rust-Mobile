@@ -42,6 +42,9 @@ namespace Oxfall.Game.UI
         private Text _fpsToggleLabel;
         private bool _showFps = true;
         private Compass _compass;
+        private RectTransform _online;
+        private Image _onlineDot;
+        private Text _onlineText;
         private PickupFeed _feed;
         private CraftUi _craft;
 
@@ -117,6 +120,15 @@ namespace Oxfall.Game.UI
             _clockIcon = UiFactory.AddIcon(clockChip, Icons.Sun, new Vector2(28f, 0f), 28f, UiTheme.Food, new Vector2(0f, 0.5f));
             var clockText = UiFactory.NewRect("Time", clockChip, new Vector2(0f, 0.5f), new Vector2(0f, 0.5f), new Vector2(54f, 0f), new Vector2(116f, 44f));
             _clock = UiFactory.AddText(clockText, "--:--", 30, TextAnchor.MiddleLeft, UiTheme.Text, true);
+
+            // Beside the clock, when playing on a server: who is online.
+            _online = UiFactory.NewRect("Online", _safeArea, topLeft, topLeft, new Vector2(212f, -20f), new Vector2(150f, 48f));
+            UiFactory.AddImage(_online, UiFactory.Soft, UiTheme.Panel);
+            var dotRect = UiFactory.NewRect("Dot", _online, new Vector2(0f, 0.5f), new Vector2(0.5f, 0.5f), new Vector2(22f, 0f), new Vector2(14f, 14f));
+            _onlineDot = UiFactory.AddImage(dotRect, UiFactory.Circle, UiTheme.Good);
+            var onlineText = UiFactory.NewRect("Text", _online, new Vector2(0f, 0.5f), new Vector2(0f, 0.5f), new Vector2(38f, 0f), new Vector2(110f, 44f));
+            _onlineText = UiFactory.AddText(onlineText, "", 26, TextAnchor.MiddleLeft, UiTheme.Text, true);
+            _online.gameObject.SetActive(false);
 
             // Top centre: the compass.
             _compass = Compass.Create(_safeArea);
@@ -422,6 +434,17 @@ namespace Oxfall.Game.UI
             _clockNight = night;
             _clockIcon.sprite = night ? Icons.Moon : Icons.Sun;
             _clockIcon.color = night ? new Color(0.72f, 0.8f, 1f) : UiTheme.Food;
+        }
+
+        /// <summary>The online chip beside the clock: "3" with a green dot, or hidden for null.</summary>
+        public void SetOnline(string text, bool good)
+        {
+            bool show = text != null;
+            if (_online.gameObject.activeSelf != show) _online.gameObject.SetActive(show);
+            if (!show) return;
+            _onlineText.text = text;
+            _onlineDot.color = good ? UiTheme.Good : UiTheme.Accent;
+            _online.sizeDelta = new Vector2(Mathf.Max(96f, 52f + _onlineText.preferredWidth), 48f);
         }
 
         /// <summary>A hint or a warning above the belt, for a moment.</summary>

@@ -1,0 +1,17 @@
+<Project Sdk="Microsoft.NET.Sdk.Web">
+  <!-- The game server: a small ASP.NET Core program that speaks the game's protocol over WebSockets
+       (so the web build and the phones connect the same way). It compiles the same rule files as
+       the game (Assets/Oxfall/Scripts/Core), so client and server can never disagree on the rules. -->
+  <PropertyGroup>
+    <TargetFramework>net8.0</TargetFramework>
+    <LangVersion>9.0</LangVersion>
+    <Nullable>disable</Nullable>
+    <ImplicitUsings>disable</ImplicitUsings>
+    <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
+    <InvariantGlobalization>true</InvariantGlobalization>
+    <RootNamespace>Oxfall.Server</RootNamespace>
+  </PropertyGroup>
+  <ItemGroup>
+    <Compile Include="../../Assets/Oxfall/Scripts/Core/**/*.cs" Link="Core/%(RecursiveDir)%(Filename)%(Extension)" />
+  </ItemGroup>
+</Project>

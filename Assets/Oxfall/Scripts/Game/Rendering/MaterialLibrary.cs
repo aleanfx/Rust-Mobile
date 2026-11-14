@@ -70,6 +70,11 @@ namespace Oxfall.Game.Rendering
         /// <summary>Fresh water in the ponds: the sea's material, greener, without the shore and its foam.</summary>
         public Material Pond { get; }
 
+        /// <summary>Other players: a worn shirt, dark trousers and skin.</summary>
+        public Material Shirt { get; }
+        public Material Trousers { get; }
+        public Material Skin { get; }
+
         public MaterialLibrary()
         {
             _base = Resources.Load<Material>(BaseMaterialResource);
@@ -153,6 +158,9 @@ namespace Oxfall.Game.Rendering
             Char = Make("Char", new Color(0.13f, 0.11f, 0.10f), 0.05f);
             Flame = Resources.Load<Material>("OxfallFlame") ?? Make("Flame", new Color(1f, 0.55f, 0.15f), 0f);
             Berries = Make("Berries", new Color(0.50f, 0.06f, 0.20f), 0.55f);
+            Shirt = Make("Shirt", new Color(0.46f, 0.42f, 0.33f), 0.05f);
+            Trousers = Make("Trousers", new Color(0.17f, 0.18f, 0.20f), 0.05f);
+            Skin = Make("Skin", new Color(0.78f, 0.58f, 0.45f), 0.25f);
             Pond = new Material(Water) { name = "Pond" };
             if (Pond.HasProperty("_DepthMap"))
             {

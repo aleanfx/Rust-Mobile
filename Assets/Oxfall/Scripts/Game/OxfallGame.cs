@@ -8,6 +8,7 @@ using Oxfall.Game.Audio;
 using Oxfall.Game.Construction;
 using Oxfall.Game.Controls;
 using Oxfall.Game.Items;
+using Oxfall.Game.Net;
 using Oxfall.Game.Player;
 using Oxfall.Game.Rendering;
 using Oxfall.Game.UI;
@@ -49,6 +50,10 @@ namespace Oxfall.Game
         private Vitals _vitals;
         private VitalsUi _vitalsUi;
         private PlayerInput _input;
+        private NetClient _net;
+        private NameTags _nameTags;
+        private Camera _camera;
+        private int _shownOnline = -1;
         private float _respawnTimer;
         private float _vitalsTimer;
         private bool _warnedHungry, _warnedThirsty;
@@ -101,6 +106,7 @@ namespace Oxfall.Game
             _player = player;
 
             var camera = CreateCamera(player.Head);
+            _camera = camera;
 
             var gatherer = playerObject.AddComponent<Gatherer>();
             gatherer.Init(input, _inventory, _hotbar, _catalog, player.Head, models, materials.Flame, _vitals, _world.Shape);
@@ -220,6 +226,16 @@ namespace Oxfall.Game
             };
             _hotbar.SelectionChanged += _ => OnHeldChanged();
             CountOwned(_owned);
+
+            // Multiplayer: with a server chosen (?server=wss://… in the web address), join it;
+            // without one, the island is yours alone.
+            _net = gameObject.AddComponent<NetClient>();
+            _net.Init(materials, player.transform);
+            _net.StatusChanged += OnNetStatus;
+            _net.Corrected += pose => _player.Teleport(new Vector3(pose.X, pose.Y, pose.Z), pose.Yaw, 0f);
+            _nameTags = new NameTags(_hud);
+            var server = NetClient.ChosenServer(out var playerName);
+            if (!string.IsNullOrEmpty(server)) _net.Connect(server, playerName);
             _hud.ShowToast("Bienvenido a Oxfall: golpea árboles y rocas");
         }
 
@@ -280,6 +296,47 @@ namespace Oxfall.Game
             foreach (var pair in _counting) _owned[pair.Key] = pair.Value;
         }
 
+        private void OnNetStatus(NetClient.Status status)
+        {
+            _shownOnline = -1;
+            switch (status)
+            {
+                case NetClient.Status.Connecting:
+                    _hud.SetOnline("…", false);
+                    break;
+                case NetClient.Status.Online:
+                    _hud.ShowToast("Conectado al servidor");
+                    if (_net.Seed != DefaultSeed)
+                        Debug.LogWarning($"[Oxfall] The server's island (seed {_net.Seed}) is not this one ({DefaultSeed}).");
+                    break;
+                case NetClient.Status.Failed:
+                    _hud.SetOnline("SIN CONEXIÓN", false);
+                    _hud.ShowToast(_net.FailReason);
+                    break;
+                default:
+                    _hud.SetOnline(null, false);
+                    break;
+            }
+        }
+
+        /// <summary>Every frame while online: the player count and the names over heads.</summary>
+        private void TickNet()
+        {
+            if (_net == null) return;
+            _nameTags.Begin();
+            if (_net.State == NetClient.Status.Online)
+            {
+                if (_net.OnlineCount != _shownOnline)
+                {
+                    _shownOnline = _net.OnlineCount;
+                    _hud.SetOnline(_shownOnline.ToString(), true);
+                }
+                foreach (var other in _net.Players.Values)
+                    if (other.Visible) _nameTags.Show(_camera, other.Root.position + Vector3.up * 2.05f, other.Name);
+            }
+            _nameTags.End();
+        }
+
         private void OnDied()
         {
             Debug.Log("[Oxfall] The player died.");
@@ -305,6 +362,7 @@ namespace Oxfall.Game
             _player.enabled = true;
             _gatherer.enabled = true;
             _player.Teleport(_world.SpawnPosition, _world.SpawnYaw, 0f);
+            _net?.MarkTeleport();
             _vitalsUi.ShowDeath(false);
             _vitalsUi.Refresh();
             _hud.ShowToast("Has despertado en la playa");
@@ -391,11 +449,17 @@ namespace Oxfall.Game
                               $"ponds={_world.Shape.Ponds.Count} berries={_inventory.Count(ItemIds.Berries)} " +
                               $"pieces={_buildings.Grid.PieceCount} views={_buildings.Count} doorLook={_doorUser.LookingAtDoor} " +
                               $"pos={_player.transform.position} quality={GraphicsQuality.Name(_quality.Tier)} " +
-                              $"screen={Screen.width}x{Screen.height} grass={_grass.BladeCount}");
+                              $"screen={Screen.width}x{Screen.height} grass={_grass.BladeCount} " +
+                              $"net={_net.State} id={_net.PlayerId} online={_net.OnlineCount} " +
+                              $"others={string.Join(";", System.Linq.Enumerable.Select(_net.Players.Values, p => p.Name + "@" + p.Root.position))}");
                     break;
+                case "disconnect": _net.Disconnect(); break;
                 default:
-                    // slot-N chooses hotbar slot N (1 to 6); tap-N taps inventory slot N (0 to 29).
-                    if (command.StartsWith("slot-") && int.TryParse(command.Substring(5), out int slot))
+                    // connect:URL joins a server; slot-N chooses hotbar slot N (1 to 6); tap-N taps
+                    // inventory slot N (0 to 29).
+                    if (command.StartsWith("connect:"))
+                        _net.Connect(command.Substring(8), "Tester");
+                    else if (command.StartsWith("slot-") && int.TryParse(command.Substring(5), out int slot))
                         _hotbar.Select(slot - 1);
                     else if (command.StartsWith("tap-") && int.TryParse(command.Substring(4), out int tap))
                         _inventoryUi.TapSlot(tap);
@@ -608,6 +672,7 @@ namespace Oxfall.Game
         {
             TickVitals(Time.deltaTime);
             _vitalsUi?.Tick();
+            TickNet();
 
             // Trees and rocks grow back on their own timers; checking once a second is plenty.
             _crafting?.Tick(Time.deltaTime);

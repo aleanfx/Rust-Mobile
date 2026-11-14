@@ -362,6 +362,40 @@ namespace Oxfall.Game.World
             return b.Build("BerryBush", 70f);
         }
 
+        // ---- Other players: a plain survivor in parts that swing (legs and arms hang from their tops).
+
+        /// <summary>Torso, neck and head, feet at the origin. Submeshes: shirt, skin.</summary>
+        public static Mesh SurvivorBody()
+        {
+            var b = new FlatMeshBuilder(2);
+            var random = new System.Random(3);
+            b.AddTube(0, new Vector3(0f, 0.9f, 0f), new Vector3(0f, 1.2f, 0f), 0.17f, 0.19f, 9, 0);
+            b.AddTube(0, new Vector3(0f, 1.2f, 0f), new Vector3(0f, 1.44f, 0f), 0.19f, 0.15f, 9, 0);
+            b.AddTube(1, new Vector3(0f, 1.42f, 0f), new Vector3(0f, 1.53f, 0f), 0.055f, 0.05f, 7, 1);
+            b.AddBlob(1, new Vector3(0f, 1.64f, 0.01f), new Vector3(0.105f, 0.125f, 0.115f), random, 0.04f);
+            return b.Build("Survivor body", 60f);
+        }
+
+        /// <summary>One leg hanging from the hip at the origin. Submeshes: trousers, boot.</summary>
+        public static Mesh SurvivorLeg()
+        {
+            var b = new FlatMeshBuilder(2);
+            b.AddTube(0, Vector3.zero, new Vector3(0f, -0.45f, 0.01f), 0.085f, 0.07f, 7, 0);
+            b.AddTube(0, new Vector3(0f, -0.45f, 0.01f), new Vector3(0f, -0.82f, 0f), 0.07f, 0.06f, 7, 0);
+            b.AddTube(1, new Vector3(0f, -0.82f, -0.02f), new Vector3(0f, -0.9f, 0.08f), 0.065f, 0.06f, 7, 1);
+            return b.Build("Survivor leg", 60f);
+        }
+
+        /// <summary>One arm hanging from the shoulder at the origin. Submeshes: sleeve, hand.</summary>
+        public static Mesh SurvivorArm()
+        {
+            var b = new FlatMeshBuilder(2);
+            b.AddTube(0, Vector3.zero, new Vector3(0f, -0.3f, 0f), 0.06f, 0.05f, 7, 0);
+            b.AddTube(1, new Vector3(0f, -0.3f, 0f), new Vector3(0f, -0.56f, 0.02f), 0.045f, 0.038f, 7, 1);
+            b.AddBlob(1, new Vector3(0f, -0.61f, 0.02f), new Vector3(0.04f, 0.055f, 0.03f), new System.Random(9), 0.05f);
+            return b.Build("Survivor arm", 60f);
+        }
+
         /// <summary>A handful of berries on a leaf, for the inventory icon. Submeshes: berries, leaf.</summary>
         public static Mesh BerryCluster()
         {

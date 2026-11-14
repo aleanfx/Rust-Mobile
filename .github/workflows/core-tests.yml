@@ -1,5 +1,6 @@
-# Runs the game-rules tests (inventory, crafting, gathering, building). They are plain C# with no
-# Unity in them, so they run in seconds and need no licence.
+# Runs the game-rules tests (inventory, crafting, gathering, building, network protocol), then
+# builds the game server and has 20 bots play on it for a few seconds. Plain C# with no Unity in
+# it, so it runs in a minute and needs no licence.
 
 name: Core tests
 
@@ -8,6 +9,8 @@ on:
     paths:
       - 'Assets/Oxfall/Scripts/Core/**'
       - 'tests/**'
+      - 'server/**'
+      - 'tools/servertest/**'
       - '.github/workflows/core-tests.yml'
   pull_request:
   workflow_dispatch:
@@ -21,5 +24,16 @@ jobs:
       - uses: actions/setup-dotnet@v4
         with:
           dotnet-version: '8.0.x'
-      - name: Test
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Test the rules
         run: dotnet test tests/Oxfall.Core.Tests --nologo
+      - name: Build the server
+        run: dotnet publish server/Oxfall.Server -c Release -o out/server --nologo
+      - name: Bots on the server
+        run: |
+          dotnet out/server/Oxfall.Server.dll > server.log 2>&1 &
+          for i in $(seq 1 30); do curl -sf http://localhost:7777/ && break; sleep 1; done
+          node tools/servertest/bots.js ws://localhost:7777/ws 20 6
+          echo; tail -n 5 server.log
