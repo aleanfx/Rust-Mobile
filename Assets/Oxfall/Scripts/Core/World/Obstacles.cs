@@ -23,6 +23,7 @@ namespace Oxfall.Core.World
                     case ResourceNodeType.Tree: r = 0.35f * n.Scale; break;
                     case ResourceNodeType.Stone:
                     case ResourceNodeType.MetalOre: r = 0.5f * n.Scale; break;
+                    case ResourceNodeType.Barrel: r = 0.3f; break;
                     default: continue;
                 }
                 _byCell[n.Id] = (n.X, n.Z, r);

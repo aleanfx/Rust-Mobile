@@ -1098,6 +1098,7 @@ namespace Oxfall.Game
                 case "nearest-stone": FaceNearest(ResourceNodeType.Stone); break;
                 case "nearest-ore": FaceNearest(ResourceNodeType.MetalOre); break;
                 case "nearest-hemp": FaceNearest(ResourceNodeType.Hemp); break;
+                case "nearest-barrel": FaceNearest(ResourceNodeType.Barrel); break;
                 case "nearest-berries": FaceNearest(ResourceNodeType.BerryBush); break;
                 case "quality-low": SetQuality(QualityTier.Low); break;
                 case "quality-medium": SetQuality(QualityTier.Medium); break;

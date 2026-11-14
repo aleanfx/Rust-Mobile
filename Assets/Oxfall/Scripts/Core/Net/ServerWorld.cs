@@ -225,7 +225,7 @@ namespace Oxfall.Core.Net
             if (!Enum.IsDefined(typeof(ToolKind), tool) || !record.Survivor.HasTool(tool)) return _yields;
 
             player.LastHitTime = now;
-            foreach (var y in node.State.Hit(tool))
+            foreach (var y in node.State.Hit(tool, _random))
             {
                 _yields.Add((y.ItemId, y.Amount));
                 lost += record.Survivor.Inventory.Add(y.ItemId, y.Amount);

@@ -325,12 +325,14 @@ namespace Oxfall.Game.Player
                 return;
             }
 
+            bool works = GatherTable.PerHit(node.Node.Type, _hotbar.HeldTool) > 0;
             var yields = node.Hit(_hotbar.HeldTool);
             if (yields.Count > 0 || !node.Node.IsDepleted) PlayHitSound(node.Node.Type);
             if (yields.Count == 0)
             {
-                // Bare hands or a torch on a tree or a rock: say once in a while what is missing.
-                if (!node.Node.IsDepleted && _hintCooldown <= 0f)
+                // Bare hands or a torch on a tree or a rock: say once in a while what is missing. (A barrel
+                // that took the blow but is not open yet gives nothing either, and needs no hint.)
+                if (!works && !node.Node.IsDepleted && _hintCooldown <= 0f)
                 {
                     _hintCooldown = 2.5f;
                     Message?.Invoke(_hotbar.HeldTool == ToolKind.None
@@ -350,6 +352,7 @@ namespace Oxfall.Game.Player
         private void PlayHitSound(ResourceNodeType type) =>
             Sound?.Invoke(type == ResourceNodeType.Tree ? SoundCue.Wood
                 : type == ResourceNodeType.Stone || type == ResourceNodeType.MetalOre ? SoundCue.Stone
+                : type == ResourceNodeType.Barrel ? SoundCue.Metal
                 : SoundCue.Plant);
 
         /// <summary>A quick chop: the held item tips forward and down about the grip, then back.</summary>

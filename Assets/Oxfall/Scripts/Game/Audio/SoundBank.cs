@@ -35,6 +35,7 @@ namespace Oxfall.Game.Audio
         /// <summary>A bow creaking as it is drawn, and the string's thrum and the arrow's whoosh as it is loosed.</summary>
         public AudioClip BowDraw { get; }
         public AudioClip BowShot { get; }
+        public AudioClip HitMetal { get; }
         public AudioClip Grunt { get; }
         public AudioClip Bark { get; }
         public AudioClip FireLoop { get; }
@@ -110,6 +111,10 @@ namespace Oxfall.Game.Audio
                 (Tone(t, 110f) + 0.5f * Tone(t, 220f) + 0.25f * Tone(t, 330f)) * Env(t, 0.002f, 0.09f) * 0.6f
                 + Thump(t, 70f, 0.05f) * 0.5f
                 + Noise() * Env(t - 0.02f, 0.03f, 0.12f) * 0.35f);
+            // A hollow steel drum struck: a dull boom under a ring of inharmonic partials.
+            HitMetal = Make("metal", 0.6f, (t, i) =>
+                Thump(t, 85f, 0.08f) * 0.55f + Noise() * Env(t, 0.001f, 0.02f) * 0.35f
+                + (Tone(t, 310f) * 0.35f + Tone(t, 523f) * 0.22f + Tone(t, 887f) * 0.14f + Tone(t, 1391f) * 0.08f) * Env(t, 0.001f, 0.22f));
             FireLoop = MakeLoop("fire", 3f, FireSample);
             WindLoop = MakeLoop("wind", 6f, WindSample);
             WavesLoop = MakeLoop("waves", 8f, WavesSample);

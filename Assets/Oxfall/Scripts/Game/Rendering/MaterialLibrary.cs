@@ -73,6 +73,9 @@ namespace Oxfall.Game.Rendering
         public Material SheetMetal { get; }
         /// <summary>Bright worn steel: the heads of metal tools.</summary>
         public Material Steel { get; }
+        /// <summary>Old oil drums: blue, rust red and olive paint, and their bare, rusting rims and lids.</summary>
+        public Material[] BarrelPaint { get; }
+        public Material BarrelRust { get; }
         /// <summary>A code lock: its dark casing, its keys, and its light (red locked, green open).</summary>
         public Material LockBody { get; }
         public Material LockKeys { get; }
@@ -189,6 +192,15 @@ namespace Oxfall.Game.Rendering
             // Forged steel: darker and more metallic than paint, so it takes the sky's light along its edges.
             Steel = Make("Steel", new Color(0.50f, 0.51f, 0.53f), 0.58f);
             Steel.SetFloat(Metallic, 0.6f);
+            BarrelPaint = new[]
+            {
+                Make("Barrel blue", new Color(0.13f, 0.27f, 0.42f), 0.38f),
+                Make("Barrel red", new Color(0.46f, 0.13f, 0.09f), 0.34f),
+                Make("Barrel olive", new Color(0.29f, 0.31f, 0.18f), 0.3f),
+            };
+            foreach (var paint in BarrelPaint) paint.SetFloat(Metallic, 0.25f);
+            BarrelRust = Make("Barrel rust", new Color(0.33f, 0.21f, 0.13f), 0.22f);
+            BarrelRust.SetFloat(Metallic, 0.3f);
             LockBody = Make("Lock body", new Color(0.15f, 0.16f, 0.17f), 0.55f);
             LockKeys = Make("Lock keys", new Color(0.58f, 0.59f, 0.57f), 0.4f);
             LedRed = Make("Lock red", new Color(1f, 0.16f, 0.1f), 0.9f);

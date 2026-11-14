@@ -144,6 +144,7 @@ namespace Oxfall.Game.World
             for (int i = 0; i < rocks.Length; i++) rocks[i] = MeshFactory.Rock(shapes);
             var hemps = new Mesh[2];
             for (int i = 0; i < hemps.Length; i++) hemps[i] = MeshFactory.Hemp(shapes);
+            var barrel = MeshFactory.Barrel();
             var bushes = new Mesh[2];
             for (int i = 0; i < bushes.Length; i++) bushes[i] = MeshFactory.BerryBush(shapes, leafCards);
 
@@ -217,6 +218,20 @@ namespace Oxfall.Game.World
                             position - new Vector3(0f, 0.05f, 0f), yaw, Vector3.one * spawn.Scale, parent);
                         AddSphere(go, new Vector3(0f, 0.45f, 0f), 0.6f, true);
                         AddView(world, go, spawn.Id, ResourceNodeType.BerryBush);
+                        break;
+                    }
+                    case ResourceNodeType.Barrel:
+                    {
+                        // Standing on the ground, a little out of true; one of three old paints.
+                        var paint = materials.BarrelPaint[v % materials.BarrelPaint.Length];
+                        var go = MakeNode("Barrel", barrel, new[] { paint, materials.BarrelRust, materials.BarrelRust },
+                            position - new Vector3(0f, 0.03f, 0f), yaw, Vector3.one, parent);
+                        go.transform.rotation *= Quaternion.Euler((v % 7 - 3) * 0.9f, 0f, (v / 7 % 7 - 3) * 0.9f);
+                        var capsule = go.AddComponent<CapsuleCollider>();
+                        capsule.center = new Vector3(0f, 0.44f, 0f);
+                        capsule.radius = 0.31f;
+                        capsule.height = 0.9f;
+                        AddView(world, go, spawn.Id, ResourceNodeType.Barrel);
                         break;
                     }
                 }

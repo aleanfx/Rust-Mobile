@@ -1,6 +1,6 @@
 // The island's animals, alone: a deer that bolts, a boar rooting about, a wolf that charges and bites,
 // killing it with a spear, cutting up the carcass with a hatchet for meat and leather, then raw meat
-// on a campfire and a bite of it.
+// on a campfire and a bite of it; last, an old barrel broken open.
 // Usage: node animals.js [outDir]   (solo, against the build served on localhost:8080)
 const { chromium } = require('playwright');
 const fs = require('fs');
@@ -141,8 +141,17 @@ const stamp = () => ((Date.now() - t0) / 1000).toFixed(1).padStart(6);
   await shot('14-ate');
   await cmd('stats', 600);
 
+  // An old barrel: three blows with the rock, and what it held goes into the inventory.
+  await cmd('slot-1', 600);
+  await cmd('nearest-barrel', 1500);
+  await shot('15-barrel');
+  for (let i = 0; i < 3; i++) await cmd('use', 1000);
+  await wait(800);
+  await shot('16-barrel-open');
+  await cmd('stats', 600);
+
   log.push(`${stamp()} [test] bitten: ${count('te muerde') + count('Bitten')} hurt-hits: ${count('Animal hit: Wolf') } killed: ${has(' Killed ')} cut: ${count(' Cut ')} usedup: ${has('UsedUp')}`);
   fs.writeFileSync(path.join(out, 'console.log'), log.join('\n'));
-  console.log(log.filter(l => /\[(cmd|test|shot|pageerror|error)\]|Oxfall\] (Stats|Animal|Facing|Put meat|Gathered|The player)|xception/.test(l)).join('\n'));
+  console.log(log.filter(l => /\[(cmd|test|shot|pageerror|error)\]|Oxfall\] (Stats|Animal|Facing|Put meat|Gathered|The player|No )|xception/.test(l)).join('\n'));
   await browser.close();
 })();

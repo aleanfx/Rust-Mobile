@@ -11,6 +11,8 @@ namespace Oxfall.Core.Gathering
         MetalOre,
         Hemp,
         BerryBush,
+        /// <summary>An old oil drum: broken open with a few blows, it gives what was inside (see <see cref="LootTable"/>).</summary>
+        Barrel,
     }
 
     public readonly struct Yield
@@ -34,6 +36,7 @@ namespace Oxfall.Core.Gathering
                 case ResourceNodeType.MetalOre: return 240;
                 case ResourceNodeType.Hemp: return 10;
                 case ResourceNodeType.BerryBush: return 4;
+                case ResourceNodeType.Barrel: return 3;
                 default: throw new ArgumentOutOfRangeException(nameof(type));
             }
         }
@@ -48,6 +51,7 @@ namespace Oxfall.Core.Gathering
                 case ResourceNodeType.MetalOre: return 480f;
                 case ResourceNodeType.Hemp: return 120f;
                 case ResourceNodeType.BerryBush: return 150f;
+                case ResourceNodeType.Barrel: return 600f;
                 default: throw new ArgumentOutOfRangeException(nameof(type));
             }
         }
@@ -90,6 +94,21 @@ namespace Oxfall.Core.Gathering
                 case ResourceNodeType.Hemp:
                 case ResourceNodeType.BerryBush:
                     return Capacity(type); // picked by hand in one go, any tool or none
+                case ResourceNodeType.Barrel:
+                    // Three blows with anything hard; metal tools in two. Not with bare hands, a torch or a bow.
+                    switch (tool)
+                    {
+                        case ToolKind.MetalHatchet:
+                        case ToolKind.MetalPickaxe:
+                            return 2;
+                        case ToolKind.Rock:
+                        case ToolKind.Hatchet:
+                        case ToolKind.Pickaxe:
+                        case ToolKind.Spear:
+                        case ToolKind.Hammer:
+                            return 1;
+                        default: return 0;
+                    }
                 default:
                     throw new ArgumentOutOfRangeException(nameof(type));
             }
@@ -104,6 +123,7 @@ namespace Oxfall.Core.Gathering
                 case ResourceNodeType.MetalOre: return ItemIds.MetalOre;
                 case ResourceNodeType.Hemp: return ItemIds.Cloth;
                 case ResourceNodeType.BerryBush: return ItemIds.Berries;
+                case ResourceNodeType.Barrel: return ItemIds.MetalFragments;
                 default: throw new ArgumentOutOfRangeException(nameof(type));
             }
         }
@@ -134,10 +154,11 @@ namespace Oxfall.Core.Gathering
         }
 
         /// <summary>
-        /// Hits the node once. Returns what it gave; an empty list means the tool does nothing here or
-        /// the node is depleted. The last hit never gives more than what is left.
+        /// Hits the node once. Returns what it gave; an empty list means the tool does nothing here, the
+        /// node is depleted, or (a barrel) it is not broken open yet. The last hit never gives more than
+        /// what is left. <paramref name="random"/> rolls what a barrel held.
         /// </summary>
-        public IReadOnlyList<Yield> Hit(ToolKind tool)
+        public IReadOnlyList<Yield> Hit(ToolKind tool, Random random = null)
         {
             if (IsDepleted) return Array.Empty<Yield>();
             int amount = Math.Min(GatherTable.PerHit(Type, tool), Remaining);
@@ -145,6 +166,8 @@ namespace Oxfall.Core.Gathering
 
             Remaining -= amount;
             if (IsDepleted) RespawnTimer = GatherTable.RespawnSeconds(Type);
+            if (Type == ResourceNodeType.Barrel)
+                return IsDepleted ? LootTable.Barrel(random ?? new Random(Id * 7919 + System.Environment.TickCount)) : (IReadOnlyList<Yield>)Array.Empty<Yield>();
 
             var result = new List<Yield>(2) { new Yield(GatherTable.MainItem(Type), amount) };
             // Metal ore comes wrapped in stone.

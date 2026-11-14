@@ -22,6 +22,7 @@ namespace Oxfall.Game.Audio
         Hurt,
         BowDraw,
         BowShot,
+        Metal,
     }
 
     /// <summary>
@@ -130,6 +131,7 @@ namespace Oxfall.Game.Audio
                 case SoundCue.Hurt: Shot(_bank.Hurt, 1f, 0.06f); break;
                 case SoundCue.BowDraw: Shot(_bank.BowDraw, 0.5f, 0.05f); break;
                 case SoundCue.BowShot: Shot(_bank.BowShot, 0.9f, 0.06f); break;
+                case SoundCue.Metal: Shot(_bank.HitMetal, 0.75f, 0.08f); break;
             }
         }
 

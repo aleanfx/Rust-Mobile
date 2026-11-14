@@ -464,6 +464,27 @@ namespace Oxfall.Game.World
         }
 
         /// <summary>A thick cut of meat with a bone through it, lying flat. Submeshes: meat, bone.</summary>
+        /// <summary>
+        /// An old oil drum, 0.88 m tall: a steel shell, rims and two rolling hoops, a sunken lid with
+        /// its bung. Submeshes: paint, bare steel (rims and hoops), lid.
+        /// </summary>
+        public static Mesh Barrel()
+        {
+            var b = new FlatMeshBuilder(3) { UvScale = 1f };
+            const int sides = 16;
+            const float r = 0.29f, h = 0.88f;
+            b.AddCylinder(0, new Vector3(0f, 0.03f, 0f), r, r, h - 0.06f, sides, 0f);
+            b.AddTube(1, new Vector3(0f, 0f, 0f), new Vector3(0f, 0.04f, 0f), r + 0.012f, r + 0.012f, sides);
+            b.AddTube(1, new Vector3(0f, h - 0.04f, 0f), new Vector3(0f, h, 0f), r + 0.012f, r + 0.012f, sides);
+            foreach (float y in new[] { h * 0.34f, h * 0.66f })
+                b.AddTube(1, new Vector3(0f, y - 0.014f, 0f), new Vector3(0f, y + 0.014f, 0f), r + 0.016f, r + 0.016f, sides);
+            // The lid a little below the rim, the rim's inside showing round it; a bung near the edge.
+            b.AddTube(1, new Vector3(0f, h - 0.03f, 0f), new Vector3(0f, h, 0f), r - 0.004f, r - 0.004f, sides);
+            b.AddCone(2, new Vector3(0f, h - 0.03f, 0f), r, 0.006f, sides, 0f);
+            b.AddTube(1, new Vector3(0.16f, h - 0.03f, 0.06f), new Vector3(0.16f, h - 0.005f, 0.06f), 0.03f, 0.03f, 8, 1);
+            return b.Build("Barrel", 50f);
+        }
+
         public static Mesh MeatCut()
         {
             var b = new FlatMeshBuilder(2) { UvScale = 0.3f };
