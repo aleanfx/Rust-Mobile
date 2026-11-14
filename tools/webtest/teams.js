@@ -73,6 +73,8 @@ const wait = ms => new Promise(r => setTimeout(r, ms));
   await cmd(beto, 'Beto', 'team-panel', 2500);
   await shot(beto, '06-beto-team-panel');
   await cmd(beto, 'Beto', 'team-panel', 800);
+  // Beto marks the map: Ana sees his marker on hers.
+  await cmd(beto, 'Beto', 'map-mark:60,40', 2500);
   await cmd(ana, 'Ana', 'map', 3500);
   await shot(ana, '07-ana-map');
   await cmd(ana, 'Ana', 'map', 800);
@@ -81,6 +83,18 @@ const wait = ms => new Promise(r => setTimeout(r, ms));
   await cmd(beto, 'Beto', 'team-say:vamos a la ruina del norte', 2000);
   await cmd(ana, 'Ana', 'say:hola a todos', 2500);
   await shot(ana, '08-ana-chat');
+
+  // Beto in metal armour with the rifle, seen up close by Ana.
+  await cmd(beto, 'Beto', 'give-armour', 1500);
+  await cmd(beto, 'Beto', 'wear-armour', 2000);
+  await cmd(beto, 'Beto', 'give-guns', 1500);
+  await cmd(beto, 'Beto', 'rifle', 2000);
+  await cmd(ana, 'Ana', 'near-player', 3000);
+  await cmd(beto, 'Beto', 'face-player', 3000);
+  await shot(ana, '08b-ana-sees-armour');
+  await cmd(beto, 'Beto', 'inventory', 2500);
+  await shot(beto, '08c-beto-armour-worn');
+  await cmd(beto, 'Beto', 'inventory', 800);
 
   // Beto leaves.
   await cmd(beto, 'Beto', 'team-leave', 3000);

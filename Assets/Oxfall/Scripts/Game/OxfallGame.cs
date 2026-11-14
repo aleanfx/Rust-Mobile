@@ -262,6 +262,7 @@ namespace Oxfall.Game
             _map.MarkerChanged += at =>
             {
                 _hud.Marker = at;
+                SendMarker();
                 Debug.Log("[Oxfall] Marker: " + (at.HasValue ? $"{at.Value.x:0},{at.Value.z:0} {MapUi.Square(at.Value)}" : "none"));
             };
 
@@ -857,6 +858,8 @@ namespace Oxfall.Game
                     _onlineSince = Time.time;
                     _chat.SetOnline(true);
                     _team.SetOnline(true);
+                    // The team sees this player's marker.
+                    if (_map.Marker.HasValue) SendMarker();
                     break;
                 case NetClient.Status.Failed:
                     _chat.SetOnline(false);
@@ -1208,8 +1211,21 @@ namespace Oxfall.Game
             if (_team != null)
                 foreach (var m in _team.Mates)
                     if (m.Owner != _actions.Owner)
+                    {
                         _mapPins.Add(new MapUi.Pin(new Vector3(m.X, 0f, m.Z), Icons.Team, m.Online ? UiTheme.Good : UiTheme.TextFaint, m.Name));
+                        // Where they marked the map, as on the PC game: their pin, in the team's green.
+                        if (m.Marked) _mapPins.Add(new MapUi.Pin(new Vector3(m.MarkX, 0f, m.MarkZ), Icons.Marker, UiTheme.Good, "Marca de " + m.Name));
+                    }
             _map.Refresh(_player.transform.position, _player.Yaw, _mapPins);
+        }
+
+        /// <summary>Online, the server is told the marker, for the team to see.</summary>
+        private void SendMarker()
+        {
+            if (_net == null || _net.State != NetClient.Status.Online) return;
+            var at = _map.Marker;
+            if (at.HasValue) _net.SendTeam(TeamOp.Mark, Teams.PackMark(at.Value.x, at.Value.z));
+            else _net.SendTeam(TeamOp.Unmark, 0);
         }
 
         private void MarkMap(string where)

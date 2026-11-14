@@ -36,6 +36,10 @@ namespace Oxfall.Core.Rules
         Kick = 5,
         /// <summary>The leader hands the lead to a member (their owner number).</summary>
         Promote = 6,
+        /// <summary>Sets the player's map marker, which their team sees (where, packed by <see cref="Teams.PackMark"/>).</summary>
+        Mark = 7,
+        /// <summary>Takes the player's map marker away.</summary>
+        Unmark = 8,
     }
 
     /// <summary>
@@ -58,6 +62,27 @@ namespace Oxfall.Core.Rules
 
         /// <summary>Someone's team or invitation changed: everyone with these owner numbers is to be told.</summary>
         public event Action<IReadOnlyList<int>> Changed;
+
+        /// <summary>Tells a player's team (or the player alone) that something of theirs changed, such as their marker.</summary>
+        public void Touch(int owner)
+        {
+            if (TryGetTeam(owner, out var team)) Changed?.Invoke(team.Members.ToArray());
+            else Changed?.Invoke(new[] { owner });
+        }
+
+        /// <summary>A point on the island in one number: x and z to the decimetre, 16 bits each.</summary>
+        public static int PackMark(float x, float z)
+        {
+            int px = (int)Math.Round(Math.Max(-3200f, Math.Min(3200f, x)) * 10f);
+            int pz = (int)Math.Round(Math.Max(-3200f, Math.Min(3200f, z)) * 10f);
+            return (px << 16) | (pz & 0xFFFF);
+        }
+
+        public static void UnpackMark(int packed, out float x, out float z)
+        {
+            x = (short)(packed >> 16) / 10f;
+            z = (short)(packed & 0xFFFF) / 10f;
+        }
 
         public IEnumerable<Team> All => _teams.Values;
 

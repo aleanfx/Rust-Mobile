@@ -96,6 +96,63 @@ namespace Oxfall.Core.Tests
         }
 
         [Test]
+        public void A_marker_packs_to_the_decimetre()
+        {
+            foreach (var (x, z) in new[] { (0f, 0f), (123.4f, -87.6f), (-199.9f, 199.9f), (-0.1f, 0.1f) })
+            {
+                Teams.UnpackMark(Teams.PackMark(x, z), out float bx, out float bz);
+                Assert.AreEqual(x, bx, 0.051f);
+                Assert.AreEqual(z, bz, 0.051f);
+            }
+        }
+
+        [Test]
+        public void On_the_server_the_team_sees_each_others_markers()
+        {
+            var world = new ServerWorld(Seed);
+            var players = new List<ServerState.Player>();
+            var records = new List<SurvivorRecord>();
+            for (int i = 0; i < 3; i++)
+            {
+                records.Add(world.Join(Protocol.Version, Names[i], Tokens[i], 0f, out var p, out _, out _));
+                players.Add(p);
+            }
+            var at = players[0].Pose;
+            world.Players.Place(players[1].Id, new Pose(at.X + 2f, at.Y, at.Z, 0f), 0f);
+            var told = new List<int>();
+            world.Teams.Changed += owners => told.AddRange(owners);
+
+            // Marked alone: kept, and told to the player only.
+            Assert.AreEqual(ActionResult.Ok, world.TeamAct(players[1].Id, TeamOp.Mark, Teams.PackMark(50f, -30f)));
+            CollectionAssert.AreEqual(new[] { records[1].Owner }, told);
+            Assert.AreEqual(ActionResult.Ok, world.TeamAct(players[0].Id, TeamOp.Invite, players[1].Id));
+            Assert.AreEqual(ActionResult.Ok, world.TeamAct(players[1].Id, TeamOp.Accept, 0));
+
+            // In a team, the mate's marker comes with the team.
+            var w = new NetWriter();
+            world.WriteTeam(w, records[0].Owner);
+            var r = new NetReader(w.Buffer, 0, w.Length);
+            r.Byte();
+            var mates = new List<TeamMate>();
+            Messages.ReadTeamState(r, out _, out _, mates, out _);
+            Assert.AreEqual(0, r.Remaining);
+            var bea = mates.Single(m => m.Owner == records[1].Owner);
+            Assert.IsTrue(bea.Marked);
+            Assert.AreEqual((50f, -30f), (bea.MarkX, bea.MarkZ));
+            Assert.IsFalse(mates.Single(m => m.Owner == records[0].Owner).Marked);
+
+            // Taken away: everyone in the team is told at once.
+            told.Clear();
+            Assert.AreEqual(ActionResult.Ok, world.TeamAct(players[1].Id, TeamOp.Unmark, 0));
+            CollectionAssert.AreEquivalent(new[] { records[0].Owner, records[1].Owner }, told);
+            world.WriteTeam(w, records[0].Owner);
+            r = new NetReader(w.Buffer, 0, w.Length);
+            r.Byte();
+            Messages.ReadTeamState(r, out _, out _, mates, out _);
+            Assert.IsFalse(mates.Any(m => m.Marked));
+        }
+
+        [Test]
         public void On_the_server_asking_in_is_face_to_face_and_everyone_is_told()
         {
             var world = new ServerWorld(Seed);

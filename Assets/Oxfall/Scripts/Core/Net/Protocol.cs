@@ -12,7 +12,7 @@ namespace Oxfall.Core.Net
     public static class Protocol
     {
         /// <summary>Raised whenever a message changes shape; a client of another version is turned away.</summary>
-        public const ushort Version = 17;
+        public const ushort Version = 18;
 
         /// <summary>Snapshots per second the server sends.</summary>
         public const int TickRate = 20;
@@ -213,7 +213,10 @@ namespace Oxfall.Core.Net
     }
 
     /// <summary>Where a player stands and which way the body faces (degrees about up).</summary>
-    /// <summary>A teammate as the others are told of them: who, their player id while online (0 away), where they last were.</summary>
+    /// <summary>
+    /// A teammate as the others are told of them: who, their player id while online (0 away), where
+    /// they last were, and where they marked the map (if they did).
+    /// </summary>
     public readonly struct TeamMate
     {
         public readonly int Owner;
@@ -221,8 +224,11 @@ namespace Oxfall.Core.Net
         public readonly string Name;
         public readonly float X, Z;
         public readonly bool Online, Dead;
+        public readonly bool Marked;
+        public readonly float MarkX, MarkZ;
 
-        public TeamMate(int owner, ushort playerId, string name, float x, float z, bool online, bool dead)
+        public TeamMate(int owner, ushort playerId, string name, float x, float z, bool online, bool dead,
+            bool marked = false, float markX = 0f, float markZ = 0f)
         {
             Owner = owner;
             PlayerId = playerId;
@@ -231,6 +237,9 @@ namespace Oxfall.Core.Net
             Z = z;
             Online = online;
             Dead = dead;
+            Marked = marked;
+            MarkX = markX;
+            MarkZ = markZ;
         }
     }
 
@@ -1281,7 +1290,12 @@ namespace Oxfall.Core.Net
                 w.String(m.Name ?? "", 64);
                 w.Float(m.X);
                 w.Float(m.Z);
-                w.Byte((byte)((m.Online ? 1 : 0) | (m.Dead ? 2 : 0)));
+                w.Byte((byte)((m.Online ? 1 : 0) | (m.Dead ? 2 : 0) | (m.Marked ? 4 : 0)));
+                if (m.Marked)
+                {
+                    w.Float(m.MarkX);
+                    w.Float(m.MarkZ);
+                }
             }
             w.String(inviteFrom ?? "", 64);
         }
@@ -1299,7 +1313,9 @@ namespace Oxfall.Core.Net
                 string name = r.String();
                 float x = r.Float(), z = r.Float();
                 byte flags = r.Byte();
-                into.Add(new TeamMate(owner, playerId, name, x, z, (flags & 1) != 0, (flags & 2) != 0));
+                bool marked = (flags & 4) != 0;
+                float markX = marked ? r.Float() : 0f, markZ = marked ? r.Float() : 0f;
+                into.Add(new TeamMate(owner, playerId, name, x, z, (flags & 1) != 0, (flags & 2) != 0, marked, markX, markZ));
             }
             inviteFrom = r.String();
         }

@@ -39,6 +39,18 @@ namespace Oxfall.Core.Net
                 case TeamOp.Leave: return Teams.Leave(owner);
                 case TeamOp.Kick: return Teams.Kick(owner, arg);
                 case TeamOp.Promote: return Teams.Promote(owner, arg);
+                case TeamOp.Mark:
+                    Teams.UnpackMark(arg, out float markX, out float markZ);
+                    record.Marked = true;
+                    record.MarkX = markX;
+                    record.MarkZ = markZ;
+                    Teams.Touch(owner);
+                    return ActionResult.Ok;
+                case TeamOp.Unmark:
+                    if (!record.Marked) return ActionResult.Ok;
+                    record.Marked = false;
+                    Teams.Touch(owner);
+                    return ActionResult.Ok;
                 default: return ActionResult.Invalid;
             }
         }
@@ -46,7 +58,7 @@ namespace Oxfall.Core.Net
         /// <summary>Whether a survivor has anything to be told about a team: one they are in, or an invitation.</summary>
         public bool HasTeamNews(int owner) => Teams.TryGetTeam(owner, out _) || Teams.TryGetInvite(owner, Time, out _);
 
-        /// <summary>Writes what <paramref name="owner"/> is told of their team: its members, where each is, and any invitation.</summary>
+        /// <summary>Writes what <paramref name="owner"/> is told of their team: its members, where each is and has marked the map, and any invitation.</summary>
         public void WriteTeam(NetWriter w, int owner)
         {
             _mates.Clear();
@@ -60,7 +72,8 @@ namespace Oxfall.Core.Net
                     if (!_byOwner.TryGetValue(m, out var mate)) continue;
                     bool online = mate.PlayerId != 0 && Players.TryGet(mate.PlayerId, out _);
                     var pose = online && Players.TryGet(mate.PlayerId, out var player) ? player.Pose : mate.Pose;
-                    _mates.Add(new TeamMate(m, online ? mate.PlayerId : (ushort)0, mate.Name, pose.X, pose.Z, online, mate.Survivor.Vitals.IsDead));
+                    _mates.Add(new TeamMate(m, online ? mate.PlayerId : (ushort)0, mate.Name, pose.X, pose.Z, online, mate.Survivor.Vitals.IsDead,
+                        mate.Marked, mate.MarkX, mate.MarkZ));
                 }
             }
             string from = Teams.TryGetInvite(owner, Time, out int inviter) && _byOwner.TryGetValue(inviter, out var by) ? by.Name ?? "" : "";

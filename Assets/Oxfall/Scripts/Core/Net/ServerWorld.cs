@@ -24,6 +24,10 @@ namespace Oxfall.Core.Net
         public Pose Pose { get; internal set; }
         /// <summary>The player id while online, 0 while away.</summary>
         public ushort PlayerId { get; internal set; }
+        /// <summary>Where they marked the map, if anywhere (their team sees it; not kept with the island).</summary>
+        public bool Marked { get; internal set; }
+        public float MarkX { get; internal set; }
+        public float MarkZ { get; internal set; }
         /// <summary>Jobs finished since last told: (recipe id, how many did not fit).</summary>
         public List<(string RecipeId, int Lost)> Crafted { get; } = new List<(string, int)>();
     }
