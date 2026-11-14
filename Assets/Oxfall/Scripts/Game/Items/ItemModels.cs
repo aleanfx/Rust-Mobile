@@ -95,6 +95,43 @@ namespace Oxfall.Game.Items
                     Materials = new[] { m.Stone, m.Bark, m.Char },
                     IconRotation = Tilt(-32f, 15f),
                 },
+                [ItemIds.StorageBox] = new ItemModel
+                {
+                    Mesh = MeshFactory.StorageBox(),
+                    Materials = new[] { m.Planks, m.Bark, m.Metal },
+                    IconRotation = Tilt(-24f, 210f),
+                },
+                [ItemIds.Furnace] = new ItemModel
+                {
+                    Mesh = MeshFactory.Furnace(),
+                    Materials = new[] { m.Stone, m.Char, m.Metal },
+                    IconRotation = Tilt(-18f, 200f),
+                },
+                [ItemIds.SleepingBag] = new ItemModel
+                {
+                    Mesh = MeshFactory.SleepingBag(),
+                    Materials = new[] { m.Bedroll, m.Cloth, m.Rope },
+                    IconRotation = Tilt(-48f, 140f),
+                    IconZoom = 1.1f,
+                },
+                [ItemIds.ToolCupboard] = new ItemModel
+                {
+                    Mesh = MeshFactory.ToolCupboard(),
+                    Materials = new[] { m.Planks, m.Bark, m.Metal },
+                    IconRotation = Tilt(-14f, 205f),
+                },
+                [ItemIds.MetalFragments] = new ItemModel
+                {
+                    Mesh = MeshFactory.MetalScraps(),
+                    Materials = new[] { m.Metal },
+                    IconRotation = Tilt(-40f, 25f),
+                },
+                [ItemIds.Charcoal] = new ItemModel
+                {
+                    Mesh = MeshFactory.CharcoalLumps(),
+                    Materials = new[] { m.Char },
+                    IconRotation = Tilt(-35f, 15f),
+                },
                 [ItemIds.Wood] = new ItemModel
                 {
                     Mesh = MeshFactory.WoodPile(),

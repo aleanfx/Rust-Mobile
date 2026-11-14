@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using Oxfall.Core.Survival;
 using UnityEngine;
 using UnityEngine.UI;
@@ -24,8 +25,31 @@ namespace Oxfall.Game.UI
         private readonly RectTransform _death;
         private int _shownHealth = -1, _shownFood = -1, _shownWater = -1;
 
-        /// <summary>Raised when the player taps DESPERTAR on the death screen.</summary>
+        /// <summary>Raised when the player taps DESPERTAR (on the beach) on the death screen.</summary>
         public event Action WakeUpTapped;
+
+        /// <summary>Raised when the player taps one of their sleeping bags on the death screen (its id).</summary>
+        public event Action<int> BagTapped;
+
+        private const int MaxBags = 3;
+        private const float ChoiceWidth = 330f;
+        private const float ChoiceGap = 26f;
+
+        private sealed class BagButton
+        {
+            public RectTransform Rect;
+            public Image Fill;
+            public Text Title;
+            public Text State;
+            public int Id;
+            public Func<float> ReadyIn;
+        }
+
+        private readonly BagButton[] _bags = new BagButton[MaxBags];
+        private RectTransform _beach;
+        private Text _beachLabel;
+        private Text _hint;
+        private int _bagCount;
 
         private sealed class Row
         {
@@ -56,18 +80,87 @@ namespace Oxfall.Game.UI
             UiFactory.AddText(title, "HAS MUERTO", 110, TextAnchor.MiddleCenter, UiTheme.Bad, true);
             var line = UiFactory.NewRect("Line", _death, half, half, new Vector2(0f, 38f), new Vector2(80f, 4f));
             UiFactory.AddImage(line, null, UiTheme.Accent);
-            var hint = UiFactory.NewRect("Hint", _death, half, half, new Vector2(0f, -10f), new Vector2(1100f, 50f));
-            UiFactory.AddText(hint, "Despiertas en la playa con una roca y una antorcha.", 32, TextAnchor.MiddleCenter, UiTheme.TextMuted);
-            var button = UiFactory.NewRect("Wake up", _death, half, half, new Vector2(0f, -120f), new Vector2(420f, 100f));
-            UiFactory.AddImage(button, UiFactory.Soft, UiTheme.Accent);
-            var label = UiFactory.NewRect("Label", button, half, half, Vector2.zero, new Vector2(400f, 70f));
-            UiFactory.AddText(label, "DESPERTAR", 42, TextAnchor.MiddleCenter, Color.white, true);
-            hud.TapTargets.Insert(0, new Hud.TapTarget { Rect = button, OnTap = () => WakeUpTapped?.Invoke() });
+            var hint = UiFactory.NewRect("Hint", _death, half, half, new Vector2(0f, -10f), new Vector2(1300f, 50f));
+            _hint = UiFactory.AddText(hint, "", 32, TextAnchor.MiddleCenter, UiTheme.TextMuted);
+            _beach = UiFactory.NewRect("Wake up", _death, half, half, new Vector2(0f, -130f), new Vector2(ChoiceWidth, 110f));
+            UiFactory.AddImage(_beach, UiFactory.Soft, UiTheme.Accent);
+            var label = UiFactory.NewRect("Label", _beach, half, half, Vector2.zero, new Vector2(ChoiceWidth - 20f, 70f));
+            _beachLabel = UiFactory.AddText(label, "DESPERTAR", 42, TextAnchor.MiddleCenter, Color.white, true);
+            hud.TapTargets.Insert(0, new Hud.TapTarget { Rect = _beach, OnTap = () => WakeUpTapped?.Invoke() });
+
+            // The player's sleeping bags, beside the beach: each says when it is ready.
+            for (int i = 0; i < MaxBags; i++)
+            {
+                var bag = new BagButton();
+                bag.Rect = UiFactory.NewRect("Bag", _death, half, half, Vector2.zero, new Vector2(ChoiceWidth, 110f));
+                bag.Fill = UiFactory.AddImage(bag.Rect, UiFactory.Soft, UiTheme.Slot);
+                var left = new Vector2(0f, 0.5f);
+                UiFactory.AddIcon(bag.Rect, Icons.Bed, new Vector2(56f, 0f), 64f, UiTheme.Text, left);
+                var bagTitle = UiFactory.NewRect("Title", bag.Rect, left, left, new Vector2(104f, 18f), new Vector2(210f, 44f));
+                bag.Title = UiFactory.AddText(bagTitle, "", 34, TextAnchor.MiddleLeft, UiTheme.Text, true);
+                var bagState = UiFactory.NewRect("State", bag.Rect, left, left, new Vector2(104f, -22f), new Vector2(210f, 34f));
+                bag.State = UiFactory.AddText(bagState, "", 24, TextAnchor.MiddleLeft, UiTheme.TextMuted, true);
+                var captured = bag;
+                hud.TapTargets.Insert(0, new Hud.TapTarget { Rect = bag.Rect, OnTap = () => BagTapped?.Invoke(captured.Id) });
+                bag.Rect.gameObject.SetActive(false);
+                _bags[i] = bag;
+            }
+            SetBags(null);
             _death.gameObject.SetActive(false);
             Refresh();
         }
 
         public void ShowDeath(bool dead) => _death.gameObject.SetActive(dead);
+
+        public bool DeathShown => _death.gameObject.activeSelf;
+
+        /// <summary>
+        /// The sleeping bags to offer on the death screen (up to three): their ids and how many
+        /// seconds until each is ready. None: only the beach.
+        /// </summary>
+        public void SetBags(IReadOnlyList<(int Id, Func<float> ReadyIn)> bags)
+        {
+            _bagCount = bags == null ? 0 : Math.Min(bags.Count, MaxBags);
+            for (int i = 0; i < MaxBags; i++)
+            {
+                var bag = _bags[i];
+                bool show = i < _bagCount;
+                bag.Rect.gameObject.SetActive(show);
+                if (!show) continue;
+                bag.Id = bags[i].Id;
+                bag.ReadyIn = bags[i].ReadyIn;
+                bag.Title.text = _bagCount == 1 ? "SACO" : "SACO " + (i + 1);
+            }
+            // The choices in one row, centred.
+            int count = _bagCount + 1;
+            float width = count * ChoiceWidth + (count - 1) * ChoiceGap;
+            float x = -width * 0.5f + ChoiceWidth * 0.5f;
+            _beach.anchoredPosition = new Vector2(x, -130f);
+            for (int i = 0; i < _bagCount; i++)
+                _bags[i].Rect.anchoredPosition = new Vector2(x + (i + 1) * (ChoiceWidth + ChoiceGap), -130f);
+            _beachLabel.text = _bagCount > 0 ? "EN LA PLAYA" : "DESPERTAR";
+            _hint.text = _bagCount > 0
+                ? "Elige dónde despertar: en la playa o en uno de tus sacos de dormir."
+                : "Despiertas en la playa con una roca y una antorcha.";
+            TickBags();
+        }
+
+        /// <summary>The countdown on each bag (called every frame while dead is plenty cheap: only text that changed is set).</summary>
+        private void TickBags()
+        {
+            for (int i = 0; i < _bagCount; i++)
+            {
+                var bag = _bags[i];
+                float wait = bag.ReadyIn();
+                bool ready = wait <= 0f;
+                string text = ready ? "LISTO" : $"{(int)wait / 60}:{(int)wait % 60:00}";
+                if (bag.State.text != text) bag.State.text = text;
+                var fill = ready ? UiTheme.Accent.WithAlpha(0.9f) : UiTheme.Slot;
+                if (bag.Fill.color != fill) bag.Fill.color = fill;
+                var colour = ready ? Color.white : UiTheme.TextMuted;
+                if (bag.State.color != colour) bag.State.color = colour;
+            }
+        }
 
         /// <summary>Redraws the bars when a shown number changes (twice a second is plenty to call it).</summary>
         public void Refresh()
@@ -80,6 +173,7 @@ namespace Oxfall.Game.UI
         /// <summary>Every frame: a vital running low pulses its icon and bar.</summary>
         public void Tick()
         {
+            if (_bagCount > 0 && _death.gameObject.activeSelf) TickBags();
             float pulse = 0.55f + 0.45f * Mathf.Sin(Time.unscaledTime * 6f);
             Pulse(_health, pulse);
             Pulse(_food, pulse);

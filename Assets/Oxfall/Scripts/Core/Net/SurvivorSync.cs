@@ -83,4 +83,67 @@ namespace Oxfall.Core.Net
             return true;
         }
     }
+
+    /// <summary>
+    /// What one client has been told about the box or furnace it has open: everything when it
+    /// opens, then only the slots that change (a furnace changes on its own while it burns), and a
+    /// word when it closes.
+    /// </summary>
+    public sealed class LootSync
+    {
+        private static readonly List<(int, ItemStack)> None = new List<(int, ItemStack)>();
+        private readonly List<(int, ItemStack)> _changed = new List<(int, ItemStack)>();
+        private ItemStack[] _slots = Array.Empty<ItemStack>();
+        private int _id;
+
+        /// <summary>The box this client was last told about (0: none).</summary>
+        public int Open => _id;
+
+        public void Reset()
+        {
+            _id = 0;
+            _slots = Array.Empty<ItemStack>();
+        }
+
+        /// <summary>Writes what changed in the open box (or that it opened or closed); false (nothing written) if nothing did.</summary>
+        public bool Write(Settlement settlement, Survivor s, NetWriter w)
+        {
+            int id = s.Looting;
+            var box = id != 0 ? settlement.Container(id) : null;
+            if (box == null) id = 0;
+            _changed.Clear();
+            if (id != _id)
+            {
+                bool wasOpen = _id != 0;
+                _id = id;
+                if (id == 0)
+                {
+                    _slots = Array.Empty<ItemStack>();
+                    if (!wasOpen) return false;
+                    Messages.Loot(w, 0, 0, None);
+                    return true;
+                }
+                _slots = new ItemStack[box.SlotCount];
+                for (int i = 0; i < _slots.Length; i++)
+                {
+                    _slots[i] = box[i].IsEmpty ? ItemStack.Empty : box[i];
+                    _changed.Add((i, _slots[i]));
+                }
+                Messages.Loot(w, id, box.SlotCount, _changed);
+                return true;
+            }
+            if (id == 0) return false;
+            for (int i = 0; i < _slots.Length; i++)
+            {
+                var now = box[i];
+                if (now.IsEmpty && _slots[i].IsEmpty) continue;
+                if (now.Equals(_slots[i])) continue;
+                _slots[i] = now.IsEmpty ? ItemStack.Empty : now;
+                _changed.Add((i, _slots[i]));
+            }
+            if (_changed.Count == 0) return false;
+            Messages.Loot(w, id, box.SlotCount, _changed);
+            return true;
+        }
+    }
 }

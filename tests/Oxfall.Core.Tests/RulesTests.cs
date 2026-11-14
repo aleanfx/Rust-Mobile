@@ -21,7 +21,7 @@ namespace Oxfall.Core.Tests
         private static (Settlement settlement, Survivor survivor, Cell cell, float x, float y, float z) Setup()
         {
             var ground = new IslandGround(Seed);
-            var settlement = new Settlement(ground);
+            var settlement = new Settlement(ground, Catalog);
             var survivor = new Survivor(Catalog);
             survivor.Inventory.Add(ItemIds.Wood, 5000);
             survivor.Inventory.Add(ItemIds.Stone, 3000);
@@ -120,15 +120,17 @@ namespace Oxfall.Core.Tests
             s.Inventory.Add(ItemIds.Campfire, 2);
             var ground = w.Ground;
             float fx = x + 1.5f, fz = z;
-            var fire = new Campfire(0, fx, ground.Height(fx, fz), fz, 30f);
-            var r = PlayerActions.Build(w, s, 1, BuildOp.PlaceCampfire(fire), x, y, z, out var done);
+            var fire = new Deployable(0, DeployableKind.Campfire, fx, ground.Height(fx, fz), fz, 30f);
+            var r = PlayerActions.Build(w, s, 1, BuildOp.Deploy(fire), x, y, z, out var done);
             Assert.AreEqual(ActionResult.Ok, r);
-            Assert.AreEqual(1, done.Fire.Id);
-            Assert.AreEqual(1, w.CampfireCount);
+            Assert.AreEqual(1, done.Id);
+            Assert.AreEqual(1, w.DeployableCount);
             Assert.AreEqual(1, s.Inventory.Count(ItemIds.Campfire));
-            var floating = new Campfire(0, fx, ground.Height(fx, fz) + 5f, fz, 0f);
-            Assert.AreEqual(ActionResult.Invalid, Build(w, s, BuildOp.PlaceCampfire(floating), x, y, z));
-            Assert.AreEqual(ActionResult.TooFar, Build(w, s, BuildOp.PlaceCampfire(fire), x + 30f, y, z));
+            var floating = new Deployable(0, DeployableKind.Campfire, fx, ground.Height(fx, fz) + 5f, fz, 0f);
+            Assert.AreEqual(ActionResult.Invalid, Build(w, s, BuildOp.Deploy(floating), x, y, z));
+            Assert.AreEqual(ActionResult.TooClose, Build(w, s, BuildOp.Deploy(fire), x, y, z), "the spot is taken");
+            var further = new Deployable(0, DeployableKind.Campfire, fx + 1.5f, ground.Height(fx + 1.5f, fz), fz, 0f);
+            Assert.AreEqual(ActionResult.TooFar, Build(w, s, BuildOp.Deploy(further), x + 30f, y, z));
         }
 
         [Test]
@@ -147,7 +149,7 @@ namespace Oxfall.Core.Tests
             s.Inventory.Add(ItemIds.Campfire, 1);
             Build(w, s, BuildOp.Door(cell.South), x, y, z);
             Build(w, s, BuildOp.ToggleDoor(cell.South, true), x, y, z);
-            Build(w, s, BuildOp.PlaceCampfire(new Campfire(0, x, w.Ground.Height(x, z), z, 0f)), x, y, z);
+            Build(w, s, BuildOp.Deploy(new Deployable(0, DeployableKind.Campfire, x, w.Ground.Height(x, z), z, 0f)), x, y, z);
 
             // Through the wire, as a joining player gets it.
             var ops = BuildOps.Describe(w);
@@ -157,21 +159,21 @@ namespace Oxfall.Core.Tests
             var read = new List<BuildOp>();
             Messages.ReadBuilt(new NetReader(bytes, 1, bytes.Length - 1), read);
 
-            var copy = new Settlement(new IslandGround(Seed));
+            var copy = new Settlement(new IslandGround(Seed), Catalog);
             foreach (var op in read) Assert.IsTrue(BuildOps.Apply(copy, op), op.ToString());
             Assert.AreEqual(w.Grid.PieceCount, copy.Grid.PieceCount);
             Assert.AreEqual(5, copy.Grid.PieceCount);
             Assert.IsTrue(copy.Grid.TryGetTier(PieceRef.OnEdge(cell.West, PieceType.Wall), out var tier));
             Assert.AreEqual(BuildingTier.Stone, tier);
             Assert.IsTrue(copy.Grid.IsDoorOpen(cell.South));
-            Assert.AreEqual(1, copy.CampfireCount);
+            Assert.AreEqual(1, copy.DeployableCount);
             w.Grid.TryGetFoundationTop(east, out float top);
             copy.Grid.TryGetFoundationTop(east, out float copyTop);
             Assert.AreEqual(top, copyTop);
 
             copy.Clear();
             Assert.AreEqual(0, copy.Grid.PieceCount);
-            Assert.AreEqual(0, copy.CampfireCount);
+            Assert.AreEqual(0, copy.DeployableCount);
         }
 
         [Test]
@@ -212,6 +214,202 @@ namespace Oxfall.Core.Tests
         }
     }
 
+    public class DeployableTests
+    {
+        private static ItemCatalog Catalog => ItemCatalog.CreateDefault();
+
+        /// <summary>A settlement and a survivor on the beach, with a spot on flat ground beside them.</summary>
+        private static (Settlement w, Survivor s, float x, float y, float z) Setup()
+        {
+            var ground = new IslandGround(20261113);
+            var w = new Settlement(ground, Catalog);
+            var s = new Survivor(Catalog);
+            var spawn = Spawns.Beach(ground, new System.Random(20261113 ^ 0x5f3759df));
+            for (int r = 0; r < 40; r++)
+            for (int i = 0; i < 16; i++)
+            {
+                float a = i * 0.3927f, x = spawn.X + (float)System.Math.Cos(a) * r, z = spawn.Z + (float)System.Math.Sin(a) * r;
+                float h = ground.Height(x, z);
+                if (h < 1.5f) continue;
+                // Flat enough for a few things around.
+                if (System.Math.Abs(ground.Height(x + 3f, z) - h) > 0.8f || System.Math.Abs(ground.Height(x - 3f, z) - h) > 0.8f) continue;
+                return (w, s, x, h, z);
+            }
+            Assert.Fail("No flat ground near the beach.");
+            return default;
+        }
+
+        private static Deployable At(DeployableKind kind, Settlement w, float x, float z) =>
+            new Deployable(0, kind, x, w.Ground.Height(x, z), z, 0f);
+
+        private static ActionResult Deploy(Settlement w, Survivor s, DeployableKind kind, float x, float z, float px, float py, float pz,
+            int owner, out BuildOp done)
+        {
+            s.Inventory.Add(Deployables.ItemOf(kind), 1);
+            return PlayerActions.Build(w, s, owner, BuildOp.Deploy(At(kind, w, x, z)), px, py, pz, out done);
+        }
+
+        [Test]
+        public void ABoxHoldsThingsAndOnlyItsOpenerMovesThem()
+        {
+            var (w, s, x, y, z) = Setup();
+            Assert.AreEqual(ActionResult.Ok, Deploy(w, s, DeployableKind.StorageBox, x + 1.5f, z, x, y, z, 7, out var done));
+            int box = done.Id;
+            Assert.AreEqual(7, done.Deployed.Owner, "the server marks who set it down");
+            Assert.AreEqual(12, w.Container(box).SlotCount);
+
+            s.Inventory.Add(ItemIds.Wood, 300);
+            int woodSlot = Enumerable.Range(0, s.Inventory.SlotCount).First(i => s.Inventory[i].ItemId == ItemIds.Wood);
+            Assert.AreEqual(ActionResult.NotOpen, PlayerActions.Put(w, s, woodSlot, -1), "it has to be opened first");
+            Assert.AreEqual(ActionResult.TooFar, PlayerActions.Open(w, s, box, x + 40f, y, z));
+            Assert.AreEqual(ActionResult.Ok, PlayerActions.Open(w, s, box, x, y, z));
+            Assert.AreEqual(ActionResult.Ok, PlayerActions.Put(w, s, woodSlot, -1));
+            Assert.AreEqual(300, w.Container(box).Count(ItemIds.Wood));
+            Assert.AreEqual(0, s.Inventory.Count(ItemIds.Wood));
+            Assert.AreEqual(ActionResult.Ok, PlayerActions.MoveInBox(w, s, 0, 5));
+            Assert.AreEqual(300, w.Container(box)[5].Amount);
+            Assert.AreEqual(ActionResult.Ok, PlayerActions.Take(w, s, 5, 20));
+            Assert.AreEqual(300, s.Inventory[20].Amount);
+            Assert.IsTrue(w.Container(box).IsEmpty);
+
+            // Picked up (only when empty) it goes back into the inventory.
+            w.Container(box).Add(ItemIds.Stone, 10);
+            Assert.AreEqual(ActionResult.NotEmpty, PlayerActions.Build(w, s, 7, BuildOp.Pickup(box), x, y, z, out _));
+            Assert.AreEqual(ActionResult.Ok, PlayerActions.Take(w, s, 0, -1));
+            Assert.AreEqual(ActionResult.NotYours, PlayerActions.Build(w, s, 8, BuildOp.Pickup(box), x, y, z, out _));
+            Assert.AreEqual(ActionResult.Ok, PlayerActions.Build(w, s, 7, BuildOp.Pickup(box), x, y, z, out _));
+            Assert.AreEqual(1, s.Inventory.Count(ItemIds.StorageBox));
+            Assert.AreEqual(0, w.DeployableCount);
+            Assert.AreEqual(ActionResult.NoPiece, PlayerActions.Take(w, s, 0, -1), "a box that went is closed");
+            Assert.AreEqual(0, s.Looting);
+        }
+
+        [Test]
+        public void AFurnaceTurnsOreIntoMetalWhileItsWoodLasts()
+        {
+            var (w, s, x, y, z) = Setup();
+            Assert.AreEqual(ActionResult.Ok, Deploy(w, s, DeployableKind.Furnace, x + 1.5f, z, x, y, z, 1, out var done));
+            int id = done.Id;
+            var furnace = w.Container(id);
+            Assert.AreEqual(ActionResult.NoFuel, PlayerActions.Build(w, s, 1, BuildOp.Light(id, true), x, y, z, out _));
+            furnace.Add(ItemIds.Wood, 5);
+            furnace.Add(ItemIds.MetalOre, 20);
+            Assert.AreEqual(ActionResult.Ok, PlayerActions.Build(w, s, 1, BuildOp.Light(id, true), x, y, z, out var lit));
+            Assert.IsTrue(lit.Open);
+            Assert.IsTrue(w.IsLit(id));
+
+            var wentOut = new List<int>();
+            // (Quarter seconds add up exactly.)
+            for (int i = 0; i < 48; i++) w.Tick(0.25f, wentOut);
+            // Five pieces of wood burn for ten seconds: five fragments, five charcoal, and it goes out.
+            Assert.AreEqual(0, furnace.Count(ItemIds.Wood));
+            Assert.AreEqual(5, furnace.Count(ItemIds.Charcoal));
+            Assert.AreEqual(5, furnace.Count(ItemIds.MetalFragments));
+            Assert.AreEqual(15, furnace.Count(ItemIds.MetalOre));
+            Assert.IsFalse(w.IsLit(id));
+            Assert.AreEqual(new[] { id }, wentOut.ToArray());
+            Assert.AreEqual(ActionResult.NotEmpty, PlayerActions.Build(w, s, 1, BuildOp.Pickup(id), x, y, z, out _));
+        }
+
+        [Test]
+        public void SleepingBagsWakeTheirOwnerUpEveryTwoMinutes()
+        {
+            var (w, s, x, y, z) = Setup();
+            Assert.AreEqual(ActionResult.Ok, Deploy(w, s, DeployableKind.SleepingBag, x + 1.5f, z, x, y, z, 3, out var done));
+            int bag = done.Id;
+            Assert.AreEqual(1, w.BagsOf(3).Count());
+            Assert.AreEqual(ActionResult.Invalid, PlayerActions.RespawnInBag(w, s, 3, bag, 0f, out _), "only the dead wake up");
+            s.Vitals.Damage(1000f);
+            Assert.AreEqual(ActionResult.NotYours, PlayerActions.RespawnInBag(w, s, 4, bag, 0f, out _));
+            Assert.AreEqual(ActionResult.Ok, PlayerActions.RespawnInBag(w, s, 3, bag, 10f, out var at));
+            Assert.AreEqual(done.Deployed.X, at.X);
+            Assert.IsFalse(s.Vitals.IsDead);
+            s.Vitals.Damage(1000f);
+            Assert.AreEqual(ActionResult.NotReady, PlayerActions.RespawnInBag(w, s, 3, bag, 60f, out _));
+            Assert.AreEqual(ActionResult.Ok, PlayerActions.RespawnInBag(w, s, 3, bag, 10f + Deployables.BagCooldown, out _));
+        }
+
+        [Test]
+        public void ACupboardKeepsOthersFromBuildingAroundIt()
+        {
+            var (w, s, x, y, z) = Setup();
+            s.Inventory.Add(ItemIds.Wood, 5000);
+            Assert.AreEqual(ActionResult.Ok, Deploy(w, s, DeployableKind.ToolCupboard, x + 1.5f, z, x, y, z, 1, out var done));
+            int tc = done.Id;
+            Assert.IsTrue(w.IsAuthorized(tc, 1), "whoever sets it down is on it");
+            Assert.IsTrue(w.HasPrivilege(1, x, z));
+            Assert.IsFalse(w.HasPrivilege(2, x, z));
+            Assert.IsTrue(w.HasPrivilege(2, x + 60f, z), "far away anyone builds");
+
+            // Player 2 can set nothing down here, nor build.
+            Assert.AreEqual(ActionResult.BuildingBlocked, Deploy(w, s, DeployableKind.Campfire, x - 1.5f, z, x, y, z, 2, out _));
+            var cell = BuildingGrid.CellAt(x - 3f, z);
+            var blocked = PlayerActions.Build(w, s, 2, BuildOp.Foundation(cell, 0f), x, y, z, out _);
+            Assert.IsTrue(blocked == ActionResult.BuildingBlocked || blocked == ActionResult.InWater || blocked == ActionResult.TooSteep,
+                blocked.ToString());
+
+            // Until they authorize themselves on it (it has no lock yet); then whoever is on it can clear it.
+            Assert.AreEqual(ActionResult.Ok, PlayerActions.Build(w, s, 2, BuildOp.Authorize(tc, 999), x, y, z, out var auth));
+            Assert.AreEqual(2, auth.Deployed.Owner, "the server decides who is authorized, not the message");
+            Assert.IsTrue(w.HasPrivilege(2, x, z));
+            Assert.AreEqual(ActionResult.NotYours, PlayerActions.Build(w, s, 5, BuildOp.ClearAuthorized(tc), x, y, z, out _));
+            Assert.AreEqual(ActionResult.Ok, PlayerActions.Build(w, s, 1, BuildOp.ClearAuthorized(tc), x, y, z, out _));
+            Assert.IsFalse(w.HasPrivilege(1, x, z));
+            Assert.AreEqual(0, w.AuthorizedOn(tc).Count);
+        }
+
+        [Test]
+        public void ACopyOfTheSettlementKnowsTheFurnacesAndCupboards()
+        {
+            var (w, s, x, y, z) = Setup();
+            Deploy(w, s, DeployableKind.Furnace, x + 1.5f, z, x, y, z, 1, out var furnace);
+            Deploy(w, s, DeployableKind.ToolCupboard, x - 1.5f, z, x, y, z, 1, out var tc);
+            w.Container(furnace.Id).Add(ItemIds.Wood, 10);
+            w.SetLit(furnace.Id, true);
+            w.Authorize(tc.Id, 9);
+
+            var copy = new Settlement(w.Ground, Catalog);
+            foreach (var op in BuildOps.Describe(w)) Assert.IsTrue(BuildOps.Apply(copy, op), op.ToString());
+            Assert.AreEqual(2, copy.DeployableCount);
+            Assert.IsTrue(copy.IsLit(furnace.Id));
+            Assert.IsTrue(copy.IsAuthorized(tc.Id, 9));
+            Assert.IsTrue(copy.IsAuthorized(tc.Id, 1));
+            Assert.AreEqual(2, copy.AuthorizedOn(tc.Id).Count);
+            Assert.IsTrue(copy.TryGet(furnace.Id, out var d) && d.Kind == DeployableKind.Furnace && d.Owner == 1);
+        }
+
+        [Test]
+        public void TheOpenBoxIsSentToItsOpenerOnly()
+        {
+            var (w, s, x, y, z) = Setup();
+            Deploy(w, s, DeployableKind.StorageBox, x + 1.5f, z, x, y, z, 1, out var done);
+            var sync = new LootSync();
+            var writer = new NetWriter();
+            Assert.IsFalse(sync.Write(w, s, writer), "nothing open, nothing to say");
+            w.Container(done.Id).Add(ItemIds.Stone, 50);
+            PlayerActions.Open(w, s, done.Id, x, y, z);
+            Assert.IsTrue(sync.Write(w, s, writer));
+            var slots = new List<(int, ItemStack)>();
+            var bytes = writer.ToArray();
+            Assert.AreEqual(MessageType.Loot, Protocol.PeekType(bytes, bytes.Length));
+            int id = Messages.ReadLoot(new NetReader(bytes, 1, bytes.Length - 1), out int count, slots);
+            Assert.AreEqual(done.Id, id);
+            Assert.AreEqual(12, count);
+            Assert.AreEqual(12, slots.Count, "everything when it opens");
+            Assert.AreEqual(new ItemStack(ItemIds.Stone, 50), slots[0].Item2);
+            Assert.IsFalse(sync.Write(w, s, writer));
+            w.Container(done.Id).Add(ItemIds.Stone, 5);
+            Assert.IsTrue(sync.Write(w, s, writer));
+            bytes = writer.ToArray();
+            Messages.ReadLoot(new NetReader(bytes, 1, bytes.Length - 1), out _, slots);
+            Assert.AreEqual(1, slots.Count, "then only what changed");
+            PlayerActions.Close(s);
+            Assert.IsTrue(sync.Write(w, s, writer));
+            bytes = writer.ToArray();
+            Assert.AreEqual(0, Messages.ReadLoot(new NetReader(bytes, 1, bytes.Length - 1), out _, slots), "and that it closed");
+        }
+    }
+
     public class BuildOpTests
     {
         [Test]
@@ -227,7 +425,7 @@ namespace Oxfall.Core.Tests
                 BuildOp.Remove(PieceRef.Roof(new Cell(5, 6))),
                 BuildOp.Door(edge),
                 BuildOp.ToggleDoor(edge, true),
-                BuildOp.PlaceCampfire(new Campfire(12, 1.5f, 2.5f, -3.5f, 90f)),
+                BuildOp.Deploy(new Deployable(12, DeployableKind.Campfire, 1.5f, 2.5f, -3.5f, 90f)),
             };
             foreach (var op in ops)
             {
@@ -241,8 +439,8 @@ namespace Oxfall.Core.Tests
                 Assert.AreEqual(op.Top, back.Top);
                 Assert.AreEqual(op.Tier, back.Tier);
                 Assert.AreEqual(op.Open, back.Open);
-                Assert.AreEqual(op.Fire.Id, back.Fire.Id);
-                Assert.AreEqual(op.Fire.Yaw, back.Fire.Yaw);
+                Assert.AreEqual(op.Deployed.Id, back.Deployed.Id);
+                Assert.AreEqual(op.Deployed.Yaw, back.Deployed.Yaw);
             }
         }
 
@@ -466,7 +664,9 @@ namespace Oxfall.Core.Tests
             p = player.Pose;
             Assert.AreEqual(ActionResult.Ok, world.Build(player.Id, BuildOp.Edge(cell.North, PieceType.Doorway), out _));
             Assert.AreEqual(ActionResult.Ok, world.Build(player.Id, BuildOp.Door(cell.North), out _));
-            Assert.AreEqual(ActionResult.Ok, world.Build(player.Id, BuildOp.PlaceCampfire(new Campfire(0, p.X, top, p.Z, 0f)), out _));
+            Assert.AreEqual(ActionResult.Ok, world.Build(player.Id, BuildOp.Deploy(new Deployable(0, DeployableKind.Campfire, p.X, top, p.Z, 0f)), out _));
+            var box = world.Settlement.Add(new Deployable(0, DeployableKind.StorageBox, p.X + 1f, top, p.Z, 0f, record.Owner));
+            world.Settlement.Container(box.Id).Add(ItemIds.MetalOre, 77);
             var tree = System.Linq.Enumerable.First(ResourceLayout.Generate(world.Ground), s => s.Type == Gathering.ResourceNodeType.Tree);
             world.Players.Place(player.Id, new Pose(tree.X + 1f, tree.Y, tree.Z, 0f), 1f);
             world.Hit(player.Id, tree.Id, ToolKind.Hatchet, 2f, out _);
@@ -477,7 +677,9 @@ namespace Oxfall.Core.Tests
 
             Assert.AreEqual(world.Settlement.Grid.PieceCount, loaded.Settlement.Grid.PieceCount);
             Assert.IsTrue(loaded.Settlement.Grid.HasDoor(cell.North));
-            Assert.AreEqual(1, loaded.Settlement.CampfireCount);
+            Assert.AreEqual(2, loaded.Settlement.DeployableCount);
+            Assert.AreEqual(77, loaded.Settlement.Container(box.Id).Count(ItemIds.MetalOre), "what the box held is kept");
+            Assert.IsTrue(loaded.Settlement.TryGet(box.Id, out var loadedBox) && loadedBox.Owner == record.Owner);
             Assert.AreEqual(record.Owner, loaded.Settlement.OwnerOf(PieceRef.Foundation(cell)), "who built it is kept");
             loaded.TryGetNode(tree.Id, out var node, out _, out _);
             world.TryGetNode(tree.Id, out var original, out _, out _);

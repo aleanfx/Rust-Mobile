@@ -200,7 +200,7 @@ namespace Oxfall.Game.UI
             // Left of jump, only while looking at something to use (a door): ABRIR or CERRAR.
             UseButton = UiFactory.NewRect("Use", _safeArea, bottomRight, centre, new Vector2(-660f, 220f), new Vector2(160f, 160f));
             UiFactory.AddImage(UseButton, UiFactory.Circle, UiTheme.Accent.WithAlpha(0.85f));
-            UiFactory.AddIcon(UseButton, Icons.Door, new Vector2(0f, 16f), 58f, Color.white);
+            _useIcon = UiFactory.AddIcon(UseButton, Icons.Door, new Vector2(0f, 16f), 58f, Color.white);
             var useLabel = UiFactory.NewRect("Label", UseButton, centre, centre, new Vector2(0f, -40f), new Vector2(160f, 36f));
             _useLabel = UiFactory.AddText(useLabel, "", 26, TextAnchor.MiddleCenter, Color.white, true);
             TapTargets.Add(new TapTarget { Rect = UseButton, OnTap = () => UseTapped?.Invoke() });
@@ -277,13 +277,18 @@ namespace Oxfall.Game.UI
             if (show && _pieceLabel.text != label) _pieceLabel.text = label;
         }
 
-        /// <summary>The use button (ABRIR, CERRAR), or hidden for null.</summary>
-        public void SetUseButton(string label)
+        /// <summary>The use button (ABRIR, CERRAR, ARMARIO) with a pictogram (a door if none), or hidden for null.</summary>
+        public void SetUseButton(string label, Sprite icon = null)
         {
             bool show = label != null;
             if (UseButton.gameObject.activeSelf != show) UseButton.gameObject.SetActive(show);
-            if (show && _useLabel.text != label) _useLabel.text = label;
+            if (!show) return;
+            if (_useLabel.text != label) _useLabel.text = label;
+            var sprite = icon != null ? icon : Icons.Door;
+            if (_useIcon.sprite != sprite) _useIcon.sprite = sprite;
         }
+
+        private Image _useIcon;
 
         /// <summary>A line under the crosshair about what is aimed at; empty or null hides it.</summary>
         public void SetAimInfo(string text)

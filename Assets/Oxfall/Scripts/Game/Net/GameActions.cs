@@ -31,6 +31,9 @@ namespace Oxfall.Game.Net
         /// <summary>Online: changes take effect when the server says so, a moment later.</summary>
         public bool Online => _net != null && _net.State == NetClient.Status.Online;
 
+        /// <summary>What marks this player's things: the server's number online, 0 alone.</summary>
+        public int Owner => Online ? _net.Owner : 0;
+
         private Inventory Inventory => _survivor.Inventory;
 
         public ActionResult MoveSlot(int from, int to)
@@ -105,6 +108,71 @@ namespace Oxfall.Game.Net
             return ActionResult.Ok;
         }
 
+        /// <summary>
+        /// Wakes up in one of the player's sleeping bags. Alone, <paramref name="bag"/> is where to put
+        /// them; online the server moves them there itself.
+        /// </summary>
+        public ActionResult RespawnInBag(int bagId, out Deployable bag)
+        {
+            var r = PlayerActions.CanUseBag(_settlement, Owner, bagId, Time.time, out bag);
+            if (r != ActionResult.Ok) return r;
+            if (!Online) return PlayerActions.RespawnInBag(_settlement, _survivor, 0, bagId, Time.time, out bag);
+            // The server keeps its own clock for bags; this copy keeps one for showing the wait.
+            _settlement.UseBag(bagId, Time.time);
+            _net.SendAct(ActKind.Respawn, bagId);
+            return ActionResult.Ok;
+        }
+
+        // ---- Boxes and furnaces
+
+        /// <summary>The box or furnace open now (0: none).</summary>
+        public int Looting => _survivor.Looting;
+
+        public ActionResult Open(int id)
+        {
+            var p = _player.position;
+            if (!Online) return PlayerActions.Open(_settlement, _survivor, id, p.x, p.y, p.z);
+            if (_settlement.Container(id) == null) return ActionResult.NoPiece;
+            // The copy opens at once; what is inside arrives from the server a moment later.
+            _survivor.Looting = id;
+            _net.SendAct(ActKind.Open, id);
+            return ActionResult.Ok;
+        }
+
+        public void Close()
+        {
+            if (_survivor.Looting == 0) return;
+            PlayerActions.Close(_survivor);
+            if (Online) _net.SendAct(ActKind.Close);
+        }
+
+        /// <summary>From the open box's slot into an inventory slot (-1: wherever it fits).</summary>
+        public ActionResult Take(int from, int to)
+        {
+            if (!Online) return PlayerActions.Take(_settlement, _survivor, from, to);
+            var box = _settlement.Container(_survivor.Looting);
+            if (box == null || from < 0 || from >= box.SlotCount || box[from].IsEmpty) return ActionResult.Invalid;
+            _net.SendAct(ActKind.Take, from, to);
+            return ActionResult.Ok;
+        }
+
+        /// <summary>From an inventory slot into the open box (-1: wherever it fits).</summary>
+        public ActionResult Put(int from, int to)
+        {
+            if (!Online) return PlayerActions.Put(_settlement, _survivor, from, to);
+            if (_survivor.Looting == 0 || Inventory[from].IsEmpty) return ActionResult.Invalid;
+            _net.SendAct(ActKind.Put, from, to);
+            return ActionResult.Ok;
+        }
+
+        public ActionResult MoveInBox(int from, int to)
+        {
+            if (!Online) return PlayerActions.MoveInBox(_settlement, _survivor, from, to);
+            if (_survivor.Looting == 0 || from == to) return ActionResult.Invalid;
+            _net.SendAct(ActKind.MoveInBox, from, to);
+            return ActionResult.Ok;
+        }
+
         /// <summary>What to tell the player when something did not happen.</summary>
         public static string Explain(ActionResult result)
         {
@@ -129,6 +197,12 @@ namespace Oxfall.Game.Net
                 case ActionResult.NoDoor: return "Ahí no hay puerta";
                 case ActionResult.NotYours: return "No es tuyo: solo quien lo construyó puede tocarlo";
                 case ActionResult.NoSpace: return "No hay casillas libres";
+                case ActionResult.BuildingBlocked: return "Bloqueado: hay un armario de otro jugador cerca";
+                case ActionResult.NotEmpty: return "Vacíalo (y apágalo) antes de recogerlo";
+                case ActionResult.NoFuel: return "Necesita madera para arder";
+                case ActionResult.NotReady: return "El saco aún no está listo";
+                case ActionResult.TooClose: return "Está demasiado cerca de otra cosa";
+                case ActionResult.NotOpen: return "Ábrelo primero";
                 default: return "No se puede";
             }
         }

@@ -4,7 +4,7 @@
 const url = process.argv[2] || 'ws://localhost:7777/ws';
 const count = +(process.argv[3] || 5);
 const seconds = +(process.argv[4] || 6);
-const VERSION = 4;
+const VERSION = 5;
 const T = {
   Hello: 1, Move: 2, Act: 4, Build: 5,
   Welcome: 10, Rejected: 11, Joined: 12, Left: 13, Snapshot: 14, Correction: 15,

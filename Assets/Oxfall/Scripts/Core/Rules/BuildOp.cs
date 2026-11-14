@@ -15,7 +15,11 @@ namespace Oxfall.Core.Rules
         Remove = 5,
         Door = 6,
         ToggleDoor = 7,
-        Campfire = 8,
+        Deploy = 8,
+        Pickup = 9,
+        Light = 10,
+        Authorize = 11,
+        ClearAuthorized = 12,
     }
 
     /// <summary>
@@ -34,10 +38,12 @@ namespace Oxfall.Core.Rules
         public readonly BuildingTier Tier;
         public readonly bool Open;
         public readonly float Top;
-        public readonly Campfire Fire;
+
+        /// <summary>The thing set down (Deploy), or the one acted on: its id, and for Authorize who.</summary>
+        public readonly Deployable Deployed;
 
         private BuildOp(BuildOpKind kind, PieceType type, int x, int z, EdgeAxis axis, BuildingTier tier = BuildingTier.Twig,
-            bool open = false, float top = 0f, Campfire fire = default)
+            bool open = false, float top = 0f, Deployable deployed = default)
         {
             Kind = kind;
             Type = type;
@@ -47,7 +53,7 @@ namespace Oxfall.Core.Rules
             Tier = tier;
             Open = open;
             Top = top;
-            Fire = fire;
+            Deployed = deployed;
         }
 
         public static BuildOp Foundation(Cell cell, float top) =>
@@ -67,8 +73,30 @@ namespace Oxfall.Core.Rules
         public static BuildOp ToggleDoor(Edge edge, bool open) =>
             new BuildOp(BuildOpKind.ToggleDoor, PieceType.Doorway, edge.X, edge.Z, edge.Axis, open: open);
 
-        public static BuildOp PlaceCampfire(Campfire fire) =>
-            new BuildOp(BuildOpKind.Campfire, PieceType.Foundation, 0, 0, default, fire: fire);
+        /// <summary>Sets a campfire, box, furnace, sleeping bag or tool cupboard down.</summary>
+        public static BuildOp Deploy(Deployable deployable) =>
+            new BuildOp(BuildOpKind.Deploy, PieceType.Foundation, 0, 0, default, deployed: deployable);
+
+        /// <summary>Picks a deployable back up (it goes back in the inventory).</summary>
+        public static BuildOp Pickup(int id) => OnDeployable(BuildOpKind.Pickup, id);
+
+        /// <summary>Lights a furnace, or puts it out.</summary>
+        public static BuildOp Light(int id, bool on) =>
+            new BuildOp(BuildOpKind.Light, PieceType.Foundation, 0, 0, default, open: on, deployed: Target(id));
+
+        /// <summary>Authorizes a player on a tool cupboard (asking, the server fills in who).</summary>
+        public static BuildOp Authorize(int cupboard, int owner = 0) =>
+            new BuildOp(BuildOpKind.Authorize, PieceType.Foundation, 0, 0, default, deployed: Target(cupboard).WithOwner(owner));
+
+        /// <summary>Empties a tool cupboard's list.</summary>
+        public static BuildOp ClearAuthorized(int cupboard) => OnDeployable(BuildOpKind.ClearAuthorized, cupboard);
+
+        private static BuildOp OnDeployable(BuildOpKind kind, int id) =>
+            new BuildOp(kind, PieceType.Foundation, 0, 0, default, deployed: Target(id));
+
+        private static Deployable Target(int id) => new Deployable(id, DeployableKind.Campfire, 0f, 0f, 0f, 0f);
+
+        public int Id => Deployed.Id;
 
         private static BuildOp OnPiece(BuildOpKind kind, PieceRef piece, BuildingTier tier) => piece.IsEdge
             ? new BuildOp(kind, piece.Type, piece.Edge.X, piece.Edge.Z, piece.Edge.Axis, tier)
@@ -82,14 +110,22 @@ namespace Oxfall.Core.Rules
             ? PieceRef.OnEdge(EdgeAt, Type)
             : Type == PieceType.Roof ? PieceRef.Roof(Cell) : PieceRef.Foundation(Cell);
 
-        public BuildOp WithTop(float top) => new BuildOp(Kind, Type, X, Z, Axis, Tier, Open, top, Fire);
-        public BuildOp WithTier(BuildingTier tier) => new BuildOp(Kind, Type, X, Z, Axis, tier, Open, Top, Fire);
-        public BuildOp WithOpen(bool open) => new BuildOp(Kind, Type, X, Z, Axis, Tier, open, Top, Fire);
-        public BuildOp WithFire(Campfire fire) => new BuildOp(Kind, Type, X, Z, Axis, Tier, Open, Top, fire);
+        public BuildOp WithTop(float top) => new BuildOp(Kind, Type, X, Z, Axis, Tier, Open, top, Deployed);
+        public BuildOp WithTier(BuildingTier tier) => new BuildOp(Kind, Type, X, Z, Axis, tier, Open, Top, Deployed);
+        public BuildOp WithOpen(bool open) => new BuildOp(Kind, Type, X, Z, Axis, Tier, open, Top, Deployed);
 
-        public override string ToString() => Kind == BuildOpKind.Campfire
-            ? $"Campfire {Fire.Id} ({Fire.X:0.0}, {Fire.Z:0.0})"
-            : $"{Kind} {Type} ({X},{Z}{(PieceRef.IsEdgeType(Type) ? "," + Axis : "")})";
+        public override string ToString()
+        {
+            switch (Kind)
+            {
+                case BuildOpKind.Deploy: return "Deploy " + Deployed;
+                case BuildOpKind.Pickup: return "Pickup " + Id;
+                case BuildOpKind.Light: return $"Light {Id} {(Open ? "on" : "off")}";
+                case BuildOpKind.Authorize: return $"Authorize {Deployed.Owner} on {Id}";
+                case BuildOpKind.ClearAuthorized: return "ClearAuthorized " + Id;
+                default: return $"{Kind} {Type} ({X},{Z}{(PieceRef.IsEdgeType(Type) ? "," + Axis : "")})";
+            }
+        }
 
         // ---- On the wire
 
@@ -128,12 +164,26 @@ namespace Oxfall.Core.Rules
                     w.Byte((byte)Axis);
                     w.Bool(Open);
                     break;
-                case BuildOpKind.Campfire:
-                    w.Int(Fire.Id);
-                    w.Float(Fire.X);
-                    w.Float(Fire.Y);
-                    w.Float(Fire.Z);
-                    w.Float(Fire.Yaw);
+                case BuildOpKind.Deploy:
+                    w.Int(Deployed.Id);
+                    w.Byte((byte)Deployed.Kind);
+                    w.Float(Deployed.X);
+                    w.Float(Deployed.Y);
+                    w.Float(Deployed.Z);
+                    w.Float(Deployed.Yaw);
+                    w.Int(Deployed.Owner);
+                    break;
+                case BuildOpKind.Pickup:
+                case BuildOpKind.ClearAuthorized:
+                    w.Int(Id);
+                    break;
+                case BuildOpKind.Light:
+                    w.Int(Id);
+                    w.Bool(Open);
+                    break;
+                case BuildOpKind.Authorize:
+                    w.Int(Id);
+                    w.Int(Deployed.Owner);
                     break;
                 default:
                     throw new InvalidOperationException("Unknown build op " + Kind);
@@ -178,11 +228,28 @@ namespace Oxfall.Core.Rules
                     bool open = r.Bool();
                     return kind == BuildOpKind.Door ? Door(edge) : ToggleDoor(edge, open);
                 }
-                case BuildOpKind.Campfire:
+                case BuildOpKind.Deploy:
                 {
                     int id = r.Int();
+                    var what = (DeployableKind)r.Byte();
+                    if (!Deployables.IsKnown(what)) throw new ProtocolException("Unknown deployable.");
                     float x = Finite(r.Float()), y = Finite(r.Float()), z = Finite(r.Float()), yaw = Finite(r.Float());
-                    return PlaceCampfire(new Campfire(id, x, y, z, yaw));
+                    int owner = r.Int();
+                    return Deploy(new Deployable(id, what, x, y, z, yaw, owner));
+                }
+                case BuildOpKind.Pickup:
+                    return Pickup(r.Int());
+                case BuildOpKind.ClearAuthorized:
+                    return ClearAuthorized(r.Int());
+                case BuildOpKind.Light:
+                {
+                    int id = r.Int();
+                    return Light(id, r.Bool());
+                }
+                case BuildOpKind.Authorize:
+                {
+                    int id = r.Int();
+                    return Authorize(id, r.Int());
                 }
                 default:
                     throw new ProtocolException("Unknown build op " + (byte)kind + ".");
@@ -238,8 +305,22 @@ namespace Oxfall.Core.Rules
                 case BuildOpKind.ToggleDoor:
                     if (!grid.HasDoor(op.EdgeAt)) return false;
                     return grid.IsDoorOpen(op.EdgeAt) == op.Open || grid.ToggleDoor(op.EdgeAt);
-                case BuildOpKind.Campfire:
-                    settlement.AddCampfire(op.Fire);
+                case BuildOpKind.Deploy:
+                    settlement.Add(op.Deployed);
+                    return true;
+                case BuildOpKind.Pickup:
+                    return settlement.Remove(op.Id);
+                case BuildOpKind.Light:
+                    if (!settlement.TryGet(op.Id, out _)) return false;
+                    settlement.SetLit(op.Id, op.Open);
+                    return true;
+                case BuildOpKind.Authorize:
+                    if (!settlement.TryGet(op.Id, out _)) return false;
+                    settlement.Authorize(op.Id, op.Deployed.Owner);
+                    return true;
+                case BuildOpKind.ClearAuthorized:
+                    if (!settlement.TryGet(op.Id, out _)) return false;
+                    settlement.ClearAuthorized(op.Id);
                     return true;
                 default:
                     return false;
@@ -278,7 +359,15 @@ namespace Oxfall.Core.Rules
                 ops.Add(BuildOp.Door(d.Key));
                 if (d.Value) ops.Add(BuildOp.ToggleDoor(d.Key, true));
             }
-            foreach (var fire in settlement.Campfires) ops.Add(BuildOp.PlaceCampfire(fire));
+            foreach (var d in settlement.Deployables)
+            {
+                ops.Add(BuildOp.Deploy(d));
+                if (settlement.IsLit(d.Id)) ops.Add(BuildOp.Light(d.Id, true));
+                if (d.Kind != DeployableKind.ToolCupboard) continue;
+                // A cupboard starts with its owner on it; the list as it is now replaces that.
+                ops.Add(BuildOp.ClearAuthorized(d.Id));
+                foreach (int owner in settlement.AuthorizedOn(d.Id)) ops.Add(BuildOp.Authorize(d.Id, owner));
+            }
             return ops;
         }
 

@@ -612,6 +612,149 @@ namespace Oxfall.Game.World
             return b.Build("Campfire", 50f);
         }
 
+        /// <summary>
+        /// A wooden storage box about 0.9 m wide, its front towards +Z: planked sides, dark corner
+        /// posts and bands, an iron latch and side handles. Submeshes: planks, frame, metal.
+        /// </summary>
+        public static Mesh StorageBox()
+        {
+            var b = new FlatMeshBuilder(3) { UvScale = 0.8f };
+            b.AddBox(0, new Vector3(-0.45f, 0.02f, -0.28f), new Vector3(0.45f, 0.5f, 0.28f));
+            b.AddBox(0, new Vector3(-0.47f, 0.5f, -0.3f), new Vector3(0.47f, 0.58f, 0.3f));
+            foreach (float x in new[] { -1f, 1f })
+            foreach (float z in new[] { -1f, 1f })
+                b.AddBox(1, new Vector3(x * 0.48f - (x > 0 ? 0.06f : 0f), 0f, z * 0.31f - (z > 0 ? 0.06f : 0f)),
+                    new Vector3(x * 0.48f + (x < 0 ? 0.06f : 0f), 0.5f, z * 0.31f + (z < 0 ? 0.06f : 0f)));
+            foreach (float y in new[] { 0.06f, 0.4f })
+            {
+                b.AddBox(1, new Vector3(-0.44f, y, 0.28f), new Vector3(0.44f, y + 0.06f, 0.31f));
+                b.AddBox(1, new Vector3(-0.44f, y, -0.31f), new Vector3(0.44f, y + 0.06f, -0.28f));
+            }
+            b.AddBox(1, new Vector3(-0.48f, 0.5f, 0.27f), new Vector3(0.48f, 0.6f, 0.32f));
+            b.AddBox(2, new Vector3(-0.05f, 0.4f, 0.31f), new Vector3(0.05f, 0.55f, 0.335f));
+            b.AddBox(2, new Vector3(-0.025f, 0.43f, 0.335f), new Vector3(0.025f, 0.47f, 0.35f));
+            foreach (float x in new[] { -1f, 1f })
+                b.AddTube(2, new Vector3(x * 0.49f, 0.33f, -0.1f), new Vector3(x * 0.49f, 0.33f, 0.1f), 0.018f, 0.018f, 5);
+            return b.Build("StorageBox");
+        }
+
+        /// <summary>
+        /// A small stone furnace about a metre tall, its mouth towards +Z: a tapering stone body
+        /// under a dome, a chimney, and an iron-framed opening. Submeshes: stone, char, metal.
+        /// </summary>
+        public static Mesh Furnace()
+        {
+            var b = new FlatMeshBuilder(3) { UvScale = 0.6f };
+            var random = new System.Random(31);
+            b.AddCylinder(0, Vector3.zero, 0.6f, 0.46f, 0.8f, 10, 9f);
+            b.AddCone(0, new Vector3(0f, 0.8f, 0f), 0.46f, 0.3f, 10, 9f);
+            b.AddTube(0, new Vector3(0.12f, 0.92f, -0.08f), new Vector3(0.12f, 1.42f, -0.08f), 0.13f, 0.11f, 7, 1);
+            // Rough stones round the foot.
+            for (int i = 0; i < 10; i++)
+            {
+                float a = i * Mathf.PI * 2f / 10f + Rand(random, -0.1f, 0.1f);
+                if (Mathf.Abs(Mathf.DeltaAngle(a * Mathf.Rad2Deg, 90f)) < 26f) continue;
+                b.AddRock(0, new Vector3(Mathf.Cos(a) * 0.6f, 0.05f, Mathf.Sin(a) * 0.6f),
+                    new Vector3(Rand(random, 0.1f, 0.14f), Rand(random, 0.07f, 0.1f), Rand(random, 0.1f, 0.14f)), random);
+            }
+            // The mouth: dark inside, an iron frame round it, a grate under it.
+            b.AddBox(1, new Vector3(-0.2f, 0.12f, 0.36f), new Vector3(0.2f, 0.46f, 0.58f));
+            b.AddBox(2, new Vector3(-0.25f, 0.46f, 0.5f), new Vector3(0.25f, 0.52f, 0.61f));
+            b.AddBox(2, new Vector3(-0.25f, 0.08f, 0.5f), new Vector3(0.25f, 0.13f, 0.61f));
+            b.AddBox(2, new Vector3(-0.25f, 0.08f, 0.5f), new Vector3(-0.2f, 0.52f, 0.61f));
+            b.AddBox(2, new Vector3(0.2f, 0.08f, 0.5f), new Vector3(0.25f, 0.52f, 0.61f));
+            for (int i = 0; i < 4; i++)
+            {
+                float x = -0.13f + i * 0.087f;
+                b.AddTube(2, new Vector3(x, 0.15f, 0.36f), new Vector3(x, 0.15f, 0.6f), 0.012f, 0.012f, 4);
+            }
+            return b.Build("Furnace", 35f);
+        }
+
+        /// <summary>
+        /// A sleeping bag about two metres long along Z, quilted, with a pillow at +Z and a strap
+        /// at the foot. Submeshes: bag, lining, rope.
+        /// </summary>
+        public static Mesh SleepingBag()
+        {
+            var b = new FlatMeshBuilder(3) { UvScale = 0.5f };
+            const int quilts = 7;
+            for (int i = 0; i < quilts; i++)
+            {
+                float z0 = -0.95f + i * 0.26f, z1 = z0 + 0.25f;
+                float h = 0.1f + 0.025f * Mathf.Sin(i * 1.7f);
+                float w = 0.37f - 0.012f * Mathf.Abs(i - 3);
+                b.AddBox(0, new Vector3(-w, 0f, z0), new Vector3(w, h, z1));
+            }
+            // The top folded back a little, showing the lining.
+            b.AddBox(1, new Vector3(-0.35f, 0.11f, 0.4f), new Vector3(0.35f, 0.14f, 0.85f));
+            b.AddBox(1, new Vector3(-0.28f, 0.02f, 0.88f), new Vector3(0.28f, 0.17f, 1.08f));
+            b.AddTube(2, new Vector3(-0.38f, 0.07f, -0.8f), new Vector3(0.38f, 0.07f, -0.8f), 0.075f, 0.075f, 6);
+            return b.Build("SleepingBag", 30f);
+        }
+
+        /// <summary>
+        /// A tool cupboard about 1.5 m tall, its doors towards +Z: a planked cabinet in a dark frame
+        /// with iron hinges and handles, a hammer and a saw hung on the side. Submeshes: planks, frame, metal.
+        /// </summary>
+        public static Mesh ToolCupboard()
+        {
+            var b = new FlatMeshBuilder(3) { UvScale = 0.9f };
+            b.AddBox(0, new Vector3(-0.38f, 0.06f, -0.2f), new Vector3(0.38f, 1.42f, 0.2f));
+            foreach (float x in new[] { -1f, 1f })
+            foreach (float z in new[] { -1f, 1f })
+                b.AddBox(1, new Vector3(x * 0.42f - (x > 0 ? 0.06f : 0f), 0f, z * 0.23f - (z > 0 ? 0.06f : 0f)),
+                    new Vector3(x * 0.42f + (x < 0 ? 0.06f : 0f), 1.52f, z * 0.23f + (z < 0 ? 0.06f : 0f)));
+            b.AddBox(1, new Vector3(-0.45f, 1.42f, -0.25f), new Vector3(0.45f, 1.52f, 0.25f));
+            b.AddBox(1, new Vector3(-0.4f, 0.05f, -0.22f), new Vector3(0.4f, 0.14f, 0.22f));
+            // Two doors with a gap between them.
+            b.AddBox(0, new Vector3(-0.36f, 0.16f, 0.2f), new Vector3(-0.01f, 1.38f, 0.235f));
+            b.AddBox(0, new Vector3(0.01f, 0.16f, 0.2f), new Vector3(0.36f, 1.38f, 0.235f));
+            b.AddBox(1, new Vector3(-0.36f, 0.74f, 0.235f), new Vector3(-0.01f, 0.8f, 0.25f));
+            b.AddBox(1, new Vector3(0.01f, 0.74f, 0.235f), new Vector3(0.36f, 0.8f, 0.25f));
+            foreach (float x in new[] { -0.07f, 0.07f })
+                b.AddBox(2, new Vector3(x - 0.015f, 0.82f, 0.235f), new Vector3(x + 0.015f, 1.0f, 0.26f));
+            foreach (float y in new[] { 0.3f, 1.2f })
+            {
+                b.AddBox(2, new Vector3(-0.37f, y, 0.23f), new Vector3(-0.3f, y + 0.06f, 0.245f));
+                b.AddBox(2, new Vector3(0.3f, y, 0.23f), new Vector3(0.37f, y + 0.06f, 0.245f));
+            }
+            // A hammer and a saw hung on the right side.
+            b.AddTube(1, new Vector3(0.465f, 0.7f, 0.05f), new Vector3(0.465f, 1.15f, 0.05f), 0.018f, 0.018f, 5);
+            b.AddBox(2, new Vector3(0.45f, 1.1f, -0.02f), new Vector3(0.49f, 1.17f, 0.15f));
+            b.AddBox(2, new Vector3(0.445f, 0.45f, -0.17f), new Vector3(0.455f, 0.95f, -0.05f));
+            b.AddBox(1, new Vector3(0.44f, 0.92f, -0.19f), new Vector3(0.47f, 1.04f, -0.03f));
+            return b.Build("ToolCupboard");
+        }
+
+        /// <summary>A few jagged scraps of rusty metal.</summary>
+        public static Mesh MetalScraps()
+        {
+            var b = new FlatMeshBuilder(1) { UvScale = 0.2f };
+            var random = new System.Random(12);
+            for (int i = 0; i < 6; i++)
+            {
+                float a = i * 1.05f;
+                var at = new Vector3(Mathf.Cos(a) * 0.07f * (i % 3), 0.03f + i * 0.018f, Mathf.Sin(a) * 0.07f * (i % 3));
+                b.AddRock(0, at, new Vector3(Rand(random, 0.06f, 0.1f), Rand(random, 0.015f, 0.028f), Rand(random, 0.04f, 0.07f)), random);
+            }
+            return b.Build("MetalScraps");
+        }
+
+        /// <summary>Lumps of charcoal.</summary>
+        public static Mesh CharcoalLumps()
+        {
+            var b = new FlatMeshBuilder(1) { UvScale = 0.2f };
+            var random = new System.Random(27);
+            for (int i = 0; i < 5; i++)
+            {
+                float a = i * 1.3f;
+                var at = new Vector3(Mathf.Cos(a) * 0.08f, 0.04f + (i == 4 ? 0.06f : 0f), Mathf.Sin(a) * 0.08f);
+                b.AddRock(0, at, new Vector3(Rand(random, 0.05f, 0.07f), Rand(random, 0.04f, 0.055f), Rand(random, 0.05f, 0.07f)), random);
+            }
+            return b.Build("CharcoalLumps", 50f);
+        }
+
         /// <summary>Three logs stacked, along Z. Submeshes: bark, end grain.</summary>
         public static Mesh WoodPile()
         {

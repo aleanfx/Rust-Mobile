@@ -13,7 +13,8 @@ namespace Oxfall.Game.Construction
     /// <summary>
     /// The hammer in hand: aim at something built and attack (MEJORAR) raises it a tier, twig to
     /// wood to stone, for its cost; the button above attack (DEMOLER, tapped twice) takes it down and
-    /// gives back half of what went into it and everything that stood on it.
+    /// gives back half of what went into it and everything that stood on it. Aimed at something set
+    /// down (a box, a furnace), the same button (RECOGER) picks it back up.
     /// </summary>
     public sealed class HammerTool : MonoBehaviour
     {
@@ -32,6 +33,10 @@ namespace Oxfall.Game.Construction
         private string _info;
         private float _confirmUntil = -1f;
         private PieceRef _confirming;
+        private int _deployable;
+
+        /// <summary>What is set down, to pick it back up.</summary>
+        public Settlement Settlement { get; set; }
 
         public bool Active { get; private set; }
 
@@ -79,6 +84,11 @@ namespace Oxfall.Game.Construction
         {
             if (!Active) return;
             Aim();
+            if (_deployable != 0)
+            {
+                _hud.ShowToast("Esto no se mejora: RECOGER lo devuelve al inventario");
+                return;
+            }
             if (!_hasAim)
             {
                 _hud.ShowToast("Apunta a algo que construiste");
@@ -112,6 +122,11 @@ namespace Oxfall.Game.Construction
         {
             if (!Active) return;
             Aim();
+            if (_deployable != 0)
+            {
+                PickUp();
+                return;
+            }
             if (!_hasAim) return;
             if (Time.time > _confirmUntil || !_confirming.Equals(_aimed))
             {
@@ -140,12 +155,30 @@ namespace Oxfall.Game.Construction
             Demolished?.Invoke();
         }
 
+        /// <summary>Picks up what is set down in the crosshair (empty, and out, first).</summary>
+        private void PickUp()
+        {
+            if (Settlement == null || !Settlement.TryGet(_deployable, out var d)) return;
+            var result = Actions.Build(BuildOp.Pickup(d.Id));
+            if (result != ActionResult.Ok)
+            {
+                _hud.ShowToast(GameActions.Explain(result));
+                return;
+            }
+            _hud.ShowToast("Recogido: " + Deployables.Name(d.Kind).ToLowerInvariant());
+            Debug.Log($"[Oxfall] Picked up {d}");
+            _deployable = 0;
+            _info = null;
+            Demolished?.Invoke();
+        }
+
         /// <summary>Finds the piece in the crosshair and shows what the hammer would do to it.</summary>
         private void Aim()
         {
             var ray = new Ray(_head.position, _head.forward);
             bool found = false;
             PieceRef piece = default;
+            int deployable = 0;
             if (Physics.Raycast(ray, out var hit, Reach, Physics.DefaultRaycastLayers, QueryTriggerInteraction.Ignore))
             {
                 var tag = hit.collider.GetComponent<PieceTag>();
@@ -154,6 +187,22 @@ namespace Oxfall.Game.Construction
                     found = true;
                     piece = tag.Piece;
                 }
+                var placed = hit.collider.GetComponent<DeployableTag>();
+                if (placed != null && Settlement != null && Settlement.TryGet(placed.Id, out _)) deployable = placed.Id;
+            }
+
+            if (deployable != _deployable) _info = null;
+            _deployable = deployable;
+            if (deployable != 0)
+            {
+                _hasAim = false;
+                if (_info != null) return;
+                Settlement.TryGet(deployable, out var d);
+                _info = Deployables.Name(d.Kind) + "  ·  RECOGER lo devuelve al inventario";
+                _hud.SetAimInfo(_info);
+                _hud.SetPieceButton("RECOGER");
+                _hud.SetPlaceValid(false);
+                return;
             }
 
             if (found != _hasAim || (found && !piece.Equals(_aimed))) _info = null;

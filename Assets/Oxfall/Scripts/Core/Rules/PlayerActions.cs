@@ -31,6 +31,12 @@ namespace Oxfall.Core.Rules
         NoDoor,
         NotYours,
         NoSpace,
+        BuildingBlocked,
+        NotEmpty,
+        NoFuel,
+        NotReady,
+        TooClose,
+        NotOpen,
     }
 
     /// <summary>
@@ -136,6 +142,97 @@ namespace Oxfall.Core.Rules
             s.Crafting.Clear();
             s.GiveStarterKit();
             s.Vitals.Respawn();
+            s.Looting = 0;
+            return ActionResult.Ok;
+        }
+
+        /// <summary>
+        /// Wakes a dead player up in one of their sleeping bags, if it is ready (each waits
+        /// <see cref="Deployables.BagCooldown"/> between uses). <paramref name="bag"/> is where to put them.
+        /// </summary>
+        public static ActionResult RespawnInBag(Settlement settlement, Survivor s, int owner, int bagId, float now, out Deployable bag)
+        {
+            var r = CanUseBag(settlement, owner, bagId, now, out bag);
+            if (r != ActionResult.Ok) return r;
+            if (!s.Vitals.IsDead) return ActionResult.Invalid;
+            r = Respawn(s);
+            if (r == ActionResult.Ok) settlement.UseBag(bagId, now);
+            return r;
+        }
+
+        /// <summary>Whether this player can wake up in this sleeping bag now (theirs, and ready).</summary>
+        public static ActionResult CanUseBag(Settlement settlement, int owner, int bagId, float now, out Deployable bag)
+        {
+            if (!settlement.TryGet(bagId, out bag) || bag.Kind != DeployableKind.SleepingBag) return ActionResult.NoPiece;
+            if (bag.Owner != owner) return ActionResult.NotYours;
+            if (now < settlement.BagReadyAt(bagId)) return ActionResult.NotReady;
+            return ActionResult.Ok;
+        }
+
+        // ---- Boxes and furnaces
+
+        /// <summary>Opens a box or furnace within reach: from now on its slots can be moved to and from.</summary>
+        public static ActionResult Open(Settlement settlement, Survivor s, int id, float x, float y, float z)
+        {
+            if (s.Vitals.IsDead) return ActionResult.Dead;
+            if (!settlement.TryGet(id, out var d) || settlement.Container(id) == null) return ActionResult.NoPiece;
+            if (!Near(x, y, z, d.X, d.Y, d.Z, UseReach)) return ActionResult.TooFar;
+            s.Looting = id;
+            return ActionResult.Ok;
+        }
+
+        public static ActionResult Close(Survivor s)
+        {
+            s.Looting = 0;
+            return ActionResult.Ok;
+        }
+
+        /// <summary>
+        /// Takes from the open box's <paramref name="from"/> slot into inventory slot <paramref name="to"/>
+        /// (merging, or swapping), or wherever it fits when <paramref name="to"/> is -1.
+        /// </summary>
+        public static ActionResult Take(Settlement settlement, Survivor s, int from, int to)
+        {
+            var r = OpenBox(settlement, s, out var box);
+            if (r != ActionResult.Ok) return r;
+            if (!IsSlot(box, from) || (to != -1 && !IsSlot(s.Inventory, to))) return ActionResult.Invalid;
+            if (box[from].IsEmpty) return ActionResult.Invalid;
+            bool moved = to == -1 ? Inventory.TransferAll(box, from, s.Inventory) : Inventory.Transfer(box, from, s.Inventory, to);
+            return moved ? ActionResult.Ok : ActionResult.NoSpace;
+        }
+
+        /// <summary>Puts inventory slot <paramref name="from"/> into the open box's slot <paramref name="to"/> (or anywhere: -1).</summary>
+        public static ActionResult Put(Settlement settlement, Survivor s, int from, int to)
+        {
+            var r = OpenBox(settlement, s, out var box);
+            if (r != ActionResult.Ok) return r;
+            if (!IsSlot(s.Inventory, from) || (to != -1 && !IsSlot(box, to))) return ActionResult.Invalid;
+            if (s.Inventory[from].IsEmpty) return ActionResult.Invalid;
+            bool moved = to == -1 ? Inventory.TransferAll(s.Inventory, from, box) : Inventory.Transfer(s.Inventory, from, box, to);
+            return moved ? ActionResult.Ok : ActionResult.NoSpace;
+        }
+
+        /// <summary>Moves a slot of the open box onto another of its slots.</summary>
+        public static ActionResult MoveInBox(Settlement settlement, Survivor s, int from, int to)
+        {
+            var r = OpenBox(settlement, s, out var box);
+            if (r != ActionResult.Ok) return r;
+            if (!IsSlot(box, from) || !IsSlot(box, to) || from == to) return ActionResult.Invalid;
+            box.Move(from, to);
+            return ActionResult.Ok;
+        }
+
+        private static ActionResult OpenBox(Settlement settlement, Survivor s, out Inventory box)
+        {
+            box = null;
+            if (s.Vitals.IsDead) return ActionResult.Dead;
+            if (s.Looting == 0) return ActionResult.NotOpen;
+            box = settlement.Container(s.Looting);
+            if (box == null)
+            {
+                s.Looting = 0;
+                return ActionResult.NoPiece;
+            }
             return ActionResult.Ok;
         }
 
@@ -159,6 +256,7 @@ namespace Oxfall.Core.Rules
                     var r = FoundationTop(settlement, op.Cell, out float top);
                     if (r != ActionResult.Ok) return r;
                     if (!Near(x, y, z, (op.X + 0.5f) * S, top, (op.Z + 0.5f) * S, BuildReach)) return ActionResult.TooFar;
+                    if (!settlement.HasPrivilege(owner, (op.X + 0.5f) * S, (op.Z + 0.5f) * S)) return ActionResult.BuildingBlocked;
                     done = op.WithTop(top);
                     return Place(settlement, s, owner, PieceRef.Foundation(op.Cell), grid.CanPlaceFoundation(op.Cell),
                         () => grid.PlaceFoundation(op.Cell, top));
@@ -169,6 +267,7 @@ namespace Oxfall.Core.Rules
                     var edge = op.EdgeAt;
                     var can = grid.CanPlaceEdge(edge);
                     if (can == PlaceResult.Ok && !Near(x, y, z, EdgePoint(grid, edge), BuildReach)) return ActionResult.TooFar;
+                    if (can == PlaceResult.Ok && !Privileged(settlement, owner, EdgePoint(grid, edge))) return ActionResult.BuildingBlocked;
                     return Place(settlement, s, owner, PieceRef.OnEdge(edge, op.Type), can, () => grid.PlaceEdge(edge, op.Type));
                 }
                 case BuildOpKind.Roof:
@@ -176,6 +275,8 @@ namespace Oxfall.Core.Rules
                     var can = grid.CanPlaceRoof(op.Cell);
                     if (can == PlaceResult.Ok && !Near(x, y, z, PiecePoint(grid, PieceRef.Roof(op.Cell)), BuildReach))
                         return ActionResult.TooFar;
+                    if (can == PlaceResult.Ok && !Privileged(settlement, owner, PiecePoint(grid, PieceRef.Roof(op.Cell))))
+                        return ActionResult.BuildingBlocked;
                     return Place(settlement, s, owner, PieceRef.Roof(op.Cell), can, () => grid.PlaceRoof(op.Cell));
                 }
                 case BuildOpKind.Upgrade:
@@ -184,6 +285,7 @@ namespace Oxfall.Core.Rules
                     if (!grid.TryGetTier(piece, out var tier)) return ActionResult.NoPiece;
                     if (!Mine(settlement, piece, owner)) return ActionResult.NotYours;
                     if (!BuildingTiers.TryNext(tier, out var next)) return ActionResult.MaxTier;
+                    if (!Privileged(settlement, owner, PiecePoint(grid, piece))) return ActionResult.BuildingBlocked;
                     if (!Near(x, y, z, PiecePoint(grid, piece), BuildReach)) return ActionResult.TooFar;
                     var cost = BuildCosts.Upgrade(piece.Type, next);
                     if (!BuildCosts.CanAfford(s.Inventory, cost)) return ActionResult.NotEnoughResources;
@@ -221,6 +323,7 @@ namespace Oxfall.Core.Rules
                     var can = grid.CanPlaceDoor(edge);
                     if (can != PlaceResult.Ok) return From(can);
                     if (!Near(x, y, z, EdgePoint(grid, edge), UseReach)) return ActionResult.TooFar;
+                    if (!Privileged(settlement, owner, EdgePoint(grid, edge))) return ActionResult.BuildingBlocked;
                     if (!s.Inventory.Has(ItemIds.WoodenDoor, 1)) return ActionResult.NotEnoughResources;
                     grid.PlaceDoor(edge);
                     s.Inventory.Remove(ItemIds.WoodenDoor, 1);
@@ -236,23 +339,84 @@ namespace Oxfall.Core.Rules
                     done = BuildOp.ToggleDoor(edge, grid.IsDoorOpen(edge));
                     return ActionResult.Ok;
                 }
-                case BuildOpKind.Campfire:
+                case BuildOpKind.Deploy:
                 {
-                    var fire = op.Fire;
-                    if (!Near(x, y, z, fire.X, fire.Y, fire.Z, UseReach)) return ActionResult.TooFar;
-                    float ground = settlement.Ground.Height(fire.X, fire.Z);
-                    if (ground < IslandGround.WaterLevel + 0.3f) return ActionResult.InWater;
-                    // On the ground, or on a floor.
-                    float floor = grid.TryGetFoundationTop(BuildingGrid.CellAt(fire.X, fire.Z), out float top) ? top : ground;
-                    if (Math.Abs(fire.Y - floor) > 0.7f && Math.Abs(fire.Y - ground) > 0.7f) return ActionResult.Invalid;
-                    if (!s.Inventory.Remove(ItemIds.Campfire, 1)) return ActionResult.NotEnoughResources;
-                    var placed = settlement.AddCampfire(new Campfire(0, fire.X, fire.Y, fire.Z, fire.Yaw));
-                    done = BuildOp.PlaceCampfire(placed);
+                    var d = op.Deployed;
+                    if (!Deployables.IsKnown(d.Kind)) return ActionResult.Invalid;
+                    var r = CanDeploy(settlement, owner, d.Kind, d.X, d.Y, d.Z);
+                    if (r != ActionResult.Ok) return r;
+                    if (!Near(x, y, z, d.X, d.Y, d.Z, UseReach)) return ActionResult.TooFar;
+                    if (!s.Inventory.Remove(Deployables.ItemOf(d.Kind), 1)) return ActionResult.NotEnoughResources;
+                    var placed = settlement.Add(new Deployable(0, d.Kind, d.X, d.Y, d.Z, d.Yaw, owner));
+                    done = BuildOp.Deploy(placed);
+                    return ActionResult.Ok;
+                }
+                case BuildOpKind.Pickup:
+                {
+                    if (!settlement.TryGet(op.Id, out var d)) return ActionResult.NoPiece;
+                    if (d.Owner != 0 && d.Owner != owner) return ActionResult.NotYours;
+                    if (!Near(x, y, z, d.X, d.Y, d.Z, UseReach)) return ActionResult.TooFar;
+                    var box = settlement.Container(d.Id);
+                    if ((box != null && !box.IsEmpty) || settlement.IsLit(d.Id)) return ActionResult.NotEmpty;
+                    string item = Deployables.ItemOf(d.Kind);
+                    if (s.Inventory.SpaceFor(item) < 1) return ActionResult.NoSpace;
+                    settlement.Remove(d.Id);
+                    s.Inventory.Add(item, 1);
+                    done = BuildOp.Pickup(d.Id);
+                    return ActionResult.Ok;
+                }
+                case BuildOpKind.Light:
+                {
+                    if (!settlement.TryGet(op.Id, out var d)) return ActionResult.NoPiece;
+                    if (d.Kind != DeployableKind.Furnace) return ActionResult.Invalid;
+                    if (!Near(x, y, z, d.X, d.Y, d.Z, UseReach)) return ActionResult.TooFar;
+                    if (op.Open && !settlement.Container(d.Id).Has(ItemIds.Wood, 1)) return ActionResult.NoFuel;
+                    settlement.SetLit(d.Id, op.Open);
+                    done = BuildOp.Light(d.Id, op.Open);
+                    return ActionResult.Ok;
+                }
+                case BuildOpKind.Authorize:
+                {
+                    if (!settlement.TryGet(op.Id, out var d)) return ActionResult.NoPiece;
+                    if (d.Kind != DeployableKind.ToolCupboard) return ActionResult.Invalid;
+                    if (!Near(x, y, z, d.X, d.Y, d.Z, UseReach)) return ActionResult.TooFar;
+                    settlement.Authorize(d.Id, owner);
+                    done = BuildOp.Authorize(d.Id, owner);
+                    return ActionResult.Ok;
+                }
+                case BuildOpKind.ClearAuthorized:
+                {
+                    if (!settlement.TryGet(op.Id, out var d)) return ActionResult.NoPiece;
+                    if (d.Kind != DeployableKind.ToolCupboard) return ActionResult.Invalid;
+                    if (!Near(x, y, z, d.X, d.Y, d.Z, UseReach)) return ActionResult.TooFar;
+                    if (!settlement.IsAuthorized(d.Id, owner)) return ActionResult.NotYours;
+                    settlement.ClearAuthorized(d.Id);
+                    done = BuildOp.ClearAuthorized(d.Id);
                     return ActionResult.Ok;
                 }
                 default:
                     return ActionResult.Invalid;
             }
+        }
+
+        /// <summary>
+        /// Whether a deployable of this kind can stand at (x, y, z) for this player: on the ground or
+        /// a floor, out of the water, clear of other deployables, and where they may build.
+        /// </summary>
+        public static ActionResult CanDeploy(Settlement settlement, int owner, DeployableKind kind, float x, float y, float z)
+        {
+            float ground = settlement.Ground.Height(x, z);
+            if (ground < IslandGround.WaterLevel + 0.3f) return ActionResult.InWater;
+            float floor = settlement.Grid.TryGetFoundationTop(BuildingGrid.CellAt(x, z), out float top) ? top : ground;
+            if (Math.Abs(y - floor) > 0.7f && Math.Abs(y - ground) > 0.7f) return ActionResult.Invalid;
+            if (!settlement.HasPrivilege(owner, x, z)) return ActionResult.BuildingBlocked;
+            float radius = Deployables.Radius(kind);
+            foreach (var other in settlement.Deployables)
+            {
+                float dx = x - other.X, dz = z - other.Z, room = radius + Deployables.Radius(other.Kind);
+                if (dx * dx + dz * dz < room * room && Math.Abs(y - other.Y) < 1.5f) return ActionResult.TooClose;
+            }
+            return ActionResult.Ok;
         }
 
         /// <summary>
@@ -347,6 +511,11 @@ namespace Oxfall.Core.Rules
         }
 
         private static bool IsSlot(Survivor s, int slot) => slot >= 0 && slot < s.Inventory.SlotCount;
+
+        private static bool IsSlot(Inventory inventory, int slot) => slot >= 0 && slot < inventory.SlotCount;
+
+        private static bool Privileged(Settlement settlement, int owner, (float X, float Y, float Z) p) =>
+            settlement.HasPrivilege(owner, p.X, p.Z);
 
         private static bool Near(float x, float y, float z, (float X, float Y, float Z) p, float reach) =>
             Near(x, y, z, p.X, p.Y, p.Z, reach);

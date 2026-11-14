@@ -15,7 +15,7 @@ namespace Oxfall.Core.Net
     public sealed partial class ServerWorld
     {
         /// <summary>Raised whenever the save's layout changes; older saves are then not loaded.</summary>
-        public const ushort SaveVersion = 1;
+        public const ushort SaveVersion = 2;
 
         private static readonly byte[] Magic = { (byte)'O', (byte)'X', (byte)'S', (byte)'V' };
 
@@ -49,6 +49,17 @@ namespace Oxfall.Core.Net
                 w.Int(pair.Value);
             }
 
+            // What boxes and furnaces hold.
+            var boxes = new List<int>();
+            foreach (var d in Settlement.Deployables)
+                if (Settlement.Container(d.Id) != null) boxes.Add(d.Id);
+            w.Int(boxes.Count);
+            foreach (int id in boxes)
+            {
+                w.Int(id);
+                WriteSlots(w, Settlement.Container(id));
+            }
+
             w.Int(_nextOwner);
             w.Int(_records.Count);
             foreach (var record in _records.Values)
@@ -62,15 +73,7 @@ namespace Oxfall.Core.Net
                 w.Float(s.Vitals.Health);
                 w.Float(s.Vitals.Food);
                 w.Float(s.Vitals.Water);
-                w.Byte((byte)s.Inventory.SlotCount);
-                for (int i = 0; i < s.Inventory.SlotCount; i++)
-                {
-                    var stack = s.Inventory[i];
-                    w.String(stack.IsEmpty ? "" : stack.ItemId, 64);
-                    if (stack.IsEmpty) continue;
-                    w.UShort((ushort)stack.Amount);
-                    w.Int(stack.SkinId);
-                }
+                WriteSlots(w, s.Inventory);
                 w.Byte((byte)s.Crafting.Jobs.Count);
                 foreach (var job in s.Crafting.Jobs)
                 {
@@ -79,6 +82,35 @@ namespace Oxfall.Core.Net
                 }
             }
             return w.ToArray();
+        }
+
+        private static void WriteSlots(NetWriter w, Inventory inventory)
+        {
+            w.Byte((byte)inventory.SlotCount);
+            for (int i = 0; i < inventory.SlotCount; i++)
+            {
+                var stack = inventory[i];
+                w.String(stack.IsEmpty ? "" : stack.ItemId, 64);
+                if (stack.IsEmpty) continue;
+                w.UShort((ushort)stack.Amount);
+                w.Int(stack.SkinId);
+            }
+        }
+
+        /// <summary>Reads slots saved by <see cref="WriteSlots"/>; items this version no longer has are dropped.</summary>
+        private void ReadSlots(NetReader r, List<(int, ItemStack)> into, int slotLimit)
+        {
+            into.Clear();
+            int slotCount = r.Byte();
+            for (int slot = 0; slot < slotCount; slot++)
+            {
+                string item = r.String();
+                if (item.Length == 0) continue;
+                int amount = r.UShort();
+                int skin = r.Int();
+                if (Catalog.TryGet(item, out var def) && slot < slotLimit)
+                    into.Add((slot, new ItemStack(item, Math.Min(amount, def.MaxStack), skin)));
+            }
         }
 
         /// <summary>
@@ -96,7 +128,7 @@ namespace Oxfall.Core.Net
                 if (r.UShort() != SaveVersion) { why = "an older save layout"; return false; }
                 int seed = r.Int();
                 if (seed != Seed) { why = $"seed {seed}, another wipe"; return false; }
-                if (_records.Count > 0 || Settlement.Grid.PieceCount > 0) { why = "the world is not fresh"; return false; }
+                if (_records.Count > 0 || Settlement.Grid.PieceCount > 0 || Settlement.DeployableCount > 0) { why = "the world is not fresh"; return false; }
 
                 int nodes = r.Int();
                 for (int i = 0; i < nodes; i++)
@@ -118,9 +150,18 @@ namespace Oxfall.Core.Net
                     if (Settlement.Grid.Exists(stored)) Settlement.SetOwner(stored, owner);
                 }
 
+                var slots = new List<(int, ItemStack)>();
+                int boxCount = r.Int();
+                for (int i = 0; i < boxCount; i++)
+                {
+                    int id = r.Int();
+                    var box = Settlement.Container(id);
+                    ReadSlots(r, slots, box?.SlotCount ?? 0);
+                    box?.SetSlots(slots);
+                }
+
                 _nextOwner = Math.Max(1, r.Int());
                 int records = r.Int();
-                var slots = new List<(int, ItemStack)>();
                 var jobs = new List<(Recipe, float)>();
                 for (int i = 0; i < records; i++)
                 {
@@ -129,18 +170,7 @@ namespace Oxfall.Core.Net
                     int owner = r.Int();
                     var pose = Pose.Read(r);
                     float health = r.Float(), food = r.Float(), water = r.Float();
-                    slots.Clear();
-                    int slotCount = r.Byte();
-                    for (int slot = 0; slot < slotCount; slot++)
-                    {
-                        string item = r.String();
-                        if (item.Length == 0) continue;
-                        int amount = r.UShort();
-                        int skin = r.Int();
-                        // An item this version no longer has is dropped rather than breaking the load.
-                        if (Catalog.TryGet(item, out var def) && slot < Inventory.DefaultSlotCount)
-                            slots.Add((slot, new ItemStack(item, Math.Min(amount, def.MaxStack), skin)));
-                    }
+                    ReadSlots(r, slots, Inventory.DefaultSlotCount);
                     jobs.Clear();
                     int jobCount = r.Byte();
                     for (int j = 0; j < jobCount; j++)

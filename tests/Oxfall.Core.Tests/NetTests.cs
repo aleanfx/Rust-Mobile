@@ -90,9 +90,9 @@ namespace Oxfall.Core.Tests
         public void ServerMessagesRoundTrip()
         {
             var w = new NetWriter();
-            Messages.Welcome(w, 7, 1234, 5.5f, new Pose(1f, 2f, 3f, 4f));
-            Messages.ReadWelcome(After(w, MessageType.Welcome), out var id, out var seed, out var time, out var pose);
-            Assert.AreEqual((7, 1234, 5.5f, new Pose(1f, 2f, 3f, 4f)), (id, seed, time, pose));
+            Messages.Welcome(w, 7, 1234, 5.5f, new Pose(1f, 2f, 3f, 4f), 42);
+            Messages.ReadWelcome(After(w, MessageType.Welcome), out var id, out var seed, out var time, out var pose, out int owner);
+            Assert.AreEqual((7, 1234, 5.5f, new Pose(1f, 2f, 3f, 4f), 42), (id, seed, time, pose, owner));
 
             Messages.Joined(w, 9, "Bea", new Pose(4f, 5f, 6f, 10f));
             Messages.ReadJoined(After(w, MessageType.Joined), out id, out var name, out pose);

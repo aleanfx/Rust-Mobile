@@ -50,6 +50,39 @@ namespace Oxfall.Game.UI
             return Mathf.Max(Mathf.Min(body, Mathf.Max(handle, -(p.y - 0.5f))), -Mathf.Min(Mathf.Abs(pocket) - 0.04f, flap));
         });
 
+        /// <summary>A wooden box seen from the front: lid, body and latch.</summary>
+        public static Sprite Box => Get("box", p =>
+        {
+            float body = RoundBox(p, new Vector2(0f, -0.08f), new Vector2(0.7f, 0.52f), 0.1f);
+            float lid = Segment(p, new Vector2(-0.8f, 0.16f), new Vector2(0.8f, 0.16f), 0.05f);
+            float latch = RoundBox(p, new Vector2(0f, 0.12f), new Vector2(0.1f, 0.14f), 0.03f);
+            return Mathf.Min(Mathf.Max(body, -lid), latch);
+        });
+
+        /// <summary>A flame with a hollow heart.</summary>
+        public static Sprite Flame => Get("flame", p =>
+        {
+            float bulb = Circle(p, new Vector2(0f, -0.3f), 0.45f);
+            float tip = Polygon(p, new Vector2(-0.41f, -0.15f), new Vector2(0.41f, -0.15f), new Vector2(0.08f, 0.8f));
+            float heart = Circle(p, new Vector2(0f, -0.38f), 0.17f);
+            return Mathf.Max(Mathf.Min(bulb, tip), -heart);
+        });
+
+        /// <summary>A shield (the tool cupboard's protection) with an open middle.</summary>
+        public static Sprite Shield => Get("shield", p =>
+        {
+            float outer = Polygon(p, new Vector2(-0.62f, 0.66f), new Vector2(0.62f, 0.66f), new Vector2(0.62f, 0.06f),
+                new Vector2(0f, -0.78f), new Vector2(-0.62f, 0.06f));
+            float inner = Polygon(p, new Vector2(-0.4f, 0.47f), new Vector2(0.4f, 0.47f), new Vector2(0.4f, 0.06f),
+                new Vector2(0f, -0.48f), new Vector2(-0.4f, 0.06f));
+            return Mathf.Max(outer, -inner);
+        });
+
+        /// <summary>A sleeping bag with its pillow.</summary>
+        public static Sprite Bed => Get("bed", p =>
+            Mathf.Min(RoundBox(p, new Vector2(0.14f, -0.12f), new Vector2(0.62f, 0.26f), 0.14f),
+                RoundBox(p, new Vector2(-0.6f, 0.12f), new Vector2(0.2f, 0.15f), 0.08f)));
+
         public static Sprite Hammer => Get("hammer", p =>
             Mathf.Min(Segment(p, new Vector2(0.18f, 0.18f), new Vector2(-0.64f, -0.64f), 0.1f),
                 RotatedBox(p, new Vector2(0.28f, 0.28f), new Vector2(0.52f, 0.2f), -45f, 0.05f)));

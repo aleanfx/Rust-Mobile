@@ -11,7 +11,7 @@ namespace Oxfall.Core.Net
     public static class Protocol
     {
         /// <summary>Raised whenever a message changes shape; a client of another version is turned away.</summary>
-        public const ushort Version = 4;
+        public const ushort Version = 5;
 
         /// <summary>Snapshots per second the server sends.</summary>
         public const int TickRate = 20;
@@ -79,6 +79,7 @@ namespace Oxfall.Core.Net
         Failed = 22,
         Built = 23,
         TimeOfDay = 24,
+        Loot = 25,
     }
 
     /// <summary>What a player does to their own belongings (inside an <see cref="MessageType.Act"/> message).</summary>
@@ -94,6 +95,15 @@ namespace Oxfall.Core.Net
         Respawn = 8,
         /// <summary>Test servers only: a kit of tools and materials. A real server refuses it.</summary>
         DevGive = 9,
+        /// <summary>Opens a box or furnace (a: its id).</summary>
+        Open = 10,
+        Close = 11,
+        /// <summary>From the open box's slot a to inventory slot b (-1: wherever it fits).</summary>
+        Take = 12,
+        /// <summary>From inventory slot a to the open box's slot b (-1: wherever it fits).</summary>
+        Put = 13,
+        /// <summary>Within the open box, slot a onto slot b.</summary>
+        MoveInBox = 14,
     }
 
     /// <summary>Where a player stands and which way the body faces (degrees about up).</summary>
@@ -219,8 +229,22 @@ namespace Oxfall.Core.Net
                 case ActKind.Craft:
                     w.String(recipe ?? "", 64);
                     break;
+                case ActKind.Respawn:
+                case ActKind.Open:
+                    w.Int(a);
+                    break;
+                case ActKind.Take:
+                case ActKind.Put:
+                case ActKind.MoveInBox:
+                    w.Byte(SlotByte(a));
+                    w.Byte(SlotByte(b));
+                    break;
             }
         }
+
+        // A slot, or 255 for "anywhere" (-1).
+        private static byte SlotByte(int slot) => slot < 0 ? (byte)255 : (byte)slot;
+        private static int ByteSlot(byte b) => b == 255 ? -1 : b;
 
         public static ActKind ReadAct(NetReader r, out int a, out int b, out string recipe)
         {
@@ -233,6 +257,16 @@ namespace Oxfall.Core.Net
                     a = r.Byte();
                     b = r.Byte();
                     break;
+                case ActKind.Respawn:
+                case ActKind.Open:
+                    a = r.Int();
+                    break;
+                case ActKind.Take:
+                case ActKind.Put:
+                case ActKind.MoveInBox:
+                    a = ByteSlot(r.Byte());
+                    b = ByteSlot(r.Byte());
+                    break;
                 case ActKind.QuickMove:
                 case ActKind.Split:
                 case ActKind.CancelCraft:
@@ -243,8 +277,8 @@ namespace Oxfall.Core.Net
                     recipe = r.String();
                     break;
                 case ActKind.Drink:
-                case ActKind.Respawn:
                 case ActKind.DevGive:
+                case ActKind.Close:
                     break;
                 default:
                     throw new ProtocolException("Unknown action " + (byte)kind + ".");
@@ -308,7 +342,8 @@ namespace Oxfall.Core.Net
         }
 
         /// <param name="pose">Where the player is: where they were last time, or a beach for a newcomer.</param>
-        public static void Welcome(NetWriter w, ushort playerId, int seed, float serverTime, Pose pose)
+        /// <param name="owner">What marks the player's buildings, bags and cupboards as theirs (it stays the same between visits).</param>
+        public static void Welcome(NetWriter w, ushort playerId, int seed, float serverTime, Pose pose, int owner)
         {
             w.Reset();
             w.Byte((byte)MessageType.Welcome);
@@ -316,14 +351,63 @@ namespace Oxfall.Core.Net
             w.Int(seed);
             w.Float(serverTime);
             pose.Write(w);
+            w.Int(owner);
         }
 
-        public static void ReadWelcome(NetReader r, out ushort playerId, out int seed, out float serverTime, out Pose pose)
+        public static void ReadWelcome(NetReader r, out ushort playerId, out int seed, out float serverTime, out Pose pose, out int owner)
         {
             playerId = r.UShort();
             seed = r.Int();
             serverTime = r.Float();
             pose = Pose.Read(r);
+            owner = r.Int();
+        }
+
+        /// <summary>
+        /// The box or furnace the player has open: its id, how many slots, and the slots that changed
+        /// (all of them when just opened). An id of 0 says it closed (out of reach, or gone).
+        /// </summary>
+        public static void Loot(NetWriter w, int id, int slotCount, IReadOnlyList<(int Slot, Items.ItemStack Stack)> slots)
+        {
+            w.Reset();
+            w.Byte((byte)MessageType.Loot);
+            w.Int(id);
+            w.Byte((byte)slotCount);
+            w.Byte((byte)slots.Count);
+            foreach (var (slot, stack) in slots) WriteStack(w, slot, stack);
+        }
+
+        public static int ReadLoot(NetReader r, out int slotCount, List<(int Slot, Items.ItemStack Stack)> into)
+        {
+            into.Clear();
+            int id = r.Int();
+            slotCount = r.Byte();
+            int n = r.Byte();
+            for (int i = 0; i < n; i++) into.Add(ReadStack(r));
+            return id;
+        }
+
+        private static void WriteStack(NetWriter w, int slot, Items.ItemStack stack)
+        {
+            w.Byte((byte)slot);
+            if (stack.IsEmpty)
+            {
+                w.String("");
+                return;
+            }
+            w.String(stack.ItemId, 64);
+            w.UShort((ushort)Math.Min(ushort.MaxValue, stack.Amount));
+            w.Int(stack.SkinId);
+        }
+
+        private static (int, Items.ItemStack) ReadStack(NetReader r)
+        {
+            int slot = r.Byte();
+            string id = r.String();
+            if (id.Length == 0) return (slot, Items.ItemStack.Empty);
+            int amount = r.UShort();
+            int skin = r.Int();
+            return (slot, amount > 0 ? new Items.ItemStack(id, amount, skin) : Items.ItemStack.Empty);
         }
 
         /// <summary>Inventory slots that changed: (slot, stack), an empty item id for an empty slot.</summary>

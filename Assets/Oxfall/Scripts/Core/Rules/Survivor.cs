@@ -19,8 +19,12 @@ namespace Oxfall.Core.Rules
             Inventory = new Inventory(catalog);
             Crafting = new CraftingQueue(Inventory);
             Vitals = new Vitals();
+            Vitals.Died += () => Looting = 0;
             GiveStarterKit();
         }
+
+        /// <summary>The box or furnace they have open (0: none).</summary>
+        public int Looting { get; set; }
 
         /// <summary>What a fresh player wakes up with in the genre: a rock to gather with and a torch.</summary>
         public void GiveStarterKit()

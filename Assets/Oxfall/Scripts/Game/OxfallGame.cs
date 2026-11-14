@@ -46,8 +46,11 @@ namespace Oxfall.Game
         private BuildSystem _build;
         private HammerTool _hammer;
         private DoorPlacer _doorPlacer;
-        private DoorUser _doorUser;
-        private CampfirePlacer _campfires;
+        private Interactor _interactor;
+        private DeployablePlacer _placer;
+        private DeployableViews _deployables;
+        private CupboardUi _cupboard;
+        private GameAudio _audio;
         private DayNight _dayNight;
         private Vitals _vitals;
         private VitalsUi _vitalsUi;
@@ -112,7 +115,7 @@ namespace Oxfall.Game
             _survivor = new Survivor(_catalog);
             _inventory = _survivor.Inventory;
             _vitals = _survivor.Vitals;
-            _settlement = new Settlement(_world.Shape.Ground);
+            _settlement = new Settlement(_world.Shape.Ground, _catalog);
             _hotbar = new Hotbar(_inventory);
             var models = ItemModels.Create(materials);
 
@@ -145,7 +148,7 @@ namespace Oxfall.Game
             controls.Init(input, _hud);
 
             // The hotbar and the inventory panel; their icons are rendered from the item models.
-            _inventoryUi = new InventoryUi(_hud, _inventory, _hotbar, _actions);
+            _inventoryUi = new InventoryUi(_hud, _inventory, _hotbar, _actions, _settlement);
             controls.SlotKey += slot => _hotbar.Select(slot);
             controls.InventoryKey += _inventoryUi.Toggle;
             ItemIcons.Render(models, _world.Sun).Ready += () =>
@@ -157,6 +160,7 @@ namespace Oxfall.Game
 
             // Sounds, all made at start-up.
             var audio = GameAudio.Create(playerObject.transform, _world.Shape);
+            _audio = audio;
             gatherer.Sound += audio.Play;
             gatherer.FireSound = audio.Bank.FireLoop;
             controls.Tapped += () => audio.Play(SoundCue.Tap);
@@ -165,6 +169,7 @@ namespace Oxfall.Game
             _vitalsUi = new VitalsUi(_hud, _vitals);
             _vitals.Died += OnDied;
             _vitalsUi.WakeUpTapped += WakeUp;
+            _vitalsUi.BagTapped += WakeUpInBag;
 
             // The clock: the island starts in the morning; a day lasts 30 minutes and a night 10.
             _dayNight = _world.Root.gameObject.AddComponent<DayNight>();
@@ -225,6 +230,7 @@ namespace Oxfall.Game
             _hammer = playerObject.AddComponent<HammerTool>();
             _hammer.Init(grid, input, _inventory, _catalog, player.Head, _hud);
             _hammer.Actions = _actions;
+            _hammer.Settlement = _settlement;
             _hammer.Upgraded += () => { audio.Play(SoundCue.Place); _gatherer.PlaySwing(); };
             _hammer.Demolished += () => audio.Play(SoundCue.Wood);
             _hud.PieceTapped += () =>
@@ -236,21 +242,32 @@ namespace Oxfall.Game
             _doorPlacer.Init(_buildings, input, _inventory, player.Head, _hud, materials);
             _doorPlacer.Actions = _actions;
             _doorPlacer.Placed += () => audio.Play(SoundCue.Place);
-            _doorUser = playerObject.AddComponent<DoorUser>();
-            _doorUser.Init(grid, player.Head, _hud);
-            _doorUser.Actions = _actions;
-            _doorUser.Used += () => audio.Play(SoundCue.Wood);
-            _hud.UseTapped += _doorUser.Use;
 
-            // Holding a campfire shows where it would go; attack puts it down.
-            var campfire = models[ItemIds.Campfire];
-            _campfires = playerObject.AddComponent<CampfirePlacer>();
-            _campfires.Init(input, _inventory, player, materials, _hud, campfire.Mesh, campfire.Materials);
-            _campfires.Actions = _actions;
-            _campfires.Placed += () => audio.Play(SoundCue.Place);
-            _campfires.Spawned += fire => GameAudio.Attach(fire, audio.Bank.FireLoop, 0.7f, 16f);
-            _settlement.CampfireAdded += _campfires.Show;
-            _settlement.CampfireRemoved += _campfires.Hide;
+            // Things set down (campfires, boxes, furnaces, sleeping bags, tool cupboards): drawn from
+            // the settlement; holding one shows where it would go and attack puts it down.
+            _deployables = new DeployableViews(_settlement, models, materials);
+            _deployables.FireStarted += fire => GameAudio.Attach(fire, audio.Bank.FireLoop, 0.7f, 16f);
+            _placer = playerObject.AddComponent<DeployablePlacer>();
+            _placer.Init(input, player, materials, _hud, _settlement, _deployables);
+            _placer.Actions = _actions;
+            _placer.Placed += () => audio.Play(SoundCue.Place);
+            _cupboard = new CupboardUi(_hud, _settlement, _actions);
+
+            // The use button: doors, boxes, furnaces, cupboards.
+            _interactor = playerObject.AddComponent<Interactor>();
+            _interactor.Init(_settlement, player.Head, _hud);
+            _interactor.Actions = _actions;
+            _interactor.DoorUsed += () => audio.Play(SoundCue.Wood);
+            _interactor.OpenBox += OpenBox;
+            _interactor.OpenCupboard += OpenCupboard;
+            _hud.UseTapped += _interactor.Use;
+            // A box that goes (picked up, or gone from the server's island) closes.
+            _settlement.DeployableRemoved += id =>
+            {
+                if (_inventoryUi.OpenBoxId != id) return;
+                _survivor.Looting = 0;
+                _inventoryUi.CloseBox(false);
+            };
 
             _inventory.Changed += _ =>
             {
@@ -287,6 +304,9 @@ namespace Oxfall.Game
                 if (_title != null) EnterGame();
                 // A fresh copy of everything comes next: what was here alone makes way for it.
                 _quietPickups = true;
+                _inventoryUi.CloseBox(false);
+                _cupboard.Close();
+                _survivor.Looting = 0;
                 _inventory.Clear();
                 _crafting.Clear();
                 _crafting.Mirror = true;
@@ -326,6 +346,20 @@ namespace Oxfall.Game
                 // Small drift is eased away by the next one; only a real difference is jumped.
                 float diff = Mathf.Abs(Mathf.DeltaAngle(_dayNight.Cycle.Hours * 15f, hours * 15f)) / 15f;
                 if (diff > 0.02f) _dayNight.SetHour(hours);
+            };
+            _net.Looted += (id, count, slots) =>
+            {
+                if (id == 0)
+                {
+                    // The server closed it (out of reach, gone, or dead).
+                    _survivor.Looting = 0;
+                    _inventoryUi.CloseBox(false);
+                    return;
+                }
+                var box = _settlement.Container(id);
+                if (box == null) return;
+                _survivor.Looting = id;
+                box.SetSlots(slots);
             };
             _net.Built += ops =>
             {
@@ -447,21 +481,21 @@ namespace Oxfall.Game
             _inventoryUi.Refresh();
             _gatherer.RefreshHeld();
             // Leave the old mode before entering the new one: both drive the attack button's label.
+            var held = _hotbar.HeldDefinition;
             bool plan = _hotbar.IsHolding(ItemIds.BuildingPlan);
-            bool fire = _hotbar.IsHolding(ItemIds.Campfire);
+            bool deploy = Deployables.TryKindOf(held?.Id, out var kind);
             bool hammer = _hotbar.IsHolding(ItemIds.Hammer);
             bool door = _hotbar.IsHolding(ItemIds.WoodenDoor);
             if (!plan) _build.SetActive(false);
-            if (!fire) _campfires.SetActive(false);
+            if (!deploy) _placer.Hold(null);
             if (!hammer) _hammer.SetActive(false);
             if (!door) _doorPlacer.SetActive(false);
             if (plan) _build.SetActive(true);
-            if (fire) _campfires.SetActive(true);
+            if (deploy) _placer.Hold(kind);
             if (hammer) { _hammer.SetActive(true); _hammer.Refresh(); }
             if (door) _doorPlacer.SetActive(true);
-            var held = _hotbar.HeldDefinition;
             bool food = held?.Category == ItemCategory.Food;
-            _hud.SetAttackLabel(plan || fire || door ? "COLOCAR" : hammer ? "MEJORAR" : food ? "COMER" : "GOLPEAR");
+            _hud.SetAttackLabel(plan || deploy || door ? "COLOCAR" : hammer ? "MEJORAR" : food ? "COMER" : "GOLPEAR");
             _hud.SetAttackIcon(held != null ? ItemIcons.Get(held.Id) : null);
         }
 
@@ -568,10 +602,25 @@ namespace Oxfall.Game
         {
             Debug.Log("[Oxfall] The player died.");
             _inventoryUi.Close();
+            _cupboard.Close();
             _hud.CloseCraftPanel();
             _player.enabled = false;
             _gatherer.enabled = false;
+            _vitalsUi.SetBags(MyBags());
             _vitalsUi.ShowDeath(true);
+        }
+
+        /// <summary>The player's sleeping bags, with how long until each can be woken up in.</summary>
+        private System.Collections.Generic.List<(int, System.Func<float>)> MyBags()
+        {
+            var bags = new System.Collections.Generic.List<(int, System.Func<float>)>();
+            foreach (var bag in _settlement.BagsOf(_actions.Owner))
+            {
+                int id = bag.Id;
+                bags.Add((id, () => _settlement.BagReadyAt(id) - Time.time));
+            }
+            bags.Sort((a, b) => a.Item1.CompareTo(b.Item1));
+            return bags;
         }
 
         /// <summary>
@@ -583,13 +632,93 @@ namespace Oxfall.Game
             if (_actions.Respawn() != ActionResult.Ok) return;
             // Alone the game picks the beach; online the server does and moves the player there.
             if (!_actions.Online) _player.Teleport(_world.SpawnPosition, _world.SpawnYaw, 0f);
+            AfterWakeUp("Has despertado en la playa");
+        }
+
+        /// <summary>Wakes up in one of the player's sleeping bags, if it is ready.</summary>
+        private void WakeUpInBag(int id)
+        {
+            var result = _actions.RespawnInBag(id, out var bag);
+            if (result != ActionResult.Ok)
+            {
+                _hud.ShowToast(GameActions.Explain(result));
+                return;
+            }
+            if (!_actions.Online) _player.Teleport(new Vector3(bag.X, bag.Y + 0.1f, bag.Z), bag.Yaw, 0f);
+            AfterWakeUp("Has despertado en tu saco de dormir");
+        }
+
+        private void AfterWakeUp(string message)
+        {
             if (_hotbar.Selected != 0) _hotbar.Select(0);
             _warnedHungry = _warnedThirsty = false;
             _player.enabled = true;
             _gatherer.enabled = true;
             _vitalsUi.ShowDeath(false);
             _vitalsUi.Refresh();
-            _hud.ShowToast("Has despertado en la playa");
+            _hud.ShowToast(message);
+        }
+
+        /// <summary>Opens a box or furnace beside the inventory.</summary>
+        private void OpenBox(int id)
+        {
+            _cupboard.Close();
+            var result = _actions.Open(id);
+            if (result != ActionResult.Ok)
+            {
+                _hud.ShowToast(GameActions.Explain(result));
+                return;
+            }
+            _inventoryUi.OpenBox(id);
+            _audio.Play(SoundCue.Wood);
+            Debug.Log("[Oxfall] Opened box " + id);
+        }
+
+        private void OpenCupboard(int id)
+        {
+            _inventoryUi.Close();
+            _cupboard.Open(id);
+            Debug.Log("[Oxfall] Opened cupboard " + id);
+        }
+
+        /// <summary>Once a second: what is open closes when the player has walked away from it.</summary>
+        private void CloseWhatIsFar()
+        {
+            float reach = PlayerActions.UseReach + 1f;
+            var here = _player.transform.position;
+            bool Far(int id) => !_settlement.TryGet(id, out var d) || (new Vector3(d.X, d.Y, d.Z) - here).sqrMagnitude > reach * reach;
+            if (_inventoryUi.OpenBoxId != 0 && Far(_inventoryUi.OpenBoxId)) _inventoryUi.CloseBox(true);
+            if (_cupboard.IsOpen && Far(_cupboard.OpenId)) _cupboard.Close();
+        }
+
+        /// <summary>For tests: the nearest thing of a kind set down, or 0.</summary>
+        private int Nearest(DeployableKind kind)
+        {
+            int best = 0;
+            float bestDistance = float.MaxValue;
+            var here = _player.transform.position;
+            foreach (var d in _settlement.Deployables)
+            {
+                if (d.Kind != kind) continue;
+                float distance = (new Vector3(d.X, d.Y, d.Z) - here).sqrMagnitude;
+                if (distance < bestDistance)
+                {
+                    bestDistance = distance;
+                    best = d.Id;
+                }
+            }
+            return best;
+        }
+
+        /// <summary>For tests: turns the player, where they stand, to look at something set down.</summary>
+        private void FaceDeployable(int id)
+        {
+            if (!_settlement.TryGet(id, out var d)) return;
+            var eye = _player.Head.position;
+            var to = new Vector3(d.X, d.Y + 0.35f, d.Z) - eye;
+            float yaw = Mathf.Atan2(to.x, to.z) * Mathf.Rad2Deg;
+            float pitch = -Mathf.Atan2(to.y, new Vector2(to.x, to.z).magnitude) * Mathf.Rad2Deg;
+            _player.Teleport(_player.transform.position, yaw, pitch);
         }
 
         /// <summary>
@@ -633,24 +762,38 @@ namespace Oxfall.Game
                     _inventory.Add(ItemIds.BuildingPlan, 1);
                     break;
                 case "give-all":
-                    _inventory.Add(ItemIds.StoneHatchet, 1);
-                    _inventory.Add(ItemIds.StonePickaxe, 1);
-                    _inventory.Add(ItemIds.BuildingPlan, 1);
-                    _inventory.Add(ItemIds.Campfire, 2);
-                    _inventory.Add(ItemIds.Hammer, 1);
-                    _inventory.Add(ItemIds.WoodenDoor, 1);
-                    _inventory.Add(ItemIds.Wood, 1500);
-                    _inventory.Add(ItemIds.Stone, 700);
-                    _inventory.Add(ItemIds.MetalOre, 240);
-                    _inventory.Add(ItemIds.Cloth, 40);
+                    // The same kit a test server hands out.
+                    ServerWorld.GiveTestKit(_inventory);
                     break;
+                case "box": HoldItem(ItemIds.StorageBox); break;
+                case "furnace": HoldItem(ItemIds.Furnace); break;
+                case "sleeping-bag": HoldItem(ItemIds.SleepingBag); break;
+                case "cupboard": HoldItem(ItemIds.ToolCupboard); break;
+                case "campfire": HoldItem(ItemIds.Campfire); break;
+                case "open-box": OpenBox(Nearest(DeployableKind.StorageBox)); break;
+                case "open-furnace": OpenBox(Nearest(DeployableKind.Furnace)); break;
+                case "open-cupboard": OpenCupboard(Nearest(DeployableKind.ToolCupboard)); break;
+                case "face-box": FaceDeployable(Nearest(DeployableKind.StorageBox)); break;
+                case "face-furnace": FaceDeployable(Nearest(DeployableKind.Furnace)); break;
+                case "face-cupboard": FaceDeployable(Nearest(DeployableKind.ToolCupboard)); break;
+                case "across": _inventoryUi.MoveAcross(); break;
+                case "light": _inventoryUi.ToggleFurnace(); break;
+                case "authorize": _cupboard.Authorize(); break;
+                case "close-box": _inventoryUi.CloseBox(true); break;
+                case "bag-1":
+                {
+                    var bags = MyBags();
+                    if (bags.Count > 0) WakeUpInBag(bags[0].Item1);
+                    break;
+                }
                 case "build": HoldItem(ItemIds.BuildingPlan); break;
                 case "hammer": HoldItem(ItemIds.Hammer); break;
                 case "door": HoldItem(ItemIds.WoodenDoor); break;
                 case "upgrade": _hammer.Upgrade(); break;
                 case "demolish": _hammer.Demolish(); break;
                 case "place-door": _doorPlacer.Place(); break;
-                case "use-door": _doorUser.Use(); break;
+                case "use-door":
+                case "interact": _interactor.Use(); break;
                 case "build-hut": BuildTestHut(); break;
                 case "aim-wall": AimAtPiece(PieceType.Wall, 1.5f); break;
                 case "aim-door": AimAtPiece(PieceType.Doorway, 1.1f); break;
@@ -659,7 +802,8 @@ namespace Oxfall.Game
                 case "piece": _build.CyclePiece(); break;
                 case "place": _build.Place(); break;
                 case "inventory": _inventoryUi.Toggle(); break;
-                case "place-fire": _campfires.Place(); break;
+                case "place-fire":
+                case "deploy": _placer.Place(); break;
                 case "starve": _vitals.Damage(1000f); break;
                 case "use": _gatherer.UseOnce(); break;
                 case "wake": WakeUp(); break;
@@ -677,10 +821,10 @@ namespace Oxfall.Game
                     Debug.Log($"[Oxfall] Stats: wood={_inventory.Count(ItemIds.Wood)} stone={_inventory.Count(ItemIds.Stone)} " +
                               $"ore={_inventory.Count(ItemIds.MetalOre)} cloth={_inventory.Count(ItemIds.Cloth)} " +
                               $"hatchet={_inventory.Count(ItemIds.StoneHatchet)} pickaxe={_inventory.Count(ItemIds.StonePickaxe)} " +
-                              $"held={_hotbar.Held} building={_build.Active} campfires={_campfires.PlacedCount} " +
+                              $"held={_hotbar.Held} building={_build.Active} deployables={_deployables.Count} looting={_survivor.Looting} " +
                               $"time={_dayNight.Cycle.Clock} health={_vitals.Health:0} food={_vitals.Food:0} water={_vitals.Water:0} " +
                               $"ponds={_world.Shape.Ponds.Count} berries={_inventory.Count(ItemIds.Berries)} " +
-                              $"pieces={_buildings.Grid.PieceCount} views={_buildings.Count} doorLook={_doorUser.LookingAtDoor} " +
+                              $"pieces={_buildings.Grid.PieceCount} views={_buildings.Count} doorLook={_interactor.LookingAtDoor} lookAt={_interactor.LookingAt} " +
                               $"pos={_player.transform.position} quality={GraphicsQuality.Name(_quality.Tier)} " +
                               $"screen={Screen.width}x{Screen.height} grass={_grass.BladeCount} " +
                               $"net={_net.State} id={_net.PlayerId} online={_net.OnlineCount} " +
@@ -696,6 +840,9 @@ namespace Oxfall.Game
                         _hotbar.Select(slot - 1);
                     else if (command.StartsWith("tap-") && int.TryParse(command.Substring(4), out int tap))
                         _inventoryUi.TapSlot(tap);
+                    // box-tap-N taps slot N of the open box.
+                    else if (command.StartsWith("box-tap-") && int.TryParse(command.Substring(8), out int boxTap))
+                        _inventoryUi.TapBoxSlot(boxTap);
                     // time-H jumps to hour H (0 to 23).
                     else if (command.StartsWith("time-") && float.TryParse(command.Substring(5),
                                  System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out float hour))
@@ -912,8 +1059,11 @@ namespace Oxfall.Game
 
             // Trees and rocks grow back on their own timers; checking once a second is plenty.
             _crafting?.Tick(Time.deltaTime);
+            // Furnaces burn here alone; online the server burns them and says what came out.
+            if (_settlement != null && !_actions.Online) _settlement.Tick(Time.deltaTime);
             _respawnTimer += Time.deltaTime;
             if (_respawnTimer < RespawnTickSeconds || _world == null) return;
+            CloseWhatIsFar();
             // Online, the server grows things back and says so.
             if (_net != null && _net.State == NetClient.Status.Online) { _respawnTimer = 0f; return; }
             foreach (var node in _world.Nodes) node.TickRespawn(_respawnTimer);

@@ -91,6 +91,14 @@ namespace Oxfall.Core.Crafting
                 new Ingredient(ItemIds.Wood, 100)),
             new Recipe("wooden_door", ItemIds.WoodenDoor, 1, 10f,
                 new Ingredient(ItemIds.Wood, 150)),
+            new Recipe("storage_box", ItemIds.StorageBox, 1, 10f,
+                new Ingredient(ItemIds.Wood, 100)),
+            new Recipe("sleeping_bag", ItemIds.SleepingBag, 1, 10f,
+                new Ingredient(ItemIds.Cloth, 30)),
+            new Recipe("furnace", ItemIds.Furnace, 1, 20f,
+                new Ingredient(ItemIds.Stone, 200), new Ingredient(ItemIds.Wood, 100)),
+            new Recipe("tool_cupboard", ItemIds.ToolCupboard, 1, 20f,
+                new Ingredient(ItemIds.Wood, 500)),
         });
     }
 }

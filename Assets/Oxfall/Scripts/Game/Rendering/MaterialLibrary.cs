@@ -64,6 +64,10 @@ namespace Oxfall.Game.Rendering
         public Material Rope { get; }
         public Material Blueprint { get; }
         public Material Char { get; }
+        /// <summary>Worn, rusty iron: hinges, handles, metal fragments.</summary>
+        public Material Metal { get; }
+        /// <summary>The olive canvas of a sleeping bag.</summary>
+        public Material Bedroll { get; }
         /// <summary>The glow of fire (Oxfall/Flame, additive); a plain orange if it isn't in the build.</summary>
         public Material Flame { get; }
         public Material Berries { get; }
@@ -156,6 +160,8 @@ namespace Oxfall.Game.Rendering
             Rope = Make("Rope", new Color(0.42f, 0.33f, 0.22f), 0.04f);
             Blueprint = Make("Blueprint", new Color(0.27f, 0.42f, 0.62f), 0.12f);
             Char = Make("Char", new Color(0.13f, 0.11f, 0.10f), 0.05f);
+            Metal = Make("Metal", new Color(0.40f, 0.36f, 0.33f), 0.42f);
+            Bedroll = Make("Bedroll", new Color(0.30f, 0.34f, 0.22f), 0.04f);
             Flame = Resources.Load<Material>("OxfallFlame") ?? Make("Flame", new Color(1f, 0.55f, 0.15f), 0f);
             Berries = Make("Berries", new Color(0.50f, 0.06f, 0.20f), 0.55f);
             Shirt = Make("Shirt", new Color(0.46f, 0.42f, 0.33f), 0.05f);

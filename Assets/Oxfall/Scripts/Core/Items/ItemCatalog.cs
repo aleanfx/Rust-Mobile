@@ -47,6 +47,10 @@ namespace Oxfall.Core.Items
                 description: "Se funde en un horno para sacar metal."),
             new ItemDefinition(ItemIds.Cloth, "Tela", ItemCategory.Resource, 1000,
                 description: "Sale del cáñamo. Para antorchas y ropa."),
+            new ItemDefinition(ItemIds.MetalFragments, "Fragmentos de metal", ItemCategory.Resource, 1000,
+                description: "Salen del horno, fundiendo mineral de metal."),
+            new ItemDefinition(ItemIds.Charcoal, "Carbón", ItemCategory.Resource, 1000,
+                description: "Lo que deja la madera al arder en el horno."),
 
             new ItemDefinition(ItemIds.Berries, "Moras", ItemCategory.Food, 20,
                 description: "Llévalas en la mano y toca COMER: algo de comida y de agua.",
@@ -69,6 +73,14 @@ namespace Oxfall.Core.Items
                 description: "Da luz y calor, y cocina."),
             new ItemDefinition(ItemIds.WoodenDoor, "Puerta de madera", ItemCategory.Placeable, 1,
                 description: "Va en un marco de puerta. Tócala con ABRIR para abrirla o cerrarla."),
+            new ItemDefinition(ItemIds.StorageBox, "Caja de almacenaje", ItemCategory.Placeable, 1,
+                description: "Guarda 12 casillas de lo que quieras. Ponla dentro de tu casa."),
+            new ItemDefinition(ItemIds.Furnace, "Horno", ItemCategory.Placeable, 1,
+                description: "Mete madera y mineral de metal y enciéndelo: saca fragmentos de metal y carbón."),
+            new ItemDefinition(ItemIds.SleepingBag, "Saco de dormir", ItemCategory.Placeable, 1,
+                description: "Al morir puedes despertar en él en vez de en la playa (cada 2 minutos)."),
+            new ItemDefinition(ItemIds.ToolCupboard, "Armario de herramientas", ItemCategory.Placeable, 1,
+                description: "Nadie que no esté autorizado en él puede construir a su alrededor (24 m)."),
         });
     }
 }

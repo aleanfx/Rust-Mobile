@@ -129,6 +129,16 @@ namespace Oxfall.Server
                     float now = Now;
                     _world.Tick(now - lastTick);
                     lastTick = now;
+                    // A furnace that burned out, for everyone to see.
+                    if (_world.Announcements.Count > 0)
+                    {
+                        if (_sessions.Count > 0)
+                        {
+                            Messages.Built(writer, _world.Announcements, 0, _world.Announcements.Count);
+                            Broadcast(writer.ToArray());
+                        }
+                        _world.Announcements.Clear();
+                    }
 
                     // Trees and rocks grow back whether anyone is online or not; once a second is plenty.
                     if (now - lastRespawn >= 1f)
@@ -295,6 +305,8 @@ namespace Oxfall.Server
             record.Crafted.Clear();
             if (session.Sync.Crafts(record.Survivor, w)) session.Connection.Send(w.ToArray());
             if (session.Sync.Vitals(record.Survivor, w, now)) session.Connection.Send(w.ToArray());
+            // The box or furnace they have open.
+            if (session.Loot.Write(_world.Settlement, record.Survivor, w)) session.Connection.Send(w.ToArray());
         }
 
         private void SendPose(Session session, NetWriter writer)
@@ -338,7 +350,7 @@ namespace Oxfall.Server
                     return false;
                 }
                 id = player.Id;
-                Messages.Welcome(writer, player.Id, _state.Seed, now, player.Pose);
+                Messages.Welcome(writer, player.Id, _state.Seed, now, player.Pose, record.Owner);
                 connection.Send(writer.ToArray());
                 Messages.TimeOfDay(writer, _world.Day.Hours);
                 connection.Send(writer.ToArray());
@@ -409,6 +421,7 @@ namespace Oxfall.Server
             public readonly SurvivorRecord Record;
             public readonly Connection Connection;
             public readonly SurvivorSync Sync = new SurvivorSync();
+            public readonly LootSync Loot = new LootSync();
             public float LastCorrection = -1f;
 
             public Session(ushort id, SurvivorRecord record, Connection connection)

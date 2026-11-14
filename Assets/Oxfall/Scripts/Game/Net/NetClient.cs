@@ -34,6 +34,8 @@ namespace Oxfall.Game.Net
         public Status State { get; private set; }
         public ushort PlayerId { get; private set; }
         public int Seed { get; private set; }
+        /// <summary>What marks this player's buildings, bags and cupboards on the server (stays the same between visits).</summary>
+        public int Owner { get; private set; }
         public string Url { get; private set; }
         public string FailReason { get; private set; }
         public IReadOnlyDictionary<ushort, RemotePlayer> Players => _players;
@@ -76,6 +78,11 @@ namespace Oxfall.Game.Net
 
         /// <summary>The island's clock as the server has it (0 to 24).</summary>
         public event Action<float> TimeOfDay;
+
+        /// <summary>The open box or furnace: (id, slot count, slots that changed); id 0 when it closed.</summary>
+        public event Action<int, int, List<(int Slot, ItemStack Stack)>> Looted;
+
+        private readonly List<(int, ItemStack)> _loot = new List<(int, ItemStack)>();
 
         private readonly List<(int Id, int Remaining)> _nodeStates = new List<(int, int)>();
         private readonly List<(string ItemId, int Amount)> _gathered = new List<(string, int)>();
@@ -226,9 +233,10 @@ namespace Oxfall.Game.Net
             {
                 case MessageType.Welcome:
                 {
-                    Messages.ReadWelcome(reader, out var id, out var seed, out var serverTime, out var pose);
+                    Messages.ReadWelcome(reader, out var id, out var seed, out var serverTime, out var pose, out int owner);
                     PlayerId = id;
                     Seed = seed;
+                    Owner = owner;
                     _clock.Observe(serverTime, Time.unscaledTime);
                     _teleportPending = false;
                     SetState(Status.Online);
@@ -302,6 +310,12 @@ namespace Oxfall.Game.Net
                 case MessageType.TimeOfDay:
                     TimeOfDay?.Invoke(Messages.ReadTimeOfDay(reader));
                     break;
+                case MessageType.Loot:
+                {
+                    int box = Messages.ReadLoot(reader, out int slotCount, _loot);
+                    Looted?.Invoke(box, slotCount, _loot);
+                    break;
+                }
                 case MessageType.Correction:
                 {
                     var pose = Messages.ReadCorrection(reader);

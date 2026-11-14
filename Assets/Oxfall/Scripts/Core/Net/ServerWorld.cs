@@ -64,7 +64,13 @@ namespace Oxfall.Core.Net
             Ground = new IslandGround(seed);
             Catalog = ItemCatalog.CreateDefault();
             Recipes = RecipeBook.CreateDefault(Catalog);
-            Settlement = new Settlement(Ground);
+            Settlement = new Settlement(Ground, Catalog);
+            // A box that goes is closed for whoever had it open.
+            Settlement.DeployableRemoved += id =>
+            {
+                foreach (var record in _records.Values)
+                    if (record.Survivor.Looting == id) record.Survivor.Looting = 0;
+            };
             _random = new Random(seed ^ 0x2c1b3c6d);
             foreach (var spawn in ResourceLayout.Generate(Ground))
                 _nodes[spawn.Id] = new Node { State = new ResourceNode(spawn.Id, spawn.Type), X = spawn.X, Y = spawn.Y, Z = spawn.Z };
@@ -80,6 +86,12 @@ namespace Oxfall.Core.Net
         public int Seed => Players.Seed;
         public int NodeCount => _nodes.Count;
         public IEnumerable<SurvivorRecord> Records => _records.Values;
+
+        /// <summary>Seconds the world has run (the clock for sleeping bags).</summary>
+        public float Time { get; private set; }
+
+        /// <summary>Changes that happened on their own (a furnace burning out), to tell everyone; the caller empties it.</summary>
+        public List<BuildOp> Announcements { get; } = new List<BuildOp>();
 
         /// <summary>
         /// For tests: everyone wakes up on the same beach (the one the game picks alone) and clients
@@ -125,6 +137,7 @@ namespace Oxfall.Core.Net
 
             if (record == null) record = AddRecord(token, _nextOwner++, pose);
             record.Name = player.Name;
+            record.Survivor.Looting = 0;
             record.PlayerId = player.Id;
             _online[player.Id] = record;
             return record;
@@ -145,6 +158,7 @@ namespace Oxfall.Core.Net
             {
                 if (Players.TryGet(playerId, out var player)) record.Pose = player.Pose;
                 record.PlayerId = 0;
+                record.Survivor.Looting = 0;
                 _online.Remove(playerId);
             }
             Players.Leave(playerId);
@@ -215,10 +229,22 @@ namespace Oxfall.Core.Net
                 case ActKind.Drink: return PlayerActions.Drink(s, Ground, player.Pose.X, player.Pose.Y, player.Pose.Z);
                 case ActKind.Respawn:
                 {
+                    if (a != 0)
+                    {
+                        // In one of their sleeping bags, if it is ready.
+                        var bagResult = PlayerActions.RespawnInBag(Settlement, s, record.Owner, a, Time, out var bag);
+                        if (bagResult == ActionResult.Ok) Players.Place(playerId, new Pose(bag.X, bag.Y + 0.1f, bag.Z, bag.Yaw), player.LastMoveTime);
+                        return bagResult;
+                    }
                     var r = PlayerActions.Respawn(s);
                     if (r == ActionResult.Ok) Players.Place(playerId, SpawnPose(), player.LastMoveTime);
                     return r;
                 }
+                case ActKind.Open: return PlayerActions.Open(Settlement, s, a, player.Pose.X, player.Pose.Y, player.Pose.Z);
+                case ActKind.Close: return PlayerActions.Close(s);
+                case ActKind.Take: return PlayerActions.Take(Settlement, s, a, b);
+                case ActKind.Put: return PlayerActions.Put(Settlement, s, a, b);
+                case ActKind.MoveInBox: return PlayerActions.MoveInBox(Settlement, s, a, b);
                 case ActKind.DevGive:
                     if (!DevMode) return ActionResult.Invalid;
                     GiveTestKit(s.Inventory);
@@ -236,6 +262,10 @@ namespace Oxfall.Core.Net
             inventory.Add(ItemIds.Campfire, 2);
             inventory.Add(ItemIds.Hammer, 1);
             inventory.Add(ItemIds.WoodenDoor, 1);
+            inventory.Add(ItemIds.StorageBox, 1);
+            inventory.Add(ItemIds.Furnace, 1);
+            inventory.Add(ItemIds.SleepingBag, 1);
+            inventory.Add(ItemIds.ToolCupboard, 1);
             inventory.Add(ItemIds.Wood, 1500);
             inventory.Add(ItemIds.Stone, 700);
             inventory.Add(ItemIds.MetalOre, 240);
@@ -251,20 +281,35 @@ namespace Oxfall.Core.Net
             return PlayerActions.Build(Settlement, record.Survivor, record.Owner, op, p.X, p.Y, p.Z, out done);
         }
 
-        /// <summary>Time passes for the players online: crafting moves on, food and water run down.</summary>
+        /// <summary>
+        /// Time passes: furnaces burn, and for the players online crafting moves on, food and water
+        /// run down, and a box left behind closes.
+        /// </summary>
         public void Tick(float deltaSeconds)
         {
             if (deltaSeconds <= 0f) return;
+            Time += deltaSeconds;
             Day.Tick(deltaSeconds);
+            _wentOut.Clear();
+            Settlement.Tick(deltaSeconds, _wentOut);
+            foreach (int id in _wentOut) Announcements.Add(BuildOp.Light(id, false));
             foreach (var record in _online.Values)
             {
                 var s = record.Survivor;
                 if (s.Vitals.IsDead) continue;
                 s.Crafting.Tick(deltaSeconds);
-                float exertion = Players.TryGet(record.PlayerId, out var player) && player.Speed > RunningSpeed ? 1.8f : 1f;
+                bool found = Players.TryGet(record.PlayerId, out var player);
+                float exertion = found && player.Speed > RunningSpeed ? 1.8f : 1f;
                 s.Vitals.Tick(deltaSeconds, exertion);
+                if (s.Looting != 0 && found && Settlement.TryGet(s.Looting, out var box))
+                {
+                    float dx = player.Pose.X - box.X, dz = player.Pose.Z - box.Z, reach = PlayerActions.UseReach + 2f;
+                    if (dx * dx + dz * dz > reach * reach || Math.Abs(player.Pose.Y - box.Y) > reach) s.Looting = 0;
+                }
             }
         }
+
+        private readonly List<int> _wentOut = new List<int>();
 
         /// <summary>Grows depleted nodes back; returns the ones that came back this tick (id, amount).</summary>
         public IReadOnlyList<(int Id, int Remaining)> TickRespawn(float deltaSeconds)

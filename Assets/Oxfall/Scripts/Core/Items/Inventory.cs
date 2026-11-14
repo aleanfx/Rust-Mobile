@@ -22,12 +22,17 @@ namespace Oxfall.Core.Items
         public int SlotCount => _slots.Length;
         public ItemCatalog Catalog => _catalog;
 
-        public Inventory(ItemCatalog catalog, int slotCount = DefaultSlotCount)
+        /// <param name="hasHotbar">A player's inventory (its first slots are the hotbar); a box's has none and fills from the top.</param>
+        public Inventory(ItemCatalog catalog, int slotCount = DefaultSlotCount, bool hasHotbar = true)
         {
-            if (slotCount < HotbarSize) throw new ArgumentOutOfRangeException(nameof(slotCount), $"Need at least {HotbarSize} slots.");
+            if (hasHotbar && slotCount < HotbarSize) throw new ArgumentOutOfRangeException(nameof(slotCount), $"Need at least {HotbarSize} slots.");
+            if (slotCount < 1) throw new ArgumentOutOfRangeException(nameof(slotCount));
             _catalog = catalog ?? throw new ArgumentNullException(nameof(catalog));
             _slots = new ItemStack[slotCount];
+            HasHotbar = hasHotbar;
         }
+
+        public bool HasHotbar { get; }
 
         public ItemStack this[int slot] => _slots[CheckSlot(slot)];
 
@@ -101,10 +106,11 @@ namespace Oxfall.Core.Items
             if (Count(itemId) < amount) return false;
 
             int remaining = amount;
+            int split = HasHotbar ? HotbarSize : 0;
             for (int pass = 0; pass < 2 && remaining > 0; pass++)
             {
-                int from = pass == 0 ? HotbarSize : 0;
-                int to = pass == 0 ? _slots.Length : HotbarSize;
+                int from = pass == 0 ? split : 0;
+                int to = pass == 0 ? _slots.Length : split;
                 for (int i = to - 1; i >= from && remaining > 0; i--)
                 {
                     if (_slots[i].IsEmpty || _slots[i].ItemId != itemId) continue;
@@ -154,6 +160,65 @@ namespace Oxfall.Core.Items
             _slots[to] = _slots[from];
             _slots[from] = tmp;
             Changed?.Invoke(-1);
+        }
+
+        /// <summary>
+        /// Moves a slot onto a slot of another inventory (a box, a furnace): merges when it can,
+        /// otherwise swaps. Returns true if anything moved.
+        /// </summary>
+        public static bool Transfer(Inventory from, int fromSlot, Inventory to, int toSlot)
+        {
+            from.CheckSlot(fromSlot);
+            to.CheckSlot(toSlot);
+            if (ReferenceEquals(from, to))
+            {
+                from.Move(fromSlot, toSlot);
+                return fromSlot != toSlot;
+            }
+            var moving = from._slots[fromSlot];
+            if (moving.IsEmpty) return false;
+            var there = to._slots[toSlot];
+            if (there.CanMergeWith(moving))
+            {
+                int put = Math.Min(to._catalog.Get(there.ItemId).MaxStack - there.Amount, moving.Amount);
+                if (put <= 0) return false;
+                to._slots[toSlot] = there.WithAmount(there.Amount + put);
+                from._slots[fromSlot] = moving.WithAmount(moving.Amount - put);
+            }
+            else
+            {
+                // A swap must fit both ways.
+                if (!there.IsEmpty && there.Amount > from._catalog.Get(there.ItemId).MaxStack) return false;
+                to._slots[toSlot] = moving;
+                from._slots[fromSlot] = there.IsEmpty ? ItemStack.Empty : there;
+            }
+            from.Changed?.Invoke(fromSlot);
+            to.Changed?.Invoke(toSlot);
+            return true;
+        }
+
+        /// <summary>Sends a whole stack into another inventory wherever it fits; what does not fit stays.</summary>
+        public static bool TransferAll(Inventory from, int fromSlot, Inventory to)
+        {
+            from.CheckSlot(fromSlot);
+            var moving = from._slots[fromSlot];
+            if (moving.IsEmpty || ReferenceEquals(from, to)) return false;
+            int left = to.Add(moving.ItemId, moving.Amount, moving.SkinId);
+            if (left == moving.Amount) return false;
+            from._slots[fromSlot] = moving.WithAmount(left);
+            from.Changed?.Invoke(fromSlot);
+            return true;
+        }
+
+        /// <summary>Whether every slot is empty.</summary>
+        public bool IsEmpty
+        {
+            get
+            {
+                for (int i = 0; i < _slots.Length; i++)
+                    if (!_slots[i].IsEmpty) return false;
+                return true;
+            }
         }
 
         /// <summary>Whether a slot is one of the hotbar's.</summary>
@@ -244,7 +309,7 @@ namespace Oxfall.Core.Items
 
         private IEnumerable<int> EmptySlotOrder(ItemCategory category)
         {
-            bool hotbarFirst = category != ItemCategory.Resource;
+            bool hotbarFirst = !HasHotbar || category != ItemCategory.Resource;
             if (hotbarFirst)
             {
                 for (int i = 0; i < _slots.Length; i++) yield return i;

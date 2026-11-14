@@ -8,6 +8,8 @@ namespace Oxfall.Core.Items
         public const string Stone = "stone";
         public const string MetalOre = "metal_ore";
         public const string Cloth = "cloth";
+        public const string MetalFragments = "metal_fragments";
+        public const string Charcoal = "charcoal";
 
         // Food
         public const string Berries = "berries";
@@ -23,5 +25,9 @@ namespace Oxfall.Core.Items
         public const string BuildingPlan = "building_plan";
         public const string Campfire = "campfire";
         public const string WoodenDoor = "wooden_door";
+        public const string StorageBox = "storage_box";
+        public const string Furnace = "furnace";
+        public const string SleepingBag = "sleeping_bag";
+        public const string ToolCupboard = "tool_cupboard";
     }
 }

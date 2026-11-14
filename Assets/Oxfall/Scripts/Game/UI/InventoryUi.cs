@@ -1,5 +1,6 @@
 using Oxfall.Core.Items;
 using Oxfall.Core.Rules;
+using Oxfall.Core.Building;
 using Oxfall.Game.Net;
 using UnityEngine;
 using UnityEngine.UI;
@@ -9,8 +10,10 @@ namespace Oxfall.Game.UI
     /// <summary>
     /// The hotbar along the bottom of the screen (tap a slot to hold it, tap it again to empty the
     /// hands) and the inventory panel behind the MOCHILA button: all 30 slots, where tapping one
-    /// item and then another slot moves it there. Moves go through <see cref="GameActions"/>: the
-    /// shared rules alone, the server online.
+    /// item and then another slot moves it there. With a box or furnace open, its slots stand on
+    /// the right of the panel (as in the PC game's loot screen) and items move between the two the
+    /// same way, or all at once with the big button. Moves go through <see cref="GameActions"/>:
+    /// the shared rules alone, the server online.
     /// </summary>
     public sealed class InventoryUi
     {
@@ -39,9 +42,30 @@ namespace Oxfall.Game.UI
         private RectTransform _quickButton;
         private Text _quickLabel;
         private RectTransform _splitButton;
+        private RectTransform _details;
         private int _picked = -1;
 
+        // The open box or furnace.
+        private const int MaxBoxSlots = 12;
+        private const int BoxColumns = 3;
+        private readonly Settlement _settlement;
+        private readonly SlotView[] _boxSlots = new SlotView[MaxBoxSlots];
+        private RectTransform _loot;
+        private Text _lootTitle;
+        private Text _lootStatus;
+        private RectTransform _lightButton;
+        private Image _lightFill;
+        private Text _lightLabel;
+        private RectTransform _lootQuick;
+        private Text _lootQuickLabel;
+        private int _box;
+        private Inventory _boxInventory;
+        private bool _pickedInBox;
+
         public bool IsOpen => _panel.gameObject.activeSelf;
+
+        /// <summary>The box or furnace shown beside the inventory (0: none).</summary>
+        public int OpenBoxId => _box;
         public RectTransform Panel => _panel;
         public RectTransform BagButton { get; private set; }
 
@@ -55,12 +79,17 @@ namespace Oxfall.Game.UI
             public Text Amount;
         }
 
-        public InventoryUi(Hud hud, Inventory inventory, Hotbar hotbar, GameActions actions)
+        public InventoryUi(Hud hud, Inventory inventory, Hotbar hotbar, GameActions actions, Settlement settlement)
         {
             _hud = hud;
             _inventory = inventory;
             _hotbar = hotbar;
             _actions = actions;
+            _settlement = settlement;
+            _settlement.DeployableChanged += id =>
+            {
+                if (id == _box) Refresh();
+            };
             _grid = new SlotView[inventory.SlotCount];
             BuildBar();
             BuildPanel();
@@ -84,40 +113,152 @@ namespace Oxfall.Game.UI
         public void Close()
         {
             if (!IsOpen) return;
+            CloseBox(true);
             _panel.gameObject.SetActive(false);
             _barRoot.gameObject.SetActive(true);
             _picked = -1;
             Refresh();
         }
 
+        /// <summary>Opens the inventory with this box or furnace beside it.</summary>
+        public void OpenBox(int id)
+        {
+            var box = _settlement.Container(id);
+            if (box == null) return;
+            if (_box != id) CloseBox(true);
+            if (!IsOpen) Toggle();
+            _box = id;
+            _boxInventory = box;
+            _boxInventory.Changed += OnBoxChanged;
+            _picked = -1;
+            bool furnace = _settlement.TryGet(id, out var d) && d.Kind == DeployableKind.Furnace;
+            _lootTitle.text = furnace ? "HORNO" : "CAJA";
+            for (int i = 0; i < _boxSlots.Length; i++) _boxSlots[i].Rect.gameObject.SetActive(i < box.SlotCount);
+            _lightButton.gameObject.SetActive(furnace);
+            _lootStatus.gameObject.SetActive(furnace);
+            _details.gameObject.SetActive(false);
+            _loot.gameObject.SetActive(true);
+            Refresh();
+        }
+
+        /// <summary>Puts the box away (the panel stays). <paramref name="tell"/>: also tell the rules (the player closed it, not the server).</summary>
+        public void CloseBox(bool tell)
+        {
+            if (_box == 0) return;
+            if (_boxInventory != null) _boxInventory.Changed -= OnBoxChanged;
+            _box = 0;
+            _boxInventory = null;
+            if (_pickedInBox) _picked = -1;
+            _pickedInBox = false;
+            _loot.gameObject.SetActive(false);
+            _details.gameObject.SetActive(true);
+            if (tell) _actions.Close();
+            Refresh();
+        }
+
+        private void OnBoxChanged(int slot) => Refresh();
+
         /// <summary>Taps a slot of the panel: picks an item, or moves the picked one there.</summary>
         public void TapSlot(int slot)
         {
             if (_picked < 0)
             {
-                if (!_inventory[slot].IsEmpty) _picked = slot;
+                if (!_inventory[slot].IsEmpty)
+                {
+                    _picked = slot;
+                    _pickedInBox = false;
+                }
             }
             else
             {
-                if (slot != _picked) _actions.MoveSlot(_picked, slot);
+                if (_pickedInBox) Report(_actions.Take(_picked, slot));
+                else if (slot != _picked) _actions.MoveSlot(_picked, slot);
                 _picked = -1;
             }
             Refresh();
         }
 
+        /// <summary>Taps a slot of the open box: picks an item, or moves the picked one there.</summary>
+        public void TapBoxSlot(int slot)
+        {
+            if (_boxInventory == null || slot >= _boxInventory.SlotCount) return;
+            if (_picked < 0)
+            {
+                if (!_boxInventory[slot].IsEmpty)
+                {
+                    _picked = slot;
+                    _pickedInBox = true;
+                }
+            }
+            else
+            {
+                if (!_pickedInBox) Report(_actions.Put(_picked, slot));
+                else if (slot != _picked) _actions.MoveInBox(_picked, slot);
+                _picked = -1;
+            }
+            Refresh();
+        }
+
+        /// <summary>The big button with a box open: the picked stack all the way across.</summary>
+        public void MoveAcross()
+        {
+            if (_picked < 0 || _box == 0) return;
+            Report(_pickedInBox ? _actions.Take(_picked, -1) : _actions.Put(_picked, -1));
+            _picked = -1;
+            Refresh();
+        }
+
+        /// <summary>Lights the open furnace, or puts it out.</summary>
+        public void ToggleFurnace()
+        {
+            if (_box == 0) return;
+            bool on = !_settlement.IsLit(_box);
+            var result = _actions.Build(BuildOp.Light(_box, on));
+            if (result != ActionResult.Ok) _hud.ShowToast(GameActions.Explain(result));
+            Refresh();
+        }
+
+        private void Report(ActionResult result)
+        {
+            if (result == ActionResult.NoSpace) _hud.ShowToast("No cabe: no hay sitio libre");
+            else if (result != ActionResult.Ok && result != ActionResult.Invalid) _hud.ShowToast(GameActions.Explain(result));
+        }
+
         /// <summary>Redraws every slot. Called when the inventory or the chosen hotbar slot changes.</summary>
         public void Refresh()
         {
-            if (_picked >= 0 && _inventory[_picked].IsEmpty) _picked = -1;
+            if (_pickedInBox && _boxInventory == null) _picked = -1;
+            if (_picked >= 0 && (_pickedInBox ? _boxInventory[_picked] : _inventory[_picked]).IsEmpty) _picked = -1;
             for (int i = 0; i < _bar.Length; i++)
                 Draw(_bar[i], _inventory[i], i == _hotbar.Selected ? Held : Color.clear);
             if (!IsOpen) return;
             for (int i = 0; i < _grid.Length; i++)
             {
-                var frame = i == _picked ? Picked : i == _hotbar.Selected ? Held : Color.clear;
+                var frame = i == _picked && !_pickedInBox ? Picked : i == _hotbar.Selected ? Held : Color.clear;
                 Draw(_grid[i], _inventory[i], frame);
             }
-            DrawDetails();
+            if (_box != 0) DrawBox();
+            else DrawDetails();
+        }
+
+        private void DrawBox()
+        {
+            for (int i = 0; i < _boxInventory.SlotCount && i < _boxSlots.Length; i++)
+                Draw(_boxSlots[i], _boxInventory[i], i == _picked && _pickedInBox ? Picked : Color.clear);
+            bool furnace = _lightButton.gameObject.activeSelf;
+            if (furnace)
+            {
+                bool lit = _settlement.IsLit(_box);
+                _lightLabel.text = lit ? "APAGAR" : "ENCENDER";
+                _lightFill.color = lit ? UiTheme.Panel : UiTheme.Accent;
+                _lootStatus.text = lit
+                    ? $"Ardiendo · madera {_boxInventory.Count(ItemIds.Wood)} · mineral {_boxInventory.Count(ItemIds.MetalOre)}"
+                    : "Mete madera y mineral de metal, y enciéndelo";
+                _lootStatus.color = lit ? UiTheme.Accent : UiTheme.TextMuted;
+            }
+            bool any = _picked >= 0;
+            _lootQuick.gameObject.SetActive(any);
+            if (any) _lootQuickLabel.text = _pickedInBox ? "AL INVENTARIO" : furnace ? "AL HORNO" : "A LA CAJA";
         }
 
         private void Draw(SlotView view, ItemStack stack, Color frame)
@@ -239,20 +380,27 @@ namespace Oxfall.Game.UI
             // Right: what the picked item is, and what can be done with it.
             var pane = UiFactory.NewRect("Details", _panel, topLeft, topLeft, new Vector2(detailsX - 20f, top + 10f), new Vector2(detailsWidth + 40f, 680f));
             UiFactory.AddImage(pane, UiFactory.Soft, new Color(1f, 1f, 1f, 0.035f));
-            _art = UiFactory.NewRect("Art", _panel, topLeft, topLeft, new Vector2(detailsX, top - 6f), new Vector2(150f, 150f));
+            BuildLoot(pane, detailsX, top, detailsWidth, barTop);
+            // The details live in their own layer, hidden while a box is open in their place.
+            _details = UiFactory.NewRect("Item details", _panel, Vector2.zero, Vector2.zero, Vector2.zero, Vector2.zero);
+            _details.anchorMin = Vector2.zero;
+            _details.anchorMax = Vector2.one;
+            _details.offsetMin = _details.offsetMax = Vector2.zero;
+            var details = _details;
+            _art = UiFactory.NewRect("Art", details, topLeft, topLeft, new Vector2(detailsX, top - 6f), new Vector2(150f, 150f));
             UiFactory.AddImage(_art, UiFactory.Soft, UiTheme.Slot);
             var glow = UiFactory.NewRect("Glow", _art, half, half, Vector2.zero, new Vector2(170f, 170f));
             UiFactory.AddImage(glow, Icons.Glow, UiTheme.Accent.WithAlpha(0.18f));
             _bigIcon = UiFactory.AddIcon(_art, null, Vector2.zero, 132f, Color.white);
-            var name = UiFactory.NewRect("Name", _panel, topLeft, topLeft, new Vector2(detailsX, top - 170f), new Vector2(detailsWidth, 50f));
+            var name = UiFactory.NewRect("Name", details, topLeft, topLeft, new Vector2(detailsX, top - 170f), new Vector2(detailsWidth, 50f));
             _name = UiFactory.AddText(name, "", 36, TextAnchor.UpperLeft, UiTheme.Text, true);
-            var detail = UiFactory.NewRect("Detail", _panel, topLeft, topLeft, new Vector2(detailsX, top - 224f), new Vector2(detailsWidth, 200f));
+            var detail = UiFactory.NewRect("Detail", details, topLeft, topLeft, new Vector2(detailsX, top - 224f), new Vector2(detailsWidth, 200f));
             _detail = UiFactory.AddText(detail, "", 24, TextAnchor.UpperLeft, UiTheme.TextMuted);
             _detail.horizontalOverflow = HorizontalWrapMode.Wrap;
 
-            _quickButton = MakeButton("Quick move", new Vector2(detailsX, barTop + 100f), detailsWidth, "", out _quickLabel);
+            _quickButton = MakeButton("Quick move", details, new Vector2(detailsX, barTop + 100f), detailsWidth, "", out _quickLabel, out _);
             _hud.TapTargets.Add(new Hud.TapTarget { Rect = _quickButton, OnTap = QuickMove });
-            _splitButton = MakeButton("Split", new Vector2(detailsX, barTop - 14f), detailsWidth, "DIVIDIR", out _);
+            _splitButton = MakeButton("Split", details, new Vector2(detailsX, barTop - 14f), detailsWidth, "DIVIDIR", out _, out _);
             _hud.TapTargets.Add(new Hud.TapTarget { Rect = _splitButton, OnTap = Split });
 
             _panel.gameObject.SetActive(false);
@@ -265,12 +413,47 @@ namespace Oxfall.Game.UI
             _hud.TapTargets.Add(new Hud.TapTarget { Rect = _grid[slot].Rect, OnTap = () => TapSlot(slot) });
         }
 
-        private RectTransform MakeButton(string name, Vector2 position, float width, string text, out Text label)
+        /// <summary>
+        /// The open box's side of the panel, over the details pane: its name, its slots three to a
+        /// row, for a furnace a line on how it burns and ENCENDER, and the button that sends the
+        /// picked stack across.
+        /// </summary>
+        private void BuildLoot(RectTransform pane, float x, float top, float width, float barTop)
+        {
+            var topLeft = new Vector2(0f, 1f);
+            _loot = UiFactory.NewRect("Loot", _panel, Vector2.zero, Vector2.zero, Vector2.zero, Vector2.zero);
+            _loot.anchorMin = Vector2.zero;
+            _loot.anchorMax = Vector2.one;
+            _loot.offsetMin = _loot.offsetMax = Vector2.zero;
+            var title = UiFactory.NewRect("Title", _loot, topLeft, topLeft, new Vector2(x, top + 2f), new Vector2(width, 44f));
+            _lootTitle = UiFactory.AddText(title, "CAJA", 34, TextAnchor.MiddleLeft, UiTheme.Accent, true);
+            float gridTop = top - 52f;
+            for (int i = 0; i < MaxBoxSlots; i++)
+            {
+                int slot = i;
+                int row = i / BoxColumns, column = i % BoxColumns;
+                _boxSlots[i] = MakeSlot(_loot, new Vector2(x + column * Pitch, gridTop - row * Pitch), topLeft, 0);
+                _hud.TapTargets.Add(new Hud.TapTarget { Rect = _boxSlots[i].Rect, OnTap = () => TapBoxSlot(slot) });
+            }
+            // A furnace's two rows leave room under them for how it burns and its switch.
+            float furnaceTop = gridTop - 2 * Pitch - 6f;
+            var status = UiFactory.NewRect("Status", _loot, topLeft, topLeft, new Vector2(x, furnaceTop), new Vector2(width, 70f));
+            _lootStatus = UiFactory.AddText(status, "", 24, TextAnchor.UpperLeft, UiTheme.TextMuted);
+            _lootStatus.horizontalOverflow = HorizontalWrapMode.Wrap;
+            _lightButton = MakeButton("Light", _loot, new Vector2(x, furnaceTop - 78f), width, "ENCENDER", out _lightLabel, out _lightFill);
+            _hud.TapTargets.Add(new Hud.TapTarget { Rect = _lightButton, OnTap = ToggleFurnace });
+            _lootQuick = MakeButton("Across", _loot, new Vector2(x, barTop - 14f), width, "", out _lootQuickLabel, out _);
+            _hud.TapTargets.Add(new Hud.TapTarget { Rect = _lootQuick, OnTap = MoveAcross });
+            _loot.gameObject.SetActive(false);
+        }
+
+        private RectTransform MakeButton(string name, RectTransform parent, Vector2 position, float width, string text, out Text label,
+            out Image fill)
         {
             var topLeft = new Vector2(0f, 1f);
             var half = new Vector2(0.5f, 0.5f);
-            var button = UiFactory.NewRect(name, _panel, topLeft, topLeft, position, new Vector2(width, 84f));
-            UiFactory.AddImage(button, UiFactory.Soft, UiTheme.Accent);
+            var button = UiFactory.NewRect(name, parent, topLeft, topLeft, position, new Vector2(width, 84f));
+            fill = UiFactory.AddImage(button, UiFactory.Soft, UiTheme.Accent);
             var labelRect = UiFactory.NewRect("Label", button, half, half, Vector2.zero, new Vector2(width - 20f, 60f));
             label = UiFactory.AddText(labelRect, text, 30, TextAnchor.MiddleCenter, Color.white, true);
             return button;
