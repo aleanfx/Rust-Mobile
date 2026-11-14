@@ -234,7 +234,37 @@ namespace Oxfall.Game.World
                     b.AddTube(DressRust, foot, foot + Vector3.up * 0.62f - side * 0.12f, 0.025f, 0.02f, 4);
                 }
             }
-            const float top = 3.15f, e = 10.6f;
+            // The walls as cast panels: a pilaster every few metres on both faces, a coping along the
+            // top, and grime at the foot (flat walls this long read as cardboard).
+            void Panels(float x0, float z0, float x1, float z1, float height)
+            {
+                bool alongX = Mathf.Abs(x1 - x0) > Mathf.Abs(z1 - z0);
+                float a0 = alongX ? Mathf.Min(x0, x1) : Mathf.Min(z0, z1), a1 = alongX ? Mathf.Max(x0, x1) : Mathf.Max(z0, z1);
+                float across = alongX ? z0 : x0, topY = Pad + height;
+                const float half = 0.225f;
+                void Slab(int sub, float from, float to, float y0, float y1, float out0, float out1)
+                {
+                    if (alongX) Box(b, sub, from, y0, across + out0, to, y1, across + out1);
+                    else Box(b, sub, across + out0, y0, from, across + out1, y1, to);
+                }
+                Slab(DressConcrete, a0 - 0.04f, a1 + 0.04f, topY, topY + 0.1f, -half - 0.07f, half + 0.07f);
+                Slab(DressStain, a0, a1, Pad, Pad + 0.42f, -half - 0.012f, -half + 0.01f);
+                Slab(DressStain, a0, a1, Pad, Pad + 0.42f, half - 0.01f, half + 0.012f);
+                int n = Mathf.Max(1, Mathf.RoundToInt((a1 - a0) / 3.4f));
+                for (int i = 0; i <= n; i++)
+                {
+                    float c = Mathf.Lerp(a0 + 0.25f, a1 - 0.25f, i / (float)n);
+                    Slab(DressConcrete, c - 0.24f, c + 0.24f, Pad, topY, -half - 0.11f, -half + 0.02f);
+                    Slab(DressConcrete, c - 0.24f, c + 0.24f, Pad, topY, half - 0.02f, half + 0.11f);
+                }
+            }
+            Panels(-10.6f, 10.6f, -2.2f, 10.6f, 3f);
+            Panels(2.2f, 10.6f, 10.6f, 10.6f, 3f);
+            Panels(-10.8f, -10.6f, 10.8f, -10.6f, 3f);
+            Panels(-10.6f, -10.8f, -10.6f, 0.8f, 3f);
+            Panels(10.6f, -1f, 10.6f, 10.6f, 3f);
+
+            const float top = 3.25f, e = 10.6f;
             Wire(new Vector3(-10.4f, top, e), new Vector3(-2.4f, top, e));
             Wire(new Vector3(2.4f, top, e), new Vector3(10.4f, top, e));
             Wire(new Vector3(-10.6f, top, -e), new Vector3(10.6f, top, -e));
