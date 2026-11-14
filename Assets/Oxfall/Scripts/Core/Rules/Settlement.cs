@@ -166,6 +166,9 @@ namespace Oxfall.Core.Rules
         public bool RecentlyHurtDoor(Edge edge) => _doorHurtAt.TryGetValue(edge, out float t) && Clock - t < Repairs.Delay;
 
         public IslandGround Ground { get; }
+
+        /// <summary>The island's trunks and boulders, which nothing is built over (none known: no check).</summary>
+        public Obstacles Obstacles { get; set; }
         public ItemCatalog Catalog { get; }
         public BuildingGrid Grid { get; }
 

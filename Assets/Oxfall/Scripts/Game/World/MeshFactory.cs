@@ -1131,6 +1131,30 @@ namespace Oxfall.Game.World
         /// so they are entered and left on the +Z side. A rail runs along the middle steps. Twig: rough
         /// sticks laid across a pole; otherwise solid wedge steps.
         /// </summary>
+        /// <summary>
+        /// What the player walks on up a spiral stair: its steps and the pole, nothing to snag on
+        /// (no rail). Kept readable, for a MeshCollider.
+        /// </summary>
+        public static Mesh SpiralStairsCollider(float rise)
+        {
+            var b = new FlatMeshBuilder(1) { KeepReadable = true };
+            const float inner = 0.13f, outer = 1.42f, thick = 0.14f;
+            int n = SpiralSteps;
+            float step = 360f / n;
+            Vector3 At(float degrees, float radius, float y)
+            {
+                float a = degrees * Mathf.Deg2Rad;
+                return new Vector3(Mathf.Sin(a) * radius, y, Mathf.Cos(a) * radius);
+            }
+            b.AddBox(0, new Vector3(-0.13f, 0f, -0.13f), new Vector3(0.13f, rise + 1.0f, 0.13f));
+            for (int i = 0; i < n; i++)
+            {
+                float top = (i + 1) * rise / n, a0 = i * step, a1 = (i + 1) * step, lo = top - thick;
+                b.AddHex(0, (ix, iy, iz) => At(ix == 0 ? a0 : a1, iz == 0 ? inner : outer, iy == 0 ? lo : top));
+            }
+            return b.Build("SpiralStairsCollider");
+        }
+
         public static Mesh SpiralStairs(float rise, bool twig)
         {
             var b = new FlatMeshBuilder(1) { UvScale = twig ? 0.6f : 1.6f };
@@ -1907,6 +1931,9 @@ namespace Oxfall.Game.World
             /// </summary>
             public float UvScale;
 
+            /// <summary>Keep the mesh's data on the CPU too (a mesh a MeshCollider is made from must).</summary>
+            public bool KeepReadable;
+
             public FlatMeshBuilder(int submeshes)
             {
                 _triangles = new List<int>[submeshes];
@@ -2173,7 +2200,7 @@ namespace Oxfall.Game.World
                 for (int i = 0; i < _triangles.Length; i++) mesh.SetTriangles(_triangles[i], i);
                 mesh.RecalculateBounds();
                 if (UvScale > 0f) mesh.RecalculateTangents();
-                mesh.UploadMeshData(true);
+                mesh.UploadMeshData(!KeepReadable);
                 return mesh;
             }
 

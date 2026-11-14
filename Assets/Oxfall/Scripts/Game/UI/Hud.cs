@@ -426,6 +426,7 @@ namespace Oxfall.Game.UI
 
         public RectTransform CraftPanel => _craft?.Panel;
         public bool CraftPanelOpen => _craft != null && _craft.IsOpen;
+        public bool SettingsOpen => _settings != null && _settings.gameObject.activeSelf;
 
         public void BuildCraftPanel(RecipeBook book, ItemCatalog catalog, Inventory inventory, CraftingQueue queue,
             System.Action<Recipe> onCraft)

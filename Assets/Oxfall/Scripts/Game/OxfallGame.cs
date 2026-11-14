@@ -172,7 +172,10 @@ namespace Oxfall.Game
 
             // Boars, wolves and deer: walking round trunks and rocks, kept out of bases.
             var ground = _world.Shape.Ground;
-            _fauna = new Fauna(ground, s_seed) { Blocked = Fauna.Barriers(_settlement.Grid, new Obstacles(ResourceLayout.Generate(ground))) };
+            var obstacles = new Obstacles(ResourceLayout.Generate(ground));
+            // Nobody builds over a trunk or a boulder (the preview shows it red).
+            _settlement.Obstacles = obstacles;
+            _fauna = new Fauna(ground, s_seed) { Blocked = Fauna.Barriers(_settlement.Grid, obstacles) };
             _fauna.Populate();
             _actions.Fauna = _fauna;
             _animalViews = new AnimalViews(materials, (x, z) => _world.Shape.Height(x, z));
@@ -225,6 +228,23 @@ namespace Oxfall.Game
             _map = new MapUi(_hud, (RectTransform)_hud.transform, _world.Shape);
             StartCoroutine(_map.Paint());
             _hud.MapTapped += _map.Toggle;
+
+            // First steps, one at a time, under the vitals.
+            _guide = new GuideUi(_hud, _inventory, _settlement)
+            {
+                Where = () => _player.transform.position,
+                Me = () => _actions.Owner,
+                Covered = () => (_inventoryUi != null && _inventoryUi.IsOpen) || _hud.CraftPanelOpen || _hud.SettingsOpen
+                    || (_cupboard != null && _cupboard.IsOpen) || (_keypad != null && _keypad.IsOpen)
+                    || (_hud.Modal != null && _hud.Modal.gameObject.activeInHierarchy),
+            };
+            _guide.StepDone += () => audio.Play(SoundCue.Accepted);
+            // A recycler this player started.
+            _settlement.DeployableChanged += id =>
+            {
+                if (_settlement.TryGet(id, out var d) && d.Kind == DeployableKind.Recycler && _settlement.IsLit(id) && _actions.Looting == id)
+                    _guide.Saw("recycle");
+            };
 
             // The clock: the island starts in the morning; a day lasts 30 minutes and a night 10.
             _dayNight = _world.Root.gameObject.AddComponent<DayNight>();
@@ -361,7 +381,11 @@ namespace Oxfall.Game
             _interactor.DoorUsed += () => audio.Play(SoundCue.Wood);
             _interactor.OpenBox += OpenBox;
             _interactor.OpenCupboard += OpenCupboard;
-            _interactor.OpenCrate += crate => _gatherer.Open(crate);
+            _interactor.OpenCrate += crate =>
+            {
+                _gatherer.Open(crate);
+                _guide.Saw("crate");
+            };
             _interactor.UseWorkbench += () => _hud.OpenCraftPanel(1);
             _interactor.EnterCode += OpenKeypad;
             _interactor.ManageLock += OpenKeypad;
@@ -1040,6 +1064,7 @@ namespace Oxfall.Game
         }
 
         private MapUi _map;
+        private GuideUi _guide;
         private Vector3? _diedAt;
         private readonly System.Collections.Generic.List<MapUi.Pin> _mapPins = new System.Collections.Generic.List<MapUi.Pin>();
 
@@ -1332,6 +1357,7 @@ namespace Oxfall.Game
                 case "face-cupboard": FaceDeployable(Nearest(DeployableKind.ToolCupboard)); break;
                 case "face-workbench": FaceDeployable(Nearest(DeployableKind.Workbench)); break;
                 case "to-recycler": ToRecycler(); break;
+                case "guide-reset": _guide.Restart(); break;
                 case "open-recycler": OpenBox(Nearest(DeployableKind.Recycler)); break;
                 case "put-parts":
                     // Test: the gun parts carried go into the open recycler.
@@ -1814,6 +1840,7 @@ namespace Oxfall.Game
         {
             TickMenuView(Time.deltaTime);
             if (_title == null) TickVitals(Time.deltaTime);
+            if (_title == null) _guide?.Tick(Time.deltaTime);
             _vitalsUi?.Tick();
             _keypad?.Tick(Time.unscaledDeltaTime);
             // Where this player looks and what they hold, for the others to see.

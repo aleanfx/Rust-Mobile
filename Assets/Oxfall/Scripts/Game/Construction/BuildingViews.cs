@@ -29,6 +29,7 @@ namespace Oxfall.Game.Construction
         private static readonly int PieceTypes = System.Enum.GetValues(typeof(PieceType)).Length;
 
         private readonly Mesh[] _solid = new Mesh[PieceTypes];
+        private readonly Mesh _stairsCollider;
         private readonly Mesh[] _twig = new Mesh[PieceTypes];
         private readonly Bounds[][] _boxes = new Bounds[PieceTypes][];
         private readonly Dictionary<PieceRef, GameObject> _pieces = new Dictionary<PieceRef, GameObject>();
@@ -81,6 +82,7 @@ namespace Oxfall.Game.Construction
                 if (_boxes[i] != null) _solid[i] = MeshFactory.Boxes(((PieceType)i).ToString(), _boxes[i]);
             // Stairs are drawn for the ground storey's rise and squashed a little for the ones above.
             _solid[(int)PieceType.Stairs] = MeshFactory.SpiralStairs(GroundRise, false);
+            _stairsCollider = MeshFactory.SpiralStairsCollider(GroundRise);
             // Twig: a solid block of sticks for floors, see-through frames for the rest.
             _twig[(int)PieceType.Foundation] = _solid[(int)PieceType.Foundation];
             _twig[(int)PieceType.Wall] = MeshFactory.TwigWall(false);
@@ -208,7 +210,7 @@ namespace Oxfall.Game.Construction
             {
                 go.transform.localScale = new Vector3(1f, StairsSquash(piece.Level), 1f);
                 // Steps to walk up: the solid steps' own shape, whatever the tier looks like.
-                go.AddComponent<MeshCollider>().sharedMesh = _solid[(int)PieceType.Stairs];
+                go.AddComponent<MeshCollider>().sharedMesh = _stairsCollider;
             }
             else
                 foreach (var box in _boxes[(int)piece.Type])

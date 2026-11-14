@@ -80,7 +80,9 @@ namespace Oxfall.Core.Net
             var spawns = ResourceLayout.Generate(Ground);
             foreach (var spawn in spawns)
                 _nodes[spawn.Id] = new Node { State = new ResourceNode(spawn.Id, spawn.Type), X = spawn.X, Y = spawn.Y, Z = spawn.Z };
-            Fauna = new Fauna(Ground, seed) { Blocked = Fauna.Barriers(Settlement.Grid, new Obstacles(spawns)) };
+            var obstacles = new Obstacles(spawns);
+            Settlement.Obstacles = obstacles;
+            Fauna = new Fauna(Ground, seed) { Blocked = Fauna.Barriers(Settlement.Grid, obstacles) };
             Fauna.Populate();
         }
 

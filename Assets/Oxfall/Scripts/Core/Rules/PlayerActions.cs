@@ -55,6 +55,8 @@ namespace Oxfall.Core.Rules
         Monument,
         /// <summary>A recycler with nothing in it that it takes (or no room left for what comes out).</summary>
         NothingToRecycle,
+        /// <summary>A tree or a boulder stands where it would go.</summary>
+        Obstructed,
     }
 
     /// <summary>
@@ -668,6 +670,7 @@ namespace Oxfall.Core.Rules
             float ground = settlement.Ground.Height(x, z);
             if (ground < IslandGround.WaterLevel + 0.3f) return ActionResult.InWater;
             if (Monuments.NoBuilding(settlement.Ground, x, z)) return ActionResult.Monument;
+            if (settlement.Obstacles != null && settlement.Obstacles.Blocks(x, z, Deployables.Radius(kind))) return ActionResult.Obstructed;
             float floor = settlement.Grid.TryGetFloorBelow(x, y, z, out float top) ? top : ground;
             if (Math.Abs(y - floor) > 0.7f && Math.Abs(y - ground) > 0.7f) return ActionResult.Invalid;
             if (!settlement.HasPrivilege(owner, x, z)) return ActionResult.BuildingBlocked;
@@ -705,6 +708,8 @@ namespace Oxfall.Core.Rules
 
             if (grid.HasFoundation(cell)) return ActionResult.Occupied;
             if (Monuments.NoBuilding(ground, x0 + S * 0.5f, z0 + S * 0.5f)) return ActionResult.Monument;
+            // (A round check over the square: its corners reach a little further.)
+            if (settlement.Obstacles != null && settlement.Obstacles.Blocks(x0 + S * 0.5f, z0 + S * 0.5f, S * 0.6f)) return ActionResult.Obstructed;
             if (lowest < 0.4f) return ActionResult.InWater;
             if (top - lowest > 2.4f) return ActionResult.TooSteep;
             if (top < highest - 0.4f) return ActionResult.GroundInTheWay;

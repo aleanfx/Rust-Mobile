@@ -3,6 +3,7 @@ using System.Linq;
 using NUnit.Framework;
 using Oxfall.Core.Building;
 using Oxfall.Core.Crafting;
+using Oxfall.Core.Gathering;
 using Oxfall.Core.Items;
 using Oxfall.Core.Net;
 using Oxfall.Core.Rules;
@@ -123,6 +124,18 @@ namespace Oxfall.Core.Tests
             Assert.AreEqual(ActionResult.Monument,
                 PlayerActions.CanDeploy(settlement, 1, DeployableKind.SleepingBag, m.X + Monuments.Radius + 3f, ground.Height(m.X + Monuments.Radius + 3f, m.Z), m.Z),
                 "nor just outside its walls");
+        }
+
+        [Test]
+        public void Nothing_is_built_over_a_tree_or_a_boulder()
+        {
+            var world = new ServerWorld(Seed);
+            foreach (var type in new[] { ResourceNodeType.Tree, ResourceNodeType.Stone })
+            {
+                var node = ResourceLayout.Generate(world.Ground).First(n => n.Type == type && !Monuments.NoBuilding(world.Ground, n.X, n.Z));
+                Assert.AreEqual(ActionResult.Obstructed, PlayerActions.FoundationTop(world.Settlement, BuildingGrid.CellAt(node.X, node.Z), out _), type.ToString());
+                Assert.AreEqual(ActionResult.Obstructed, PlayerActions.CanDeploy(world.Settlement, 1, DeployableKind.StorageBox, node.X + 0.3f, node.Y, node.Z), type.ToString());
+            }
         }
 
         [Test]
