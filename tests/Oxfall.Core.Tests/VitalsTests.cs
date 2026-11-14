@@ -1,4 +1,6 @@
 using NUnit.Framework;
+using Oxfall.Core.Items;
+using Oxfall.Core.Rules;
 using Oxfall.Core.Survival;
 
 namespace Oxfall.Core.Tests
@@ -95,6 +97,38 @@ namespace Oxfall.Core.Tests
             v.Respawn();
             Assert.That(v.IsDead, Is.False);
             Assert.That(v.Health, Is.EqualTo(60f));
+        }
+
+        [Test]
+        public void A_bandage_heals_some_at_once_and_the_rest_over_a_few_seconds()
+        {
+            var s = new Survivor(ItemCatalog.CreateDefault());
+            s.Vitals.Set(40f, 400f, 200f);
+            s.Inventory.Add(ItemIds.Bandage, 2);
+            int slot = -1;
+            for (int i = 0; i < s.Inventory.SlotCount && slot < 0; i++)
+                if (s.Inventory[i].ItemId == ItemIds.Bandage) slot = i;
+            Assert.That(PlayerActions.Eat(s, slot), Is.EqualTo(ActionResult.Ok));
+            Assert.That(s.Inventory.Count(ItemIds.Bandage), Is.EqualTo(1));
+            Assert.That(s.Vitals.Health, Is.EqualTo(50f), "10 at once");
+            Assert.That(s.Vitals.Regen, Is.EqualTo(10f));
+            s.Vitals.Tick(1f);
+            Assert.That(s.Vitals.Health, Is.EqualTo(50f + Vitals.RegenPerSecond + Vitals.HealPerSecond).Within(0.01f));
+            s.Vitals.Tick(10f);
+            Assert.That(s.Vitals.Regen, Is.EqualTo(0f));
+            Assert.That(s.Vitals.Health, Is.EqualTo(60f + 11f * Vitals.HealPerSecond).Within(0.01f), "the rest came back, no more");
+        }
+
+        [Test]
+        public void Lasting_healing_stops_at_death()
+        {
+            var v = new Vitals(30f, 400f, 200f);
+            v.Consume(new Nourishment(0f, 0f, 15f, 30f));
+            v.Damage(100f);
+            Assert.That(v.IsDead, Is.True);
+            Assert.That(v.Regen, Is.EqualTo(0f));
+            v.Tick(5f);
+            Assert.That(v.IsDead, Is.True, "no coming back from a syringe");
         }
     }
 }

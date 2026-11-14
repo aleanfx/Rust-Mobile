@@ -118,6 +118,12 @@ namespace Oxfall.Game.Rendering
         public Material Brass { get; }
         public Material ShellPaper { get; }
 
+        /// <summary>Medicine: clean bandage cloth, its red stripes and a syringe's dose, the clear barrel, white plastic.</summary>
+        public Material Bandage { get; }
+        public Material MedRed { get; }
+        public Material SyringeBarrel { get; }
+        public Material Plastic { get; }
+
         /// <summary>Blasts: the fireball (additive) and the smoke and dust (alpha-blended), each puff tinted as it goes.</summary>
         public Material Fireball { get; }
         public Material Smoke { get; }
@@ -248,6 +254,10 @@ namespace Oxfall.Game.Rendering
             Brass = Make("Brass", new Color(0.72f, 0.55f, 0.26f), 0.66f);
             Brass.SetFloat(Metallic, 0.75f);
             ShellPaper = Make("Shell paper", new Color(0.55f, 0.13f, 0.1f), 0.22f);
+            Bandage = Make("Bandage", new Color(0.86f, 0.84f, 0.78f), 0.05f);
+            MedRed = Make("Med red", new Color(0.72f, 0.08f, 0.07f), 0.5f);
+            SyringeBarrel = Make("Syringe barrel", new Color(0.78f, 0.85f, 0.88f), 0.9f);
+            Plastic = Make("Plastic", new Color(0.92f, 0.92f, 0.9f), 0.45f);
             var fireball = Resources.Load<Material>("OxfallFireball");
             var smoke = Resources.Load<Material>("OxfallSmoke");
             HasPuffs = fireball != null && smoke != null;

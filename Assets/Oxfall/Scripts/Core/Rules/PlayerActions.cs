@@ -124,13 +124,14 @@ namespace Oxfall.Core.Rules
             return s.Crafting.Cancel(index) ? ActionResult.Ok : ActionResult.Invalid;
         }
 
-        /// <summary>Eats one of the food in a slot.</summary>
+        /// <summary>Eats one of the food in a slot, or uses one bandage or syringe.</summary>
         public static ActionResult Eat(Survivor s, int slot)
         {
             if (s.Vitals.IsDead) return ActionResult.Dead;
             if (!IsSlot(s, slot)) return ActionResult.Invalid;
             var stack = s.Inventory[slot];
-            if (stack.IsEmpty || !s.Inventory.Catalog.TryGet(stack.ItemId, out var food) || food.Category != ItemCategory.Food)
+            if (stack.IsEmpty || !s.Inventory.Catalog.TryGet(stack.ItemId, out var food)
+                || (food.Category != ItemCategory.Food && food.Category != ItemCategory.Medical))
                 return ActionResult.NotFood;
             s.Inventory.TakeFromSlot(slot, 1);
             s.Vitals.Consume(food.Nourishment);

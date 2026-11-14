@@ -27,6 +27,7 @@ namespace Oxfall.Game.Audio
         Shotgun,
         Reload,
         DryFire,
+        Bandage,
     }
 
     /// <summary>
@@ -130,6 +131,7 @@ namespace Oxfall.Game.Audio
                 case SoundCue.Stone: Shot(_bank.HitStone, 0.8f, 0.1f); break;
                 case SoundCue.Plant: Shot(_bank.Pick, 0.7f, 0.1f); break;
                 case SoundCue.Eat: Shot(_bank.Eat, 0.8f, 0.08f); break;
+                case SoundCue.Bandage: Shot(_bank.Bandage, 0.8f, 0.06f); break;
                 case SoundCue.Drink: Shot(_bank.Drink, 0.8f, 0.05f); break;
                 case SoundCue.Place: Shot(_bank.Place, 0.9f, 0.05f); break;
                 case SoundCue.Crafted: Shot(_bank.Crafted, 0.6f, 0f); break;

@@ -292,6 +292,28 @@ namespace Oxfall.Game.Items
                     Materials = new[] { m.Brass, m.Metal },
                     IconRotation = Tilt(-25f, 20f),
                 },
+                [ItemIds.Bandage] = new ItemModel
+                {
+                    Mesh = MeshFactory.ClothRoll(),
+                    Materials = new[] { m.Bandage, m.MedRed },
+                    ShowInHand = true,
+                    HandPosition = new Vector3(0.24f, -0.25f, 0.46f),
+                    HandRotation = Quaternion.Euler(-25f, 30f, 10f),
+                    HandScale = 0.9f,
+                    IconRotation = Quaternion.AngleAxis(-20f, Vector3.right) * Quaternion.AngleAxis(-30f, Vector3.up),
+                },
+                [ItemIds.MedicalSyringe] = new ItemModel
+                {
+                    Mesh = MeshFactory.Syringe(),
+                    Materials = new[] { m.SyringeBarrel, m.Plastic, m.MedRed, m.Steel },
+                    ShowInHand = true,
+                    // Held like a dart, the needle ahead and a little down and in.
+                    HandPosition = new Vector3(0.2f, -0.22f, 0.42f),
+                    HandRotation = Quaternion.Euler(0f, -70f, -14f),
+                    HandScale = 1.4f,
+                    IconRotation = Quaternion.AngleAxis(35f, Vector3.forward) * Quaternion.AngleAxis(-15f, Vector3.right),
+                    IconZoom = 1.3f,
+                },
                 [ItemIds.Arrow] = new ItemModel
                 {
                     Mesh = MeshFactory.Arrow(),

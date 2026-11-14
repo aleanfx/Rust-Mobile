@@ -187,9 +187,10 @@ namespace Oxfall.Game.Player
                 Sound?.Invoke(SoundCue.Swing);
                 Strike();
             }
-            else if (_input.AttackPressed && _cooldown <= 0f && _hotbar.HeldDefinition?.Category == ItemCategory.Food)
+            else if (_input.AttackPressed && _cooldown <= 0f && IsUsable(_hotbar.HeldDefinition))
             {
-                _cooldown = 0.5f;
+                // A bandage takes a moment to wrap; a bite is quick.
+                _cooldown = _hotbar.HeldDefinition.Category == ItemCategory.Medical ? 1.2f : 0.5f;
                 _swing = 0f;
                 Eat(_hotbar.HeldDefinition);
             }
@@ -215,8 +216,12 @@ namespace Oxfall.Game.Player
             }
             _swing = 0f;
             if (CanSwing) Strike();
-            else if (_hotbar.HeldDefinition?.Category == ItemCategory.Food) Eat(_hotbar.HeldDefinition);
+            else if (IsUsable(_hotbar.HeldDefinition)) Eat(_hotbar.HeldDefinition);
         }
+
+        /// <summary>Food to eat, or a bandage or syringe to use, from the hand.</summary>
+        private static bool IsUsable(ItemDefinition def) =>
+            def != null && (def.Category == ItemCategory.Food || def.Category == ItemCategory.Medical);
 
         /// <summary>
         /// Online, a blow that lands on another player goes to the server (their id, the tool in
@@ -271,8 +276,16 @@ namespace Oxfall.Game.Player
         {
             int slot = _hotbar.Selected;
             if (_vitals == null || Actions == null || slot < 0 || Actions.Eat(slot) != ActionResult.Ok) return;
-            Sound?.Invoke(SoundCue.Eat);
             _text.Clear();
+            if (food.Category == ItemCategory.Medical)
+            {
+                Sound?.Invoke(SoundCue.Bandage);
+                _text.Append(food.Id == ItemIds.MedicalSyringe ? "Te inyectas la jeringa" : "Te vendas las heridas");
+                _text.Append("   +").Append(Mathf.RoundToInt(food.Nourishment.Health + food.Nourishment.Regen)).Append(" vida");
+                Message?.Invoke(_text.ToString());
+                return;
+            }
+            Sound?.Invoke(SoundCue.Eat);
             _text.Append("Comes ").Append(food.DisplayName.ToLowerInvariant());
             if (food.Nourishment.Food > 0f) _text.Append("   +").Append(Mathf.RoundToInt(food.Nourishment.Food)).Append(" comida");
             if (food.Nourishment.Water > 0f) _text.Append("   +").Append(Mathf.RoundToInt(food.Nourishment.Water)).Append(" agua");

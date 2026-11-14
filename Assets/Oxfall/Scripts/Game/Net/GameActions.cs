@@ -285,7 +285,8 @@ namespace Oxfall.Game.Net
         {
             if (!Online) return PlayerActions.Eat(_survivor, slot);
             var stack = Inventory[slot];
-            if (stack.IsEmpty || !Inventory.Catalog.TryGet(stack.ItemId, out var def) || def.Category != ItemCategory.Food)
+            if (stack.IsEmpty || !Inventory.Catalog.TryGet(stack.ItemId, out var def)
+                || (def.Category != ItemCategory.Food && def.Category != ItemCategory.Medical))
                 return ActionResult.NotFood;
             _net.SendAct(ActKind.Eat, slot);
             return ActionResult.Ok;

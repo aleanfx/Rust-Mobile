@@ -643,10 +643,11 @@ namespace Oxfall.Game
             if (codeLock) _lockPlacer.SetActive(true);
             if (satchel) _thrower.SetActive(true);
             bool food = held?.Category == ItemCategory.Food;
+            bool medical = held?.Category == ItemCategory.Medical;
             bool bow = held?.Tool == ToolKind.Bow;
             _gunLabel = null;
             int arrows = bow ? _inventory.Count(ItemIds.Arrow) : 0;
-            _hud.SetAttackLabel(plan || deploy || door || codeLock ? "COLOCAR" : hammer ? "MEJORAR" : food ? "COMER"
+            _hud.SetAttackLabel(plan || deploy || door || codeLock ? "COLOCAR" : hammer ? "MEJORAR" : food ? "COMER" : medical ? "CURAR"
                 : bow ? (arrows > 0 ? $"FLECHAS {arrows}" : "SIN FLECHAS")
                 : Firearms.TryGet(held?.Tool ?? ToolKind.None, out var gun) ? GunLabel(gun)
                 : satchel ? $"LANZAR {_inventory.Count(ItemIds.SatchelCharge)}" : "GOLPEAR");
@@ -1212,6 +1213,8 @@ namespace Oxfall.Game
                 case "satchel": HoldItem(ItemIds.SatchelCharge); break;
                 case "revolver": HoldItem(ItemIds.Revolver); break;
                 case "blunderbuss": HoldItem(ItemIds.Blunderbuss); break;
+                case "bandage": HoldItem(ItemIds.Bandage); break;
+                case "syringe": HoldItem(ItemIds.MedicalSyringe); break;
                 case "fire": _gatherer.UseOnce(); break;
                 case "reload":
                     if (Firearms.IsGun(_hotbar.HeldTool) && _actions.ReloadGun(_hotbar.HeldTool)) _audio.Play(SoundCue.Reload);

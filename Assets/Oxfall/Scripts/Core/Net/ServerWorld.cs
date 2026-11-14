@@ -365,6 +365,8 @@ namespace Oxfall.Core.Net
                 inventory.Add(ItemIds.Revolver, 1);
                 inventory.Add(ItemIds.Shell, 40);
                 inventory.Add(ItemIds.PistolBullet, 60);
+                inventory.Add(ItemIds.Bandage, 3);
+                inventory.Add(ItemIds.MedicalSyringe, 1);
                 return;
             }
             if (kit == 1)

@@ -2,18 +2,22 @@ using System;
 
 namespace Oxfall.Core.Survival
 {
-    /// <summary>What eating or drinking something gives back.</summary>
+    /// <summary>What eating, drinking or a bandage gives back: health at once, and some more over the next seconds.</summary>
     public readonly struct Nourishment
     {
         public float Food { get; }
         public float Water { get; }
         public float Health { get; }
 
-        public Nourishment(float food, float water, float health = 0f)
+        /// <summary>Health that comes back over the next seconds (<see cref="Vitals.RegenPerSecond"/>).</summary>
+        public float Regen { get; }
+
+        public Nourishment(float food, float water, float health = 0f, float regen = 0f)
         {
             Food = food;
             Water = water;
             Health = health;
+            Regen = regen;
         }
     }
 
@@ -38,11 +42,20 @@ namespace Oxfall.Core.Survival
         /// <summary>Health regained per second while food and water are both above a quarter.</summary>
         public const float HealPerSecond = 0.2f;
 
+        /// <summary>How fast a bandage's or syringe's lasting healing comes back, health per second.</summary>
+        public const float RegenPerSecond = 4f;
+
+        /// <summary>The most lasting healing that can be waiting at once.</summary>
+        public const float MaxRegen = 60f;
+
         public float Health { get; private set; }
         public float Food { get; private set; }
         public float Water { get; private set; }
 
         public bool IsDead => Health <= 0f;
+
+        /// <summary>Health still to come back from a bandage or syringe.</summary>
+        public float Regen { get; private set; }
 
         /// <summary>Raised once, the moment health reaches zero.</summary>
         public event Action Died;
@@ -73,6 +86,12 @@ namespace Oxfall.Core.Survival
             if (Water <= 0f) change -= StarvePerSecond;
             if (change == 0f && Food > MaxFood * 0.25f && Water > MaxWater * 0.25f && Health < MaxHealth)
                 change = HealPerSecond;
+            if (Regen > 0f)
+            {
+                float back = Math.Min(Regen, RegenPerSecond * seconds);
+                Regen -= back;
+                change += back / seconds;
+            }
             if (change != 0f) SetHealth(Health + change * seconds);
         }
 
@@ -83,6 +102,7 @@ namespace Oxfall.Core.Survival
             Food = Clamp(Food + n.Food, MaxFood);
             Water = Clamp(Water + n.Water, MaxWater);
             if (n.Health != 0f) SetHealth(Health + n.Health);
+            if (n.Regen > 0f && !IsDead) Regen = Math.Min(MaxRegen, Regen + n.Regen);
         }
 
         /// <summary>Takes damage (a fall, the cold, another player). Returns true if this killed.</summary>
@@ -105,6 +125,7 @@ namespace Oxfall.Core.Survival
         /// <summary>Back to life, as a fresh player wakes up on the beach.</summary>
         public void Respawn(float health = 60f, float food = 200f, float water = 150f)
         {
+            Regen = 0f;
             Health = Clamp(health, MaxHealth);
             Food = Clamp(food, MaxFood);
             Water = Clamp(water, MaxWater);
@@ -114,6 +135,7 @@ namespace Oxfall.Core.Survival
         {
             bool wasAlive = !IsDead;
             Health = Clamp(value, MaxHealth);
+            if (IsDead) Regen = 0f;
             if (wasAlive && IsDead) Died?.Invoke();
         }
 

@@ -71,6 +71,18 @@ const wait = ms => new Promise(r => setTimeout(r, ms));
   await cmd(solo, 'Solo', 'craft-tab-2', 1500);
   await shot(solo, '09-craft-guns');
   await cmd(solo, 'Solo', 'craft-panel', 800);
+  // Hurt, then a bandage and a syringe.
+  await cmd(solo, 'Solo', 'hungry', 600);
+  await cmd(solo, 'Solo', 'bandage', 1200);
+  await shot(solo, '09b-bandage');
+  await cmd(solo, 'Solo', 'fire', 1500);
+  await cmd(solo, 'Solo', 'syringe', 1200);
+  await shot(solo, '09c-syringe');
+  await cmd(solo, 'Solo', 'fire', 1500);
+  await cmd(solo, 'Solo', 'craft-panel', 1200);
+  await cmd(solo, 'Solo', 'craft-tab-1', 1500);
+  await shot(solo, '09d-craft-tools-medical');
+  await cmd(solo, 'Solo', 'craft-panel', 800);
   await cmd(solo, 'Solo', 'stats', 600);
   log.push(`${stamp()} [test] solo fired ${count('Solo [log] [Oxfall] Fired')} times`);
   await solo.context().close();

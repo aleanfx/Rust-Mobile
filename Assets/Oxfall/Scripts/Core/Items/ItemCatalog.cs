@@ -58,7 +58,7 @@ namespace Oxfall.Core.Items
             new ItemDefinition(ItemIds.Sulfur, "Azufre", ItemCategory.Resource, 1000,
                 description: "Sale del horno. Con carbón se hace pólvora."),
             new ItemDefinition(ItemIds.Gunpowder, "Pólvora", ItemCategory.Resource, 1000,
-                description: "Carbón y azufre molidos juntos. Para las cargas explosivas."),
+                description: "Carbón y azufre molidos juntos. Para las cargas explosivas y la munición."),
 
             new ItemDefinition(ItemIds.Berries, "Moras", ItemCategory.Food, 20,
                 description: "Llévalas en la mano y toca COMER: algo de comida y de agua.",
@@ -69,6 +69,12 @@ namespace Oxfall.Core.Items
             new ItemDefinition(ItemIds.CookedMeat, "Carne asada", ItemCategory.Food, 20,
                 description: "La mejor comida de la isla.",
                 nourishment: new Nourishment(75f, 5f)),
+            new ItemDefinition(ItemIds.Bandage, "Venda", ItemCategory.Medical, 5,
+                description: "Tela limpia para cerrar heridas. En la mano, toca CURAR: +10 de vida al momento y 10 más poco a poco.",
+                nourishment: new Nourishment(0f, 0f, 10f, 10f)),
+            new ItemDefinition(ItemIds.MedicalSyringe, "Jeringa médica", ItemCategory.Medical, 2,
+                description: "Un pinchazo y a seguir peleando: +15 de vida al momento y 30 más en unos segundos.",
+                nourishment: new Nourishment(0f, 0f, 15f, 30f)),
 
             new ItemDefinition(ItemIds.Rock, "Roca", ItemCategory.Tool, 1, ToolKind.Rock, skinnable: true,
                 description: "Golpea árboles y piedras. Mejor que nada."),

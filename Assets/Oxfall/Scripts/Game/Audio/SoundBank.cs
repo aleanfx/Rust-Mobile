@@ -21,6 +21,8 @@ namespace Oxfall.Game.Audio
         public AudioClip Place { get; }
         public AudioClip Crafted { get; }
         public AudioClip Eat { get; }
+        /// <summary>Cloth unrolled, then torn: a bandage (or a syringe's quick hiss).</summary>
+        public AudioClip Bandage { get; }
         public AudioClip Drink { get; }
         public AudioClip Tap { get; }
         public AudioClip KeyBeep { get; }
@@ -76,6 +78,8 @@ namespace Oxfall.Game.Audio
             Place = Make("place", 0.35f, (t, i) => Thump(t, 110f, 0.06f) * 0.8f + Thump(t - 0.11f, 140f, 0.05f) * 0.6f + Noise() * Env(t, 0.001f, 0.03f) * 0.2f);
             Crafted = Make("crafted", 0.5f, (t, i) => (Tone(t, 660f) * Env(t, 0.005f, 0.25f) + Tone(t - 0.09f, 880f) * Env(t - 0.09f, 0.005f, 0.3f)) * 0.25f);
             Eat = Make("eat", 0.4f, (t, i) => Dark(0.5f) * (Env(t, 0.002f, 0.04f) + Env(t - 0.12f, 0.002f, 0.04f) + Env(t - 0.25f, 0.002f, 0.05f)) * 0.6f);
+            Bandage = Make("bandage", 0.75f, (t, i) => Rustle(t, 0.4f) * 0.45f
+                + Noise() * Env(t - 0.42f, 0.004f, 0.11f) * 0.4f + Noise() * Env(t - 0.5f, 0.004f, 0.08f) * 0.25f);
             Drink = Make("drink", 0.6f, (t, i) => Gulp(t) * 0.5f + Gulp(t - 0.28f) * 0.45f);
             Tap = Make("tap", 0.05f, (t, i) => Tone(t, 1500f) * Env(t, 0.001f, 0.012f) * 0.25f);
             // The code lock: a short square-ish beep per key, two rising notes for a right code, and a

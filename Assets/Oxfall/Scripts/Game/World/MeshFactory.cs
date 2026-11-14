@@ -452,6 +452,24 @@ namespace Oxfall.Game.World
             return b.Build("PistolRounds", 40f);
         }
 
+        /// <summary>
+        /// A medical syringe along +X: a clear barrel showing the red dose, a white plunger with its
+        /// thumb rest and finger flange, a steel needle. Submeshes: barrel, plastic, dose, needle.
+        /// </summary>
+        public static Mesh Syringe()
+        {
+            var b = new FlatMeshBuilder(4) { UvScale = 0.05f };
+            b.AddTube(0, new Vector3(-0.055f, 0f, 0f), new Vector3(-0.02f, 0f, 0f), 0.0125f, 0.0125f, 10, 0);
+            b.AddTube(2, new Vector3(-0.02f, 0f, 0f), new Vector3(0.045f, 0f, 0f), 0.0127f, 0.0127f, 10, 0);
+            b.AddTube(1, new Vector3(0.045f, 0f, 0f), new Vector3(0.056f, 0f, 0f), 0.0127f, 0.004f, 10, 1);
+            b.AddTube(3, new Vector3(0.056f, 0f, 0f), new Vector3(0.1f, 0f, 0f), 0.0016f, 0.0008f, 6, 3);
+            // The plunger out the back, its thumb rest, and the flange to hold.
+            b.AddTube(1, new Vector3(-0.1f, 0f, 0f), new Vector3(-0.055f, 0f, 0f), 0.0045f, 0.0045f, 6, 1);
+            b.AddTube(1, new Vector3(-0.106f, 0f, 0f), new Vector3(-0.1f, 0f, 0f), 0.015f, 0.015f, 12, 1);
+            b.AddBox(1, new Vector3(-0.06f, -0.005f, -0.026f), new Vector3(-0.054f, 0.005f, 0.026f));
+            return b.Build("Syringe", 40f);
+        }
+
         /// <summary>A broken lump about a metre across (scaled down for rubble), faceted like a fresh break.</summary>
         public static Mesh Rubble(int seed)
         {

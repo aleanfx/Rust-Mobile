@@ -12,6 +12,8 @@ namespace Oxfall.Core.Items
         Ammo,
         /// <summary>Clothing and armour, worn in the four wear slots.</summary>
         Attire,
+        /// <summary>Bandages and syringes: used from the hand like food, they heal.</summary>
+        Medical,
     }
 
     /// <summary>Where on the body a piece of clothing goes (one of each at a time).</summary>
