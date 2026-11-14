@@ -1891,6 +1891,45 @@ namespace Oxfall.Game.World
         }
 
         /// <summary>A flat square grid centred on the origin, facing up, split into cells.</summary>
+        /// <summary>
+        /// Rain for the Oxfall/Rain shader: <paramref name="count"/> streaks, each a quad whose four
+        /// corners all sit at the streak's spot in a box <paramref name="box"/> across (the shader drops
+        /// and wraps it round the camera and opens it out), with the corner in UV0 and, in UV1, the
+        /// streak's own number (0..1, so a share of them can be shown) and a speed variation.
+        /// </summary>
+        public static Mesh RainStreaks(int count, float box, int seed)
+        {
+            var random = new System.Random(seed);
+            var vertices = new Vector3[count * 4];
+            var uv = new Vector2[count * 4];
+            var uv2 = new Vector2[count * 4];
+            var triangles = new int[count * 6];
+            var corners = new[] { new Vector2(-1f, 0f), new Vector2(1f, 0f), new Vector2(1f, 1f), new Vector2(-1f, 1f) };
+            for (int i = 0; i < count; i++)
+            {
+                var spot = new Vector3(Rand(random, 0f, box), Rand(random, 0f, box), Rand(random, 0f, box));
+                var own = new Vector2((i + 0.5f) / count, Rand(random, 0f, 1f));
+                for (int k = 0; k < 4; k++)
+                {
+                    vertices[i * 4 + k] = spot;
+                    uv[i * 4 + k] = corners[k];
+                    uv2[i * 4 + k] = own;
+                }
+                int t = i * 6, v = i * 4;
+                triangles[t] = v; triangles[t + 1] = v + 1; triangles[t + 2] = v + 2;
+                triangles[t + 3] = v; triangles[t + 4] = v + 2; triangles[t + 5] = v + 3;
+            }
+            var mesh = new Mesh { name = "Rain" };
+            if (vertices.Length > 65000) mesh.indexFormat = IndexFormat.UInt32;
+            mesh.vertices = vertices;
+            mesh.uv = uv;
+            mesh.uv2 = uv2;
+            mesh.triangles = triangles;
+            // Drawn wherever the camera is: never culled.
+            mesh.bounds = new Bounds(Vector3.zero, Vector3.one * 100000f);
+            return mesh;
+        }
+
         public static Mesh Grid(float size, int cells)
         {
             var vertices = new List<Vector3>((cells + 1) * (cells + 1));

@@ -61,6 +61,10 @@ namespace Oxfall.Game.Audio
         /// <summary>A cargo plane's four engines droning, heard from far off (loops).</summary>
         public AudioClip PlaneLoop { get; }
 
+        /// <summary>Rain falling all round (a loop) and a roll of thunder far off.</summary>
+        public AudioClip RainLoop { get; }
+        public AudioClip Thunder { get; }
+
         private readonly System.Random _random = new System.Random(5);
 
         public SoundBank()
@@ -186,6 +190,8 @@ namespace Oxfall.Game.Audio
             WavesLoop = MakeLoop("waves", 8f, WavesSample);
             MachineLoop = MakeLoop("machine", 2f, MachineSample);
             PlaneLoop = MakeLoop("plane", 4f, PlaneSample);
+            RainLoop = MakeLoop("rain", 5f, RainSample);
+            Thunder = Make("thunder", 7f, ThunderSample);
         }
 
         // ---- building blocks ----
@@ -288,6 +294,28 @@ namespace Oxfall.Game.Audio
             _drone += (Noise() - _drone) * 0.05f;
             float beat = 0.8f + 0.2f * Mathf.Sin(t * Mathf.PI * 2f * 1.5f);
             return (props + _drone * 0.9f) * beat;
+        }
+
+        private float _hiss, _patter;
+        private float RainSample(float t, int i)
+        {
+            // A soft hiss (noise with its harshest top taken off) under a patter of single drops.
+            _hiss += (Noise() - _hiss) * 0.45f;
+            _patter *= 0.94f;
+            if (_random.NextDouble() < 0.0016) _patter += Noise() * 0.9f;
+            float swell = 0.85f + 0.15f * Mathf.Sin(2f * Mathf.PI * t / 5f);
+            return _hiss * 0.55f * swell + _patter * Noise() * 0.5f;
+        }
+
+        private float _thunder, _thunder2;
+        private float ThunderSample(float t, int i)
+        {
+            // A crack, then a long low roll that swells and dies away in rolls.
+            _thunder += (Noise() - _thunder) * 0.012f;
+            _thunder2 += (_thunder - _thunder2) * 0.05f;
+            float crack = Noise() * Env(t, 0.002f, 0.08f) * 0.35f;
+            float roll = Env(t - 0.05f, 0.25f, 2.4f) * (0.75f + 0.25f * Mathf.Sin(t * 5.3f) * Mathf.Sin(t * 1.7f + 0.6f));
+            return crack + _thunder2 * roll * 9f;
         }
 
         private float _wind;

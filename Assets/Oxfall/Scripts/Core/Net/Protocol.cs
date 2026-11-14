@@ -172,6 +172,8 @@ namespace Oxfall.Core.Net
         Airdrop = 60,
         /// <summary>The blueprints this player has learned (recipe ids).</summary>
         Blueprints = 61,
+        /// <summary>The weather now: rain and fog, a byte each (0..255 for 0..1).</summary>
+        Weather = 62,
     }
 
     /// <summary>What a player does to their own belongings (inside an <see cref="MessageType.Act"/> message).</summary>
@@ -672,6 +674,20 @@ namespace Oxfall.Core.Net
         }
 
         /// <summary>The island's clock (0 to 24), so everyone has the same day and night.</summary>
+        public static void Weather(NetWriter w, float rain, float fog)
+        {
+            w.Reset();
+            w.Byte((byte)MessageType.Weather);
+            w.Byte((byte)Math.Round(Math.Max(0f, Math.Min(1f, rain)) * 255f));
+            w.Byte((byte)Math.Round(Math.Max(0f, Math.Min(1f, fog)) * 255f));
+        }
+
+        public static void ReadWeather(NetReader r, out float rain, out float fog)
+        {
+            rain = r.Byte() / 255f;
+            fog = r.Byte() / 255f;
+        }
+
         public static void TimeOfDay(NetWriter w, float hours)
         {
             w.Reset();

@@ -93,6 +93,8 @@ namespace Oxfall.Game.Rendering
         public Material Sandbag { get; }
         public Material WarnYellow { get; }
         public Material Stain { get; }
+        /// <summary>Rain round the camera (null in a build without its shader: no rain drawn).</summary>
+        public Material Rain { get; }
         /// <summary>A code lock: its dark casing, its keys, and its light (red locked, green open).</summary>
         public Material LockBody { get; }
         public Material LockKeys { get; }
@@ -250,6 +252,8 @@ namespace Oxfall.Game.Rendering
             Sandbag = Make("Sandbag", new Color(0.5f, 0.45f, 0.33f), 0.05f);
             WarnYellow = Make("Warning yellow", new Color(0.86f, 0.64f, 0.1f), 0.3f);
             Stain = Make("Oil stain", new Color(0.2f, 0.19f, 0.18f), 0.62f);
+            var rain = Resources.Load<Material>("OxfallRain");
+            Rain = rain != null ? new Material(rain) { name = "Rain" } : null;
             Concrete = Textured("OxfallConcrete") ?? Tinted(Stone, "Concrete", Stone.HasProperty(BaseMap) && Stone.GetTexture(BaseMap) != null
                 ? new Color(1.05f, 1.05f, 1.02f) : new Color(0.62f, 0.61f, 0.58f));
             CratePaint = Make("Crate paint", new Color(0.25f, 0.29f, 0.17f), 0.28f);

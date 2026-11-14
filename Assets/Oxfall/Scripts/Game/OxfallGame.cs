@@ -64,6 +64,9 @@ namespace Oxfall.Game
         private KeypadUi _keypad;
         private GameAudio _audio;
         private DayNight _dayNight;
+        // Rain, fog and storms: alone worked out here from the seed, online as the server says.
+        private WeatherViews _weather;
+        private float _weatherCheck;
         private Vitals _vitals;
         private VitalsUi _vitalsUi;
         private PlayerInput _input;
@@ -288,10 +291,13 @@ namespace Oxfall.Game
 
             _quality = new GraphicsQuality(camera, _world.Sun, grass, materials.Ground);
             _hud.SetQuality((int)_quality.Tier);
+            _weather = WeatherViews.Create(materials, _dayNight, audio);
+            _weather.SetDensity(_quality.Tier == QualityTier.Low ? 0.5f : 1f);
             controls.QualityTapped += () =>
             {
                 _quality.Next();
                 _hud.SetQuality((int)_quality.Tier);
+                _weather?.SetDensity(_quality.Tier == QualityTier.Low ? 0.5f : 1f);
                 _hud.ShowToast("Gráficos: " + GraphicsQuality.Name(_quality.Tier));
             };
             _hud.QualityChosen += tier =>
@@ -576,6 +582,7 @@ namespace Oxfall.Game
             _net.AnimalHit += _actions.OnServerAnimalHit;
             _net.AnimalsSeen += animals => _animalViews.Apply(animals);
             _net.AirdropSeen += drop => _airdropViews.Add(drop);
+            _net.WeatherSeen += (rain, fog) => _weather.SetTarget(rain, fog);
             // What this player has learned; one more than before is one just learned.
             _net.BlueprintsSeen += ids =>
             {
@@ -1485,6 +1492,7 @@ namespace Oxfall.Game
                 case "to-recycler": ToRecycler(); break;
                 case "to-bandit": ToBandit(); break;
                 case "airdrop": DevAirdrop(); break;
+                case "weather-auto": _weather.Force(null, null); break;
                 case "learn-all":
                     // Test, alone: every blueprint known.
                     foreach (var recipe in _recipes.All) _survivor.Learn(recipe.Id);
@@ -1649,6 +1657,12 @@ namespace Oxfall.Game
                         _inventoryUi.TapBoxSlot(boxTap);
                     // time-H jumps to hour H (0 to 23).
                     else if (command.StartsWith("view-ruin:")) ViewRuin(command.Substring(10));
+                    else if (command.StartsWith("rain-") && float.TryParse(command.Substring(5), System.Globalization.NumberStyles.Float,
+                                 System.Globalization.CultureInfo.InvariantCulture, out float forcedRain))
+                        _weather.Force(forcedRain, Mathf.Max(forcedRain * 0.65f, _weather.Fog));
+                    else if (command.StartsWith("fog-") && float.TryParse(command.Substring(4), System.Globalization.NumberStyles.Float,
+                                 System.Globalization.CultureInfo.InvariantCulture, out float forcedFog))
+                        _weather.Force(null, forcedFog);
                     else if (command.StartsWith("time-") && float.TryParse(command.Substring(5),
                                  System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out float hour))
                         _dayNight.SetHour(hour);
@@ -1867,6 +1881,7 @@ namespace Oxfall.Game
         {
             _quality.Apply(tier);
             _hud.SetQuality((int)tier);
+            _weather?.SetDensity(tier == QualityTier.Low ? 0.5f : 1f);
         }
 
         /// <summary>Stands the player a step from the nearest resource of a kind, looking at it.</summary>
@@ -2110,6 +2125,13 @@ namespace Oxfall.Game
             TickNet();
             TickAnimals(Time.deltaTime);
             TickAirdrops(Time.deltaTime);
+            // Alone, the weather from the seed and the time (online the server says it).
+            if (_weather != null && !_actions.Online && (_weatherCheck -= Time.deltaTime) <= 0f)
+            {
+                _weatherCheck = 2f;
+                Weather.At(s_seed, Time.time, out float rain, out float fog);
+                _weather.SetTarget(rain, fog);
+            }
             if (_map != null && _map.IsOpen) RefreshMap();
             _chat?.Tick(Time.unscaledDeltaTime);
             _chat?.SetDrop(_guide != null && _guide.Showing ? 128f : 0f);

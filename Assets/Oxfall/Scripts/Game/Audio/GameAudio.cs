@@ -39,6 +39,10 @@ namespace Oxfall.Game.Audio
         private SoundBank _bank;
         private AudioSource _shots;
         private AudioSource _wind;
+        private AudioSource _rain;
+
+        /// <summary>How hard it is raining (0..1): the rain's hiss and a stronger wind with it.</summary>
+        public float Rain { get; set; }
         private AudioSource _waves;
         private Transform _player;
         private CharacterController _body;
@@ -64,6 +68,7 @@ namespace Oxfall.Game.Audio
             audio._shots.playOnAwake = false;
             audio._wind = audio.Loop(go, audio._bank.WindLoop, 0.22f);
             audio._waves = audio.Loop(go, audio._bank.WavesLoop, 0f);
+            audio._rain = audio.Loop(go, audio._bank.RainLoop, 0f);
             return audio;
         }
 
@@ -168,7 +173,12 @@ namespace Oxfall.Game.Audio
                 _wavesTarget = ShoreCloseness() * 0.55f;
             }
             _waves.volume = Mathf.MoveTowards(_waves.volume, _wavesTarget, Time.deltaTime * 0.3f);
+            _rain.volume = Rain * 0.5f;
+            _wind.volume = 0.22f + Rain * 0.2f;
         }
+
+        /// <summary>Thunder, as loud as it is near.</summary>
+        public void PlayThunder(float volume) => Shot(_bank.Thunder, volume, 0.12f);
 
         /// <summary>A step every stride walked on the ground: sand on the beach, grass elsewhere.</summary>
         private void Footsteps()

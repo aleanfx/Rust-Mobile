@@ -18,6 +18,7 @@ namespace Oxfall.Editor
             // Fire needs no texture: made whether or not the photos are there.
             MakeFlame();
             MakePuffs();
+            MakeRain();
             if (!AssetDatabase.IsValidFolder(TexturesFolder))
             {
                 Debug.LogWarning($"[Oxfall] {TexturesFolder} is missing; the game keeps its plain colours.");
@@ -254,6 +255,28 @@ namespace Oxfall.Editor
             smoke.SetFloat("_DstBlend", (float)BlendMode.OneMinusSrcAlpha);
             smoke.renderQueue = (int)RenderQueue.Transparent + 1;
             EditorUtility.SetDirty(smoke);
+            AssetDatabase.SaveAssets();
+        }
+
+        /// <summary>Rain round the camera (Oxfall/Rain); the game sets how much falls and its colour.</summary>
+        private static void MakeRain()
+        {
+            var shader = Shader.Find("Oxfall/Rain");
+            if (shader == null)
+            {
+                Debug.LogWarning("[Oxfall] Shader Oxfall/Rain not found; no rain is drawn.");
+                return;
+            }
+            var rain = LoadOrCreate("OxfallRain", shader);
+            rain.SetColor("_Color", new Color(0.72f, 0.76f, 0.82f, 0.32f));
+            rain.SetFloat("_Amount", 0f);
+            rain.SetFloat("_Speed", 16f);
+            rain.SetVector("_Wind", new Vector4(2.2f, 0f, 1.1f, 0f));
+            rain.SetFloat("_Box", 24f);
+            rain.SetFloat("_Length", 0.75f);
+            rain.SetFloat("_Width", 0.012f);
+            rain.renderQueue = (int)RenderQueue.Transparent + 5;
+            EditorUtility.SetDirty(rain);
             AssetDatabase.SaveAssets();
         }
 

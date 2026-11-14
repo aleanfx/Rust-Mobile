@@ -150,6 +150,9 @@ namespace Oxfall.Game.Net
 
         private readonly List<string> _blueprints = new List<string>();
 
+        /// <summary>The weather as the server says it is: rain and fog, 0..1 each.</summary>
+        public event Action<float, float> WeatherSeen;
+
         /// <summary>A supply plane on its way (its times put on this machine's clock).</summary>
         public event Action<Oxfall.Core.World.Airdrop> AirdropSeen;
 
@@ -563,6 +566,12 @@ namespace Oxfall.Game.Net
                     Messages.ReadBitten(reader, out ushort target, out var kind, out int damage, out bool killed);
                     if (_players.TryGetValue(target, out var victim)) victim.Flinch();
                     Bitten?.Invoke(target, kind, damage, killed);
+                    break;
+                }
+                case MessageType.Weather:
+                {
+                    Messages.ReadWeather(reader, out float rain, out float fog);
+                    WeatherSeen?.Invoke(rain, fog);
                     break;
                 }
                 case MessageType.Blueprints:

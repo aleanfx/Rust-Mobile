@@ -50,6 +50,21 @@ namespace Oxfall.Game.World
 
         public DayCycle Cycle => _cycle;
 
+        /// <summary>How overcast the sky is (0..1, set by the weather): a dimmer, greyer day.</summary>
+        public float Overcast { get; set; }
+
+        /// <summary>How much thicker the fog is than the graphics setting's (0..1, set by the weather).</summary>
+        public float FogBoost { get; set; }
+
+        /// <summary>A lightning flash lighting everything for an instant (0..1, set by the weather).</summary>
+        public float Flash { get; set; }
+
+        // The fog density the graphics setting (or the title screen) chose, and the one set here last.
+        private float _fogBase = -1f, _fogSet = -1f;
+
+        /// <summary>Relights now (for a lightning flash, which cannot wait for the next tenth of a second).</summary>
+        public void Relight() => Apply();
+
         /// <summary>Raised when the clock shows a new minute, with the time as the player reads it.</summary>
         public event Action<string> ClockChanged;
 
@@ -79,6 +94,14 @@ namespace Oxfall.Game.World
             // Ten times a second is smooth enough: a minute of game time passes in about two seconds.
             _timer = 0.1f;
             Apply();
+        }
+
+        /// <summary>A colour washed towards a grey of its own brightness (by <paramref name="amount"/>), then dimmed.</summary>
+        private static Color Grey(Color c, float amount, float dim)
+        {
+            float l = c.r * 0.3f + c.g * 0.59f + c.b * 0.11f;
+            var grey = new Color(l, l * 1.01f, l * 1.04f) * dim;
+            return Color.Lerp(c, grey, amount);
         }
 
         private void Apply()
@@ -116,15 +139,25 @@ namespace Oxfall.Game.World
                 _sun.intensity = 0.4f * Mathf.SmoothStep(0f, 1f, Mathf.InverseLerp(0f, 10f, _cycle.MoonElevation));
             }
 
-            RenderSettings.ambientSkyColor = Color.Lerp(NightSky, DaySky, twilight);
-            RenderSettings.ambientEquatorColor = Color.Lerp(Color.Lerp(NightEquator, DayEquator, twilight), DuskEquator, dusk * 0.45f);
-            RenderSettings.ambientGroundColor = Color.Lerp(NightGround, DayGround, twilight);
+            // Under cloud: the sun dimmed, the light and the sky greyer; a flash lights it all up.
+            float overcast = Mathf.Clamp01(Overcast), flash = Mathf.Clamp01(Flash);
+            _sun.intensity *= 1f - 0.62f * overcast;
+            var flashLight = new Color(0.62f, 0.66f, 0.82f) * flash;
+            RenderSettings.ambientSkyColor = Grey(Color.Lerp(NightSky, DaySky, twilight), overcast * 0.6f, 0.85f) + flashLight;
+            RenderSettings.ambientEquatorColor = Grey(Color.Lerp(Color.Lerp(NightEquator, DayEquator, twilight), DuskEquator, dusk * 0.45f * (1f - overcast)), overcast * 0.6f, 0.85f) + flashLight;
+            RenderSettings.ambientGroundColor = Color.Lerp(NightGround, DayGround, twilight) * (1f - 0.25f * overcast) + flashLight * 0.5f;
 
-            var fog = Color.Lerp(Color.Lerp(NightFog, WorldBuilder.FogColour, twilight), DuskFog, dusk * 0.6f);
+            var fog = Color.Lerp(Color.Lerp(NightFog, WorldBuilder.FogColour, twilight), DuskFog, dusk * 0.6f * (1f - overcast));
+            fog = Grey(fog, overcast * 0.75f, 0.8f) + flashLight * 0.5f;
             RenderSettings.fogColor = fog;
             if (_camera != null) _camera.backgroundColor = fog;
+            // Thicker fog in bad weather, on top of whatever density was chosen for the view.
+            float density = RenderSettings.fogDensity;
+            if (_fogSet < 0f || Mathf.Abs(density - _fogSet) > 1e-7f) _fogBase = density;
+            _fogSet = _fogBase * (1f + Mathf.Clamp01(FogBoost) * 2.2f);
+            RenderSettings.fogDensity = _fogSet;
 
-            var top = Color.Lerp(NightSkyTop, WorldBuilder.SkyTop, twilight);
+            var top = Color.Lerp(Color.Lerp(NightSkyTop, WorldBuilder.SkyTop, twilight), fog, overcast * 0.8f) + flashLight * 0.6f;
             Shader.SetGlobalVector(SkyTopGlobal, top.linear);
             Shader.SetGlobalVector(SkyHorizonGlobal, fog.linear);
             if (_sky != null)
@@ -133,7 +166,9 @@ namespace Oxfall.Game.World
                 _sky.SetColor(HorizonColor, fog);
                 _sky.SetColor(BottomColor, Color.Lerp(NightBelow, WorldBuilder.SkyBelowHorizon, twilight));
                 // By night the disc in the sky is the moon.
-                _sky.SetColor(SunColor, _cycle.IsNight ? new Color(0.78f, 0.82f, 0.9f) : _sun.color);
+                // Behind cloud the disc fades away.
+                var disc = _cycle.IsNight ? new Color(0.78f, 0.82f, 0.9f) : _sun.color;
+                _sky.SetColor(SunColor, Color.Lerp(disc, fog, overcast * 0.9f));
                 _sky.SetVector(SunDirection, -_sun.transform.forward);
             }
         }

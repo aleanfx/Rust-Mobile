@@ -127,7 +127,7 @@ namespace Oxfall.Server
             var writer = new NetWriter(2048);
             var period = TimeSpan.FromSeconds(1.0 / Protocol.TickRate);
             using var timer = new PeriodicTimer(period);
-            float lastTick = Now, lastRespawn = Now, lastSave = Now, lastClock = Now;
+            float lastTick = Now, lastRespawn = Now, lastSave = Now, lastClock = Now, lastWeather = Now;
             long ticks = 0;
             while (await timer.WaitForNextTickAsync(stop))
             {
@@ -215,6 +215,14 @@ namespace Oxfall.Server
                     {
                         lastClock = now;
                         Messages.TimeOfDay(writer, _world.Day.Hours);
+                        Broadcast(writer.ToArray());
+                    }
+                    // The weather, every few seconds (it changes slowly; each phone eases towards it).
+                    if (now - lastWeather >= 5f)
+                    {
+                        lastWeather = now;
+                        Oxfall.Core.Environment.Weather.At(_state.Seed, _world.Time, out float rain, out float fog);
+                        Messages.Weather(writer, rain, fog);
                         Broadcast(writer.ToArray());
                     }
                     Messages.Snapshot(writer, now, _state.Snapshot());
@@ -594,6 +602,9 @@ namespace Oxfall.Server
                 Messages.Welcome(writer, player.Id, _state.Seed, now, player.Pose, record.Owner);
                 connection.Send(writer.ToArray());
                 Messages.TimeOfDay(writer, _world.Day.Hours);
+                connection.Send(writer.ToArray());
+                Oxfall.Core.Environment.Weather.At(_state.Seed, _world.Time, out float rainNow, out float fogNow);
+                Messages.Weather(writer, rainNow, fogNow);
                 connection.Send(writer.ToArray());
                 // What has been cut or mined and not grown back yet.
                 var damaged = _world.NotFull();
