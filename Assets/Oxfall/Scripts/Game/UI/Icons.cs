@@ -112,6 +112,18 @@ namespace Oxfall.Game.UI
             Mathf.Min(Segment(p, new Vector2(0.18f, 0.18f), new Vector2(-0.64f, -0.64f), 0.1f),
                 RotatedBox(p, new Vector2(0.28f, 0.28f), new Vector2(0.52f, 0.2f), -45f, 0.05f)));
 
+        /// <summary>A round arrow, clockwise, its head at the right: reload.</summary>
+        public static Sprite Reload => Get("reload", p =>
+        {
+            float ring = Mathf.Abs(Circle(p, Vector2.zero, 0.5f)) - Stroke * 0.85f;
+            float angle = Mathf.Atan2(p.y, p.x) * Mathf.Rad2Deg;
+            // A gap between the arrow's tail (top) and its head (right).
+            if (angle > 12f && angle < 78f) ring = Mathf.Max(ring, 0.06f);
+            var tip = new Vector2(0.5f, -0.2f);
+            float head = Polygon(p, new Vector2(0.24f, 0.13f), new Vector2(0.76f, 0.13f), tip);
+            return Mathf.Min(ring, head);
+        });
+
         public static Sprite Jump => Get("jump", p =>
             Mathf.Min(Chevron(p, 0.5f, 0.48f), Chevron(p, -0.02f, 0.48f)));
 

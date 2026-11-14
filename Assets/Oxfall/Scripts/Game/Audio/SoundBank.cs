@@ -45,6 +45,12 @@ namespace Oxfall.Game.Audio
 
         /// <summary>A lit fuse: a hiss full of spitting sparks (a loop).</summary>
         public AudioClip FuseLoop { get; }
+
+        /// <summary>Guns: the revolver's sharp crack, the shotgun's deep blast, a reload's clicks, and the click of an empty one.</summary>
+        public AudioClip RevolverShot { get; }
+        public AudioClip ShotgunShot { get; }
+        public AudioClip GunReload { get; }
+        public AudioClip DryFire { get; }
         public AudioClip WindLoop { get; }
         public AudioClip WavesLoop { get; }
 
@@ -136,6 +142,37 @@ namespace Oxfall.Game.Audio
                 return (float)Math.Tanh(s * 2.2f);
             });
             FuseLoop = MakeLoop("fuse", 1.6f, FuseSample);
+            RevolverShot = Make("revolver", 1.1f, (t, i) =>
+            {
+                float crack = Noise() * Env(t, 0.0002f, 0.009f) * 1.8f;
+                float body = Thump(t, 140f, 0.045f) * 0.9f + Thump(t, 62f, 0.16f) * 0.7f;
+                // The report off the hills behind.
+                float tail = Dark(0.12f) * Env(t, 0.004f, 0.32f) * 0.55f + Dark(0.05f) * Env(t - 0.18f, 0.02f, 0.3f) * 0.3f;
+                return (float)Math.Tanh((crack + body + tail) * 2.4f);
+            });
+            ShotgunShot = Make("shotgun", 1.5f, (t, i) =>
+            {
+                float crack = Noise() * Env(t, 0.0003f, 0.016f) * 1.7f;
+                float boom = Thump(t, 52f, 0.3f) * 1.3f + Thump(t, 95f, 0.07f) * 0.8f;
+                float tail = Dark(0.09f) * Env(t, 0.006f, 0.45f) * 0.9f + Dark(0.04f) * Env(t - 0.22f, 0.03f, 0.4f) * 0.35f;
+                return (float)Math.Tanh((crack + boom + tail) * 2.6f);
+            });
+            // Steel on steel: the gate opening, rounds going in, the gate shut and the hammer cocked.
+            var clicks = new[] { 0.04f, 0.42f, 0.7f, 0.98f, 1.4f, 1.62f };
+            GunReload = Make("gun reload", 1.9f, (t, i) =>
+            {
+                float s = 0f;
+                for (int k = 0; k < clicks.Length; k++)
+                {
+                    float u = t - clicks[k];
+                    float pitch = k == 0 || k >= 4 ? 1f : 0.75f;
+                    s += (Tone(u, 2650f * pitch) * 0.6f + Tone(u, 4170f * pitch) * 0.35f + Tone(u, 6900f * pitch) * 0.2f) * Env(u, 0.0004f, 0.012f)
+                         + Noise() * Env(u, 0.0002f, 0.005f) * 0.5f;
+                }
+                return s;
+            });
+            DryFire = Make("dry fire", 0.12f, (t, i) =>
+                (Tone(t, 3100f) * 0.6f + Tone(t, 5300f) * 0.3f) * Env(t, 0.0003f, 0.01f) + Noise() * Env(t, 0.0002f, 0.004f) * 0.5f);
             WindLoop = MakeLoop("wind", 6f, WindSample);
             WavesLoop = MakeLoop("waves", 8f, WavesSample);
         }

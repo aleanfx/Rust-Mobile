@@ -80,6 +80,17 @@ namespace Oxfall.Game.Player
         /// <summary>The bow is drawn (for tests and the HUD).</summary>
         public bool Drawing => _draw >= 0f;
 
+        /// <summary>Where gunfire shows: muzzle flashes, bullets, what they strike, the kick.</summary>
+        public Explosions Effects { get; set; }
+
+        /// <summary>A gun fired from this hand: which kind (for the HUD and tests).</summary>
+        public event Action<ToolKind> Fired;
+
+        // Guns: since the last shot (for the kick), whether it was reloading last frame, and what the pellets hit.
+        private float _gunKick = 10f;
+        private bool _wasReloading;
+        private readonly Dictionary<(ArrowTarget Kind, int Id), int> _pelletHits = new Dictionary<(ArrowTarget, int), int>();
+
         public void Init(PlayerInput input, Inventory inventory, Hotbar hotbar, ItemCatalog catalog, Transform head,
             IReadOnlyDictionary<string, ItemModel> models, Material flameMaterial, Vitals vitals, IslandShape shape)
         {
@@ -145,7 +156,8 @@ namespace Oxfall.Game.Player
             {
                 var def = _hotbar.HeldDefinition;
                 // The hammer builds (HammerTool) instead of gathering.
-                return def == null || (def.Category == ItemCategory.Tool && def.Tool != ToolKind.Hammer && def.Tool != ToolKind.Explosive);
+                return def == null || (def.Category == ItemCategory.Tool && def.Tool != ToolKind.Hammer && def.Tool != ToolKind.Explosive
+                                       && !Firearms.IsGun(def.Tool));
             }
         }
 
@@ -159,6 +171,12 @@ namespace Oxfall.Game.Player
             if (_held != null && _held.Shoots)
             {
                 TickBow(dt);
+                AnimateHand(dt);
+                return;
+            }
+            if (_held != null && _held.Fires)
+            {
+                TickGun();
                 AnimateHand(dt);
                 return;
             }
@@ -188,6 +206,11 @@ namespace Oxfall.Game.Player
             if (_held != null && _held.Shoots)
             {
                 Loose();
+                return;
+            }
+            if (_held != null && _held.Fires)
+            {
+                PullTrigger(true);
                 return;
             }
             _swing = 0f;
@@ -474,12 +497,127 @@ namespace Oxfall.Game.Player
             }
         }
 
+        // ---- Guns: hold attack to fire (as fast as the gun allows); empty, it reloads by itself.
+
+        private void TickGun()
+        {
+            if (Actions == null || !Firearms.TryGet(_hotbar.HeldTool, out var gun)) return;
+            bool reloading = Actions.GunState(gun.Tool).Reloading(Time.time);
+            if (reloading && !_wasReloading) Sound?.Invoke(SoundCue.Reload);
+            _wasReloading = reloading;
+            if (_input.Attack) PullTrigger(_input.AttackPressed);
+        }
+
+        /// <summary>Fires the gun in hand if it can; a fresh press on an empty one clicks and says so.</summary>
+        private void PullTrigger(bool pressed)
+        {
+            if (Actions == null || !Firearms.TryGet(_hotbar.HeldTool, out var gun)) return;
+            if (_inventory.Count(gun.Ammo) < 1)
+            {
+                if (pressed && _hintCooldown <= 0f)
+                {
+                    _hintCooldown = 1.5f;
+                    Sound?.Invoke(SoundCue.DryFire);
+                    Message?.Invoke(gun.Tool == ToolKind.Shotgun
+                        ? "Sin cartuchos: fabrícalos con pólvora y piedra"
+                        : "Sin balas: fabrícalas con pólvora y metal");
+                }
+                return;
+            }
+            if (!Actions.GunState(gun.Tool).CanFire(gun, Time.time)) return;
+            FireGun(gun);
+        }
+
+        /// <summary>One shot along the crosshair: each pellet a ray strayed by the shot's spray; what they hit is reported.</summary>
+        private void FireGun(GunSpec gun)
+        {
+            var forward = _head.forward;
+            var origin = _head.position;
+            float yaw = Mathf.Atan2(forward.x, forward.z) * Mathf.Rad2Deg;
+            float pitch = Mathf.Asin(Mathf.Clamp(forward.y, -1f, 1f)) * Mathf.Rad2Deg;
+            ushort seed = (ushort)UnityEngine.Random.Range(0, 65536);
+            if (!Actions.Fire(gun.Tool, origin, yaw, pitch, seed)) return;
+            _gunKick = 0f;
+            bool big = gun.Pellets > 1;
+            Sound?.Invoke(big ? SoundCue.Shotgun : SoundCue.Revolver);
+            var muzzle = _hand.TransformPoint(_held.Muzzle);
+            if (Effects != null)
+            {
+                Effects.MuzzleFlash(muzzle, forward, big);
+                Effects.Punch(big ? 3.5f : 2f);
+            }
+            _pelletHits.Clear();
+            Spray(gun, origin, muzzle, yaw, pitch, seed, Effects, _pelletHits);
+            foreach (var pair in _pelletHits) Actions.GunHit(pair.Key.Kind, pair.Key.Id, pair.Value);
+            Fired?.Invoke(gun.Tool);
+        }
+
+        /// <summary>
+        /// The pellets of one shot, cast from <paramref name="origin"/> along yaw/pitch with the shot's
+        /// spray: where each lands is drawn, and (if <paramref name="hits"/> is given) who it struck is counted.
+        /// </summary>
+        public static void Spray(GunSpec gun, Vector3 origin, Vector3 muzzle, float yaw, float pitch, ushort seed, Explosions effects,
+            Dictionary<(ArrowTarget Kind, int Id), int> hits)
+        {
+            for (int i = 0; i < gun.Pellets; i++)
+            {
+                var (dy, dp) = Firearms.PelletOffset(gun, seed, i);
+                var dir = Quaternion.Euler(-(pitch + dp), yaw + dy, 0f) * Vector3.forward;
+                Vector3 end;
+                if (Physics.Raycast(origin, dir, out var hit, gun.Range, Physics.DefaultRaycastLayers, QueryTriggerInteraction.Collide))
+                {
+                    end = hit.point;
+                    var player = hit.collider.GetComponent<Net.PlayerTag>();
+                    var animal = player == null ? hit.collider.GetComponent<AnimalTag>() : null;
+                    var sleeper = player == null && animal == null ? hit.collider.GetComponent<Net.SleeperTag>() : null;
+                    bool flesh = player != null || animal != null || sleeper != null;
+                    if (hits != null && flesh)
+                    {
+                        var key = player != null ? (ArrowTarget.Player, (int)player.Id)
+                            : animal != null ? (ArrowTarget.Animal, animal.Id) : (ArrowTarget.Sleeper, sleeper.Owner);
+                        hits.TryGetValue(key, out int n);
+                        hits[key] = n + 1;
+                    }
+                    effects?.Impact(hit.point, hit.normal, flesh);
+                }
+                else end = origin + dir * Mathf.Min(gun.Range, 80f);
+                effects?.Bullet(muzzle, end);
+            }
+        }
+
+        private void AnimateGun(float dt)
+        {
+            _gunKick += dt;
+            float kick = Mathf.Exp(-_gunKick * 16f);
+            bool big = _hotbar.HeldTool == ToolKind.Shotgun;
+            // Reloading: dropped and tipped over, then back up.
+            float reload = 0f;
+            if (Actions != null && Firearms.TryGet(_hotbar.HeldTool, out var gun))
+            {
+                var state = Actions.GunState(gun.Tool);
+                if (state.Reloading(Time.time))
+                {
+                    float t = 1f - (state.ReloadEndsAt - Time.time) / gun.ReloadSeconds;
+                    reload = Mathf.Sin(Mathf.Clamp01(t) * Mathf.PI);
+                    reload = Mathf.Min(1f, reload * 1.6f);
+                }
+            }
+            _hand.localPosition = _held.HandPosition + new Vector3(0f, 0.012f, big ? -0.09f : -0.06f) * kick
+                + new Vector3(-0.05f, -0.1f, -0.04f) * reload;
+            _hand.localRotation = Quaternion.Euler(-(big ? 14f : 10f) * kick + 28f * reload, -8f * reload, 35f * reload) * _held.HandRotation;
+        }
+
         private void AnimateHand(float dt)
         {
             if (_held == null) return;
             if (_held.Shoots)
             {
                 AnimateBow(dt);
+                return;
+            }
+            if (_held.Fires)
+            {
+                AnimateGun(dt);
                 return;
             }
             _swing += dt;

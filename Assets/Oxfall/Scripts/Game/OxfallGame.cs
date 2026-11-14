@@ -58,6 +58,9 @@ namespace Oxfall.Game
         private Explosions _explosions;
         /// <summary>When the last blast went off (a hurt just after one is the blast's).</summary>
         private float _lastBlast = -10f;
+        // Guns: who fired last and when (for "te dispara"), and the attack label last shown for the gun in hand.
+        private readonly System.Collections.Generic.Dictionary<ushort, float> _firedAt = new System.Collections.Generic.Dictionary<ushort, float>();
+        private string _gunLabel;
         private KeypadUi _keypad;
         private GameAudio _audio;
         private DayNight _dayNight;
@@ -320,6 +323,13 @@ namespace Oxfall.Game
             _explosions = Explosions.Create(materials, audio.Bank, camera.transform, (x, z) => _world.Shape.Height(x, z));
             _buildings.Fell += _explosions.Fell;
             _deployables.Fell += _explosions.Fell;
+            // Gunfire shows through the same effects.
+            _gatherer.Effects = _explosions;
+            _gatherer.Fired += tool =>
+            {
+                if (Firearms.TryGet(tool, out var gun))
+                    Debug.Log($"[Oxfall] Fired {tool}: {_actions.GunState(tool).Loaded(gun, Time.time)} loaded, {_inventory.Count(gun.Ammo)} carried");
+            };
             _thrower = playerObject.AddComponent<ChargeThrower>();
             _thrower.Init(grid, input, player.Head, _hud, _inventory, _explosions);
             _thrower.Actions = _actions;
@@ -344,6 +354,10 @@ namespace Oxfall.Game
             _interactor.ManageLock += OpenKeypad;
             _hud.UseTapped += _interactor.Use;
             _hud.LockTapped += _interactor.UseLock;
+            _hud.ReloadTapped += () =>
+            {
+                if (Firearms.IsGun(_hotbar.HeldTool) && _actions.ReloadGun(_hotbar.HeldTool)) _audio.Play(SoundCue.Reload);
+            };
             // A box that goes (picked up, or gone from the server's island) closes.
             _settlement.DeployableRemoved += id =>
             {
@@ -480,6 +494,7 @@ namespace Oxfall.Game
                 _explosions.Blast(id, at);
                 Debug.Log($"[Oxfall] Blast {id} at ({at.x:0.0}, {at.y:0.0}, {at.z:0.0})");
             };
+            _net.Gunshot += OnGunshot;
             _net.ArrowSeen += (origin, yaw, pitch) =>
             {
                 var direction = Quaternion.Euler(-pitch, yaw, 0f) * Vector3.forward;
@@ -628,9 +643,11 @@ namespace Oxfall.Game
             if (satchel) _thrower.SetActive(true);
             bool food = held?.Category == ItemCategory.Food;
             bool bow = held?.Tool == ToolKind.Bow;
+            _gunLabel = null;
             int arrows = bow ? _inventory.Count(ItemIds.Arrow) : 0;
             _hud.SetAttackLabel(plan || deploy || door || codeLock ? "COLOCAR" : hammer ? "MEJORAR" : food ? "COMER"
                 : bow ? (arrows > 0 ? $"FLECHAS {arrows}" : "SIN FLECHAS")
+                : Firearms.TryGet(held?.Tool ?? ToolKind.None, out var gun) ? GunLabel(gun)
                 : satchel ? $"LANZAR {_inventory.Count(ItemIds.SatchelCharge)}" : "GOLPEAR");
             _hud.SetAttackIcon(held != null ? ItemIcons.Get(held.Id) : null);
         }
@@ -772,6 +789,7 @@ namespace Oxfall.Game
                     else _hud.ShowToast($"Te alcanza {whose}  −{damage}");
                 }
                 else if (killed) _killer = by;
+                else if (_firedAt.TryGetValue(attacker, out float firedAt) && Time.time - firedAt < 1.5f) _hud.ShowToast($"{by} te dispara  −{damage}");
                 else _hud.ShowToast($"{by} te golpea  −{damage}");
             }
             else if (attacker == _net.PlayerId)
@@ -780,6 +798,31 @@ namespace Oxfall.Game
                 _audio.Play(SoundCue.HitBody);
                 if (killed) _hud.ShowToast($"Has derribado a {whom}");
             }
+        }
+
+        /// <summary>Someone else fired a gun: the flash, the bang and where its pellets strike, as they see it.</summary>
+        private void OnGunshot(ushort shooter, ToolKind tool, Vector3 origin, float yaw, float pitch, ushort seed)
+        {
+            if (!Firearms.TryGet(tool, out var gun)) return;
+            _firedAt[shooter] = Time.time;
+            Debug.Log($"[Oxfall] Gunshot by {_net.NameOf(shooter) ?? "someone"} ({tool})");
+            var forward = Quaternion.Euler(-pitch, yaw, 0f) * Vector3.forward;
+            var muzzle = origin + forward * 0.6f + Vector3.down * 0.15f;
+            bool big = gun.Pellets > 1;
+            _explosions.MuzzleFlash(muzzle, forward, big);
+            Gatherer.Spray(gun, origin + forward * 0.5f, muzzle, yaw, pitch, seed, _explosions, null);
+            GameAudio.PlayAt(big ? _audio.Bank.ShotgunShot : _audio.Bank.RevolverShot, muzzle, 1f, 6f, big ? 180f : 200f, 0.05f);
+        }
+
+        /// <summary>The attack button's label for the gun in hand: rounds in it, and how many more are carried.</summary>
+        private string GunLabel(GunSpec gun)
+        {
+            int carried = _inventory.Count(gun.Ammo);
+            if (carried == 0) return gun.Tool == ToolKind.Shotgun ? "SIN CARTUCHOS" : "SIN BALAS";
+            var state = _actions.GunState(gun.Tool);
+            if (state.Reloading(Time.time)) return "RECARGANDO…";
+            int loaded = Mathf.Min(state.Loaded(gun, Time.time), carried);
+            return $"DISPARAR {loaded}/{gun.Capacity} · {carried}";
         }
 
         /// <summary>Alone: one of this player's charges goes off; standing too near hurts.</summary>
@@ -1164,6 +1207,12 @@ namespace Oxfall.Game
                 case "nearest-barrel": FaceNearest(ResourceNodeType.Barrel); break;
                 case "nearest-sulfur": FaceNearest(ResourceNodeType.Sulfur); break;
                 case "satchel": HoldItem(ItemIds.SatchelCharge); break;
+                case "revolver": HoldItem(ItemIds.Revolver); break;
+                case "blunderbuss": HoldItem(ItemIds.Blunderbuss); break;
+                case "fire": _gatherer.UseOnce(); break;
+                case "reload":
+                    if (Firearms.IsGun(_hotbar.HeldTool) && _actions.ReloadGun(_hotbar.HeldTool)) _audio.Play(SoundCue.Reload);
+                    break;
                 case "throw": _thrower.Throw(); break;
                 case "nearest-berries": FaceNearest(ResourceNodeType.BerryBush); break;
                 case "quality-low": SetQuality(QualityTier.Low); break;
@@ -1188,6 +1237,12 @@ namespace Oxfall.Game
                     break;
                 case "give-raid":
                     ServerWorld.GiveTestKit(_inventory, 1);
+                    break;
+                case "give-guns" when _actions.Online:
+                    _net.SendAct(ActKind.DevGive, 2);
+                    break;
+                case "give-guns":
+                    ServerWorld.GiveTestKit(_inventory, 2);
                     break;
                 case "give":
                     _inventory.Add(ItemIds.Wood, 1000);
@@ -1305,6 +1360,7 @@ namespace Oxfall.Game
                               $"locks={_lockViews.Count} keypad={(_keypad.IsOpen ? _keypad.Current.ToString() : "closed")} " +
                               $"metal={_inventory.Count(ItemIds.MetalFragments)} animals={_animalViews.Count} sleepers={_sleeperViews.Count} arrows={_inventory.Count(ItemIds.Arrow)} armour={Mathf.RoundToInt(_inventory.Protection * 100f)} " +
                               $"satchels={_inventory.Count(ItemIds.SatchelCharge)} charges={_explosions.Live} sulfur={_inventory.Count(ItemIds.Sulfur)} " +
+                              $"shells={_inventory.Count(ItemIds.Shell)} bullets={_inventory.Count(ItemIds.PistolBullet)} " +
                               $"meat={_inventory.Count(ItemIds.RawMeat)} cooked={_inventory.Count(ItemIds.CookedMeat)} leather={_inventory.Count(ItemIds.Leather)} " +
                               $"pos={_player.transform.position} quality={GraphicsQuality.Name(_quality.Tier)} " +
                               $"screen={Screen.width}x{Screen.height} grass={_grass.BladeCount} " +
@@ -1569,6 +1625,21 @@ namespace Oxfall.Game
 
             // Charges thrown alone burn down here (online the server sets them off).
             _actions?.TickCharges();
+            // The gun in hand: its rounds and reloading show on the attack button, and reload when it has room.
+            if (_hotbar != null && _actions != null && Firearms.TryGet(_hotbar.HeldTool, out var heldGun))
+            {
+                string label = GunLabel(heldGun);
+                if (label != _gunLabel)
+                {
+                    _gunLabel = label;
+                    _hud.SetAttackLabel(label);
+                }
+                var state = _actions.GunState(heldGun.Tool);
+                int carried = _inventory.Count(heldGun.Ammo);
+                _hud.SetReloadButton(heldGun.Capacity > 1 && carried > 0 && !state.Reloading(Time.time)
+                                     && state.Loaded(heldGun, Time.time) < Mathf.Min(heldGun.Capacity, carried));
+            }
+            else _hud?.SetReloadButton(false);
             // Trees and rocks grow back on their own timers; checking once a second is plenty.
             _crafting?.Tick(Time.deltaTime);
             // Furnaces burn here alone; online the server burns them and says what came out.

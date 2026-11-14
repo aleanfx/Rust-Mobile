@@ -71,7 +71,10 @@ const stamp = () => ((Date.now() - t0) / 1000).toFixed(1).padStart(6);
   await page.evaluate(() => { const c = document.querySelector('canvas'); if (c) { c.setAttribute('tabindex', '0'); c.focus(); } });
   await cmd('quality-high', 2500);
   await cmd('give-all', 1200);
+  // The kit fills the backpack: wear the hide and set a box down to make room for the charges.
+  await cmd('wear-hide', 1000);
   await cmd('give-raid', 1200);
+  await cmd('stats', 600);
   await cmd('time-12', 1500);
 
   // Sulfur on the map, and the charge in the crafting menu.

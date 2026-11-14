@@ -364,6 +364,94 @@ namespace Oxfall.Game.World
             return b.Build("SatchelCharge", 45f);
         }
 
+        /// <summary>Where the blunderbuss's muzzle is, and the revolver's (both point along +X).</summary>
+        public static readonly Vector3 BlunderbussMuzzle = new Vector3(0.48f, 0.04f, 0f);
+        public static readonly Vector3 RevolverMuzzle = new Vector3(0.205f, 0.048f, 0f);
+
+        /// <summary>
+        /// A pipe shotgun: a wooden stock, a steel pipe bound to it with rope that flares at the
+        /// muzzle, a flint lock and a trigger. Points along +X, the grip at the origin. Submeshes:
+        /// wood, metal, rope, the dark bore.
+        /// </summary>
+        public static Mesh Blunderbuss()
+        {
+            var b = new FlatMeshBuilder(4) { UvScale = 0.25f };
+            const float w = 0.021f;
+            // The stock: the butt, sloping down to the shoulder, then the wrist into the body.
+            b.AddPrism(0, -w, w, new Vector2(-0.46f, -0.125f), new Vector2(-0.3f, -0.07f), new Vector2(-0.3f, 0.02f), new Vector2(-0.46f, -0.01f));
+            b.AddPrism(0, -w, w, new Vector2(-0.3f, -0.07f), new Vector2(-0.08f, -0.05f), new Vector2(0.02f, -0.03f), new Vector2(0.02f, 0.03f), new Vector2(-0.3f, 0.02f));
+            // The fore-end under the pipe.
+            b.AddBox(0, new Vector3(0.02f, -0.026f, -0.019f), new Vector3(0.3f, 0.016f, 0.019f));
+            // The pipe, flaring into a bell at the muzzle.
+            b.AddTube(1, new Vector3(-0.06f, 0.04f, 0f), new Vector3(0.4f, 0.04f, 0f), 0.022f, 0.022f, 10, 3);
+            b.AddTube(1, new Vector3(0.4f, 0.04f, 0f), BlunderbussMuzzle, 0.022f, 0.035f, 10, 3);
+            // Rope bands holding pipe and stock together.
+            b.AddBox(2, new Vector3(0.08f, -0.031f, -0.026f), new Vector3(0.11f, 0.067f, 0.026f));
+            b.AddBox(2, new Vector3(0.24f, -0.031f, -0.026f), new Vector3(0.27f, 0.067f, 0.026f));
+            // The lock plate, its hammer, the trigger and its guard.
+            b.AddBox(1, new Vector3(-0.075f, 0.012f, -0.024f), new Vector3(0.0f, 0.048f, 0.024f));
+            b.AddBox(1, new Vector3(-0.095f, 0.04f, -0.006f), new Vector3(-0.074f, 0.088f, 0.006f));
+            b.AddBox(1, new Vector3(-0.125f, -0.078f, -0.005f), new Vector3(-0.045f, -0.068f, 0.005f));
+            b.AddBox(1, new Vector3(-0.098f, -0.068f, -0.003f), new Vector3(-0.09f, -0.036f, 0.003f));
+            return b.Build("Blunderbuss", 40f);
+        }
+
+        /// <summary>
+        /// A six-shot revolver: a wooden grip, a steel frame, a fluted cylinder, a long barrel with a
+        /// rib and a front sight, a hammer and a trigger guard. Points along +X. Submeshes: wood, metal,
+        /// brass (the rounds in the cylinder), the dark bore.
+        /// </summary>
+        public static Mesh Revolver()
+        {
+            var b = new FlatMeshBuilder(4) { UvScale = 0.1f };
+            b.AddPrism(0, -0.017f, 0.017f, new Vector2(-0.135f, -0.115f), new Vector2(-0.08f, -0.122f), new Vector2(-0.035f, -0.006f),
+                new Vector2(-0.05f, 0.025f), new Vector2(-0.106f, 0.02f));
+            b.AddPrism(1, -0.012f, 0.012f, new Vector2(-0.112f, 0.0f), new Vector2(0.03f, 0.0f), new Vector2(0.03f, 0.056f),
+                new Vector2(-0.09f, 0.066f), new Vector2(-0.118f, 0.032f));
+            // The cylinder, and the backs of the rounds in it.
+            b.AddTube(1, new Vector3(-0.036f, 0.04f, 0f), new Vector3(0.026f, 0.04f, 0f), 0.026f, 0.026f, 12, 1);
+            for (int i = 0; i < 6; i++)
+            {
+                float a = i * Mathf.PI / 3f + Mathf.PI / 6f;
+                var at = new Vector3(-0.0365f, 0.04f + Mathf.Cos(a) * 0.015f, Mathf.Sin(a) * 0.015f);
+                b.AddTube(2, at, at + new Vector3(0.004f, 0f, 0f), 0.006f, 0.006f, 6, 2);
+            }
+            b.AddTube(1, new Vector3(0.026f, 0.048f, 0f), RevolverMuzzle, 0.011f, 0.011f, 10, 3);
+            b.AddBox(1, new Vector3(0.026f, 0.05f, -0.005f), new Vector3(0.2f, 0.062f, 0.005f));
+            b.AddBox(1, new Vector3(0.186f, 0.062f, -0.002f), new Vector3(0.196f, 0.074f, 0.002f));
+            b.AddBox(1, new Vector3(-0.108f, 0.055f, -0.004f), new Vector3(-0.088f, 0.086f, 0.004f));
+            b.AddBox(1, new Vector3(-0.062f, -0.036f, -0.004f), new Vector3(-0.004f, -0.029f, 0.004f));
+            b.AddBox(1, new Vector3(-0.008f, -0.036f, -0.004f), new Vector3(-0.001f, 0.0f, 0.004f));
+            b.AddBox(1, new Vector3(-0.042f, -0.03f, -0.003f), new Vector3(-0.035f, 0.0f, 0.003f));
+            return b.Build("Revolver", 40f);
+        }
+
+        /// <summary>Three handmade shells standing together: red paper tubes on brass heads.</summary>
+        public static Mesh Shells()
+        {
+            var b = new FlatMeshBuilder(2) { UvScale = 0.05f };
+            var at = new[] { new Vector3(-0.016f, 0f, 0f), new Vector3(0.016f, 0f, 0.004f), new Vector3(0f, 0f, -0.024f) };
+            foreach (var p in at)
+            {
+                b.AddTube(1, p, p + new Vector3(0f, 0.016f, 0f), 0.0125f, 0.0125f, 12, 1);
+                b.AddTube(0, p + new Vector3(0f, 0.016f, 0f), p + new Vector3(0f, 0.066f, 0f), 0.0118f, 0.0118f, 12, 0);
+            }
+            return b.Build("Shells", 40f);
+        }
+
+        /// <summary>A few pistol rounds: brass cases with grey lead tips.</summary>
+        public static Mesh PistolRounds()
+        {
+            var b = new FlatMeshBuilder(2) { UvScale = 0.05f };
+            var at = new[] { new Vector3(-0.012f, 0f, 0f), new Vector3(0.012f, 0f, 0.003f), new Vector3(0f, 0f, -0.018f), new Vector3(0.026f, 0f, -0.016f) };
+            foreach (var p in at)
+            {
+                b.AddTube(0, p, p + new Vector3(0f, 0.024f, 0f), 0.0058f, 0.0058f, 10, 0);
+                b.AddTube(1, p + new Vector3(0f, 0.024f, 0f), p + new Vector3(0f, 0.036f, 0f), 0.0056f, 0.0012f, 10, 1);
+            }
+            return b.Build("PistolRounds", 40f);
+        }
+
         /// <summary>A broken lump about a metre across (scaled down for rubble), faceted like a fresh break.</summary>
         public static Mesh Rubble(int seed)
         {

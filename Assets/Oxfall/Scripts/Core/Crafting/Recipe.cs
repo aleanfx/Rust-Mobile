@@ -133,6 +133,15 @@ namespace Oxfall.Core.Crafting
                 new Ingredient(ItemIds.Charcoal, 30), new Ingredient(ItemIds.Sulfur, 20)),
             new Recipe("satchel_charge", ItemIds.SatchelCharge, 1, 15f,
                 new Ingredient(ItemIds.Gunpowder, 40), new Ingredient(ItemIds.Cloth, 10), new Ingredient(ItemIds.MetalFragments, 20)),
+            // Guns: a crude shotgun first, then a revolver; their rounds are mostly gunpowder.
+            new Recipe("blunderbuss", ItemIds.Blunderbuss, 1, 20f,
+                new Ingredient(ItemIds.Wood, 150), new Ingredient(ItemIds.MetalFragments, 100), new Ingredient(ItemIds.Cloth, 20)),
+            new Recipe("revolver", ItemIds.Revolver, 1, 30f,
+                new Ingredient(ItemIds.MetalFragments, 250), new Ingredient(ItemIds.Wood, 50), new Ingredient(ItemIds.Cloth, 30)),
+            new Recipe("handmade_shells", ItemIds.Shell, 2, 5f,
+                new Ingredient(ItemIds.Gunpowder, 5), new Ingredient(ItemIds.Stone, 10)),
+            new Recipe("pistol_bullets", ItemIds.PistolBullet, 4, 5f,
+                new Ingredient(ItemIds.Gunpowder, 10), new Ingredient(ItemIds.MetalFragments, 10)),
         });
     }
 }

@@ -67,6 +67,8 @@ namespace Oxfall.Game.UI
         public RectTransform PieceButton { get; private set; }
         public RectTransform UseButton { get; private set; }
         public RectTransform LockButton { get; private set; }
+        /// <summary>With a gun in hand that is not full: reload it now.</summary>
+        public RectTransform ReloadButton { get; private set; }
 
         /// <summary>The area clear of notches and rounded corners; everything on screen hangs from it.</summary>
         public RectTransform SafeArea => _safeArea;
@@ -83,6 +85,7 @@ namespace Oxfall.Game.UI
         public event System.Action PieceTapped;
         public event System.Action UseTapped;
         public event System.Action LockTapped;
+        public event System.Action ReloadTapped;
         public event System.Action CraftPanelOpened;
         /// <summary>A graphics level was chosen in settings: 0 low, 1 medium, 2 high.</summary>
         public event System.Action<int> QualityChosen;
@@ -241,7 +244,23 @@ namespace Oxfall.Game.UI
             TapTargets.Add(new TapTarget { Rect = LockButton, OnTap = () => LockTapped?.Invoke() });
             LockButton.gameObject.SetActive(false);
 
+            // Between jump and attack, with a gun in hand that has room for more: reload now.
+            ReloadButton = UiFactory.NewRect("Reload", _safeArea, bottomRight, centre, new Vector2(-410f, 312f), new Vector2(112f, 112f));
+            UiFactory.AddImage(ReloadButton, UiFactory.Circle, UiTheme.Button);
+            AddRing(ReloadButton, 112f);
+            UiFactory.AddIcon(ReloadButton, Icons.Reload, new Vector2(0f, 10f), 46f, UiTheme.Text);
+            var reloadLabel = UiFactory.NewRect("Label", ReloadButton, centre, centre, new Vector2(0f, -31f), new Vector2(112f, 26f));
+            UiFactory.AddText(reloadLabel, "RECARGAR", 17, TextAnchor.MiddleCenter, UiTheme.TextMuted, true);
+            TapTargets.Add(new TapTarget { Rect = ReloadButton, OnTap = () => ReloadTapped?.Invoke() });
+            ReloadButton.gameObject.SetActive(false);
+
             BuildSettings();
+        }
+
+        /// <summary>Shows or hides the reload button.</summary>
+        public void SetReloadButton(bool show)
+        {
+            if (ReloadButton.gameObject.activeSelf != show) ReloadButton.gameObject.SetActive(show);
         }
 
         // ---- Small pieces

@@ -99,6 +99,67 @@ namespace Oxfall.Game.Net
 
         private readonly System.Collections.Generic.Queue<Vector3> _shots = new System.Collections.Generic.Queue<Vector3>();
 
+        // ---- Guns
+
+        private readonly System.Collections.Generic.Dictionary<ToolKind, GunState> _guns = new System.Collections.Generic.Dictionary<ToolKind, GunState>();
+        private GunSpec _lastGun;
+        private Vector3 _lastGunFrom;
+        private float _lastGunAt = float.NegativeInfinity;
+
+        /// <summary>This player's gun of this kind: rounds in it, and whether it is being reloaded (on this phone's clock).</summary>
+        public GunState GunState(ToolKind tool)
+        {
+            if (!_guns.TryGetValue(tool, out var state)) _guns[tool] = state = new GunState();
+            return state;
+        }
+
+        /// <summary>
+        /// Fires the gun of this kind from where, which way, with the seed of its spray: carried, a round for
+        /// it, loaded and not too fast. The round is spent (online, by the server, which may still refuse).
+        /// </summary>
+        public bool Fire(ToolKind tool, Vector3 origin, float yaw, float pitch, ushort seed)
+        {
+            if (!Firearms.TryGet(tool, out var gun) || _survivor.Vitals.IsDead || !_survivor.HasTool(tool) || Inventory.Count(gun.Ammo) < 1) return false;
+            var state = GunState(tool);
+            if (!state.CanFire(gun, Time.time)) return false;
+            state.Fire(gun, Time.time);
+            if (Online)
+            {
+                _net.SendFire(tool, origin, yaw, pitch, seed);
+                return true;
+            }
+            Inventory.Remove(gun.Ammo, 1);
+            _lastGun = gun;
+            _lastGunFrom = origin;
+            _lastGunAt = Time.time;
+            return true;
+        }
+
+        /// <summary>Some pellets of this player's last shot hit something (a player online, an animal, a sleeper).</summary>
+        public void GunHit(ArrowTarget kind, int target, int pellets)
+        {
+            if (Online)
+            {
+                _net.SendGunHit(kind, target, pellets);
+                return;
+            }
+            if (_lastGun == null || Time.time - _lastGunAt > 1f) return;
+            if (kind != ArrowTarget.Animal || Fauna == null || !Fauna.TryGet(target, out var animal) || animal.IsDead) return;
+            float distance = Vector2.Distance(new Vector2(_lastGunFrom.x, _lastGunFrom.z), new Vector2(animal.X, animal.Z));
+            float amount = Firearms.Damage(_lastGun, pellets, distance);
+            float damage = Mathf.Min(amount, animal.Health);
+            bool killed = Fauna.Hit(target, amount, 0, _lastGunFrom.x, _lastGunFrom.z);
+            AnimalHit?.Invoke(target, killed ? AnimalBlow.Killed : AnimalBlow.Hurt, damage);
+        }
+
+        /// <summary>Reloads the gun of this kind before it is empty. False if it is full or already being reloaded.</summary>
+        public bool ReloadGun(ToolKind tool)
+        {
+            if (!Firearms.TryGet(tool, out var gun) || Inventory.Count(gun.Ammo) < 1 || !GunState(tool).Reload(gun, Time.time)) return false;
+            if (Online) _net.SendReload(tool);
+            return true;
+        }
+
         // ---- Satchel charges
 
         private readonly System.Collections.Generic.List<LiveCharge> _charges = new System.Collections.Generic.List<LiveCharge>();

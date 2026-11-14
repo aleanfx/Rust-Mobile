@@ -113,6 +113,11 @@ namespace Oxfall.Game.Rendering
         /// <summary>A satchel charge's olive canvas.</summary>
         public Material Satchel { get; }
 
+        /// <summary>Guns: blued steel, the brass of a cartridge, and a shell's red paper.</summary>
+        public Material GunMetal { get; }
+        public Material Brass { get; }
+        public Material ShellPaper { get; }
+
         /// <summary>Blasts: the fireball (additive) and the smoke and dust (alpha-blended), each puff tinted as it goes.</summary>
         public Material Fireball { get; }
         public Material Smoke { get; }
@@ -238,6 +243,11 @@ namespace Oxfall.Game.Rendering
             Sulfur = Make("Sulfur", new Color(0.86f, 0.74f, 0.16f), 0.45f);
             Gunpowder = Make("Gunpowder", new Color(0.16f, 0.16f, 0.17f), 0.12f);
             Satchel = Make("Satchel", new Color(0.33f, 0.34f, 0.22f), 0.06f);
+            GunMetal = Make("Gun metal", new Color(0.16f, 0.17f, 0.19f), 0.62f);
+            GunMetal.SetFloat(Metallic, 0.7f);
+            Brass = Make("Brass", new Color(0.72f, 0.55f, 0.26f), 0.66f);
+            Brass.SetFloat(Metallic, 0.75f);
+            ShellPaper = Make("Shell paper", new Color(0.55f, 0.13f, 0.1f), 0.22f);
             var fireball = Resources.Load<Material>("OxfallFireball");
             var smoke = Resources.Load<Material>("OxfallSmoke");
             HasPuffs = fireball != null && smoke != null;

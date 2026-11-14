@@ -54,5 +54,9 @@ namespace Oxfall.Core.Items
 
         // Raiding
         public const string SatchelCharge = "satchel_charge";
+        public const string Blunderbuss = "blunderbuss";
+        public const string Revolver = "revolver";
+        public const string Shell = "handmade_shell";
+        public const string PistolBullet = "pistol_bullet";
     }
 }

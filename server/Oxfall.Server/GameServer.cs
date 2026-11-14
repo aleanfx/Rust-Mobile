@@ -387,6 +387,41 @@ namespace Oxfall.Server
                     }
                     break;
                 }
+                case MessageType.Fire:
+                {
+                    Messages.ReadFire(reader, out var tool, out float x, out float y, out float z, out float yaw, out float pitch, out ushort seed);
+                    if (!_world.Fire(id, tool, x, y, z, yaw, pitch, now)) break;
+                    // Everyone else sees the flash and hears the bang (the shooter already did).
+                    Messages.Gunshot(writer, id, tool, x, y, z, yaw, pitch, seed);
+                    var shot = writer.ToArray();
+                    foreach (var other in _sessions.Values)
+                        if (other.Id != id) other.Connection.Send(shot);
+                    break;
+                }
+                case MessageType.GunHit:
+                {
+                    Messages.ReadGunHit(reader, out var kind, out int target, out int pellets);
+                    if (!_world.GunHit(id, kind, target, pellets, now, out float damage, out bool killed, out var blow)) break;
+                    if (kind == ArrowTarget.Player)
+                    {
+                        Messages.Hurt(writer, (ushort)target, id, damage, killed);
+                        Broadcast(writer.ToArray());
+                    }
+                    else if (kind == ArrowTarget.Sleeper)
+                    {
+                        Messages.SleeperHit(writer, target, id, session.Record.Name, damage, killed);
+                        Broadcast(writer.ToArray());
+                    }
+                    else
+                    {
+                        Messages.AnimalHit(writer, target, blow, damage);
+                        session.Connection.Send(writer.ToArray());
+                    }
+                    break;
+                }
+                case MessageType.Reload:
+                    _world.ReloadGun(id, Messages.ReadReload(reader), now);
+                    break;
                 case MessageType.Throw:
                 {
                     Messages.ReadThrow(reader, out var target, out float x, out float y, out float z, out float nx, out float ny, out float nz);

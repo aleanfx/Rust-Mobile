@@ -127,6 +127,9 @@ namespace Oxfall.Game.Net
         /// <summary>A charge went off: its id and where.</summary>
         public event Action<int, Vector3> Blasted;
 
+        /// <summary>Someone else fired a gun: who, which kind, from where, which way (yaw, pitch) and the seed of its spray.</summary>
+        public event Action<ushort, ToolKind, Vector3, float, float, ushort> Gunshot;
+
         private readonly List<(int, ItemStack)> _loot = new List<(int, ItemStack)>();
 
         private readonly List<(int Id, int Remaining)> _nodeStates = new List<(int, int)>();
@@ -176,6 +179,27 @@ namespace Oxfall.Game.Net
         {
             if (State != Status.Online || _socket == null) return;
             Messages.Throw(_writer, target, at.x, at.y, at.z, normal.x, normal.y, normal.z);
+            _socket.Send(_writer.Buffer, _writer.Length);
+        }
+
+        public void SendFire(ToolKind tool, Vector3 origin, float yaw, float pitch, ushort seed)
+        {
+            if (State != Status.Online || _socket == null) return;
+            Messages.Fire(_writer, tool, origin.x, origin.y, origin.z, yaw, pitch, seed);
+            _socket.Send(_writer.Buffer, _writer.Length);
+        }
+
+        public void SendGunHit(ArrowTarget kind, int target, int pellets)
+        {
+            if (State != Status.Online || _socket == null) return;
+            Messages.GunHit(_writer, kind, target, pellets);
+            _socket.Send(_writer.Buffer, _writer.Length);
+        }
+
+        public void SendReload(ToolKind tool)
+        {
+            if (State != Status.Online || _socket == null) return;
+            Messages.Reload(_writer, tool);
             _socket.Send(_writer.Buffer, _writer.Length);
         }
 
@@ -469,6 +493,13 @@ namespace Oxfall.Game.Net
                 {
                     var charge = Messages.ReadChargeArmed(reader, out float left);
                     ChargeArmed?.Invoke(charge, left);
+                    break;
+                }
+                case MessageType.Gunshot:
+                {
+                    Messages.ReadGunshot(reader, out ushort shooter, out var tool, out float gx, out float gy, out float gz,
+                        out float yaw, out float pitch, out ushort seed);
+                    if (shooter != PlayerId) Gunshot?.Invoke(shooter, tool, new Vector3(gx, gy, gz), yaw, pitch, seed);
                     break;
                 }
                 case MessageType.Blast:

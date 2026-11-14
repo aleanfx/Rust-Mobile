@@ -39,6 +39,10 @@ namespace Oxfall.Core.Items
         Bow,
         /// <summary>A satchel charge: thrown at a wall or a door, it goes off a few seconds later.</summary>
         Explosive,
+        /// <summary>A gun that fires a spray of shot (handmade shells), one at a time.</summary>
+        Shotgun,
+        /// <summary>A gun that fires one bullet at a time, six before it is reloaded.</summary>
+        Revolver,
     }
 
     /// <summary>

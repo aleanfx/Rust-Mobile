@@ -35,6 +35,10 @@ namespace Oxfall.Game.Items
 
         /// <summary>Whether it is drawn and loosed (a bow) rather than swung.</summary>
         public bool Shoots;
+
+        /// <summary>Whether it is a gun (attack fires it), and where its muzzle is on the model.</summary>
+        public bool Fires;
+        public Vector3 Muzzle;
     }
 
     /// <summary>
@@ -250,6 +254,43 @@ namespace Oxfall.Game.Items
                     IconRotation = Quaternion.AngleAxis(-45f, Vector3.forward) * Quaternion.AngleAxis(90f, Vector3.up),
                     IconZoom = 1.25f,
                     Shoots = true,
+                },
+                // Guns: modelled along +X, turned to point ahead, held low on the right like a hip shot.
+                [ItemIds.Blunderbuss] = new ItemModel
+                {
+                    Mesh = MeshFactory.Blunderbuss(),
+                    Materials = new[] { m.Planks, m.GunMetal, m.Rope, m.Char },
+                    ShowInHand = true,
+                    HandPosition = new Vector3(0.19f, -0.2f, 0.36f),
+                    HandRotation = Quaternion.Euler(0f, -91.5f, 0f),
+                    IconRotation = Quaternion.AngleAxis(12f, Vector3.forward),
+                    IconZoom = 1.15f,
+                    Fires = true,
+                    Muzzle = MeshFactory.BlunderbussMuzzle,
+                },
+                [ItemIds.Revolver] = new ItemModel
+                {
+                    Mesh = MeshFactory.Revolver(),
+                    Materials = new[] { m.Planks, m.GunMetal, m.Brass, m.Char },
+                    ShowInHand = true,
+                    HandPosition = new Vector3(0.16f, -0.17f, 0.34f),
+                    HandRotation = Quaternion.Euler(0f, -92f, 0f),
+                    IconRotation = Quaternion.AngleAxis(8f, Vector3.forward),
+                    IconZoom = 1.1f,
+                    Fires = true,
+                    Muzzle = MeshFactory.RevolverMuzzle,
+                },
+                [ItemIds.Shell] = new ItemModel
+                {
+                    Mesh = MeshFactory.Shells(),
+                    Materials = new[] { m.ShellPaper, m.Brass },
+                    IconRotation = Tilt(-25f, 20f),
+                },
+                [ItemIds.PistolBullet] = new ItemModel
+                {
+                    Mesh = MeshFactory.PistolRounds(),
+                    Materials = new[] { m.Brass, m.Metal },
+                    IconRotation = Tilt(-25f, 20f),
                 },
                 [ItemIds.Arrow] = new ItemModel
                 {

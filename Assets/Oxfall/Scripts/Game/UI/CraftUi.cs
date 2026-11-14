@@ -49,6 +49,10 @@ namespace Oxfall.Game.UI
                 case ItemIds.Arrow:
                 case ItemIds.Gunpowder:
                 case ItemIds.SatchelCharge:
+                case ItemIds.Blunderbuss:
+                case ItemIds.Revolver:
+                case ItemIds.Shell:
+                case ItemIds.PistolBullet:
                     return 1;
                 case ItemIds.BurlapHeadwrap:
                 case ItemIds.BurlapShirt:

@@ -91,6 +91,14 @@ namespace Oxfall.Core.Items
             new ItemDefinition(ItemIds.SatchelCharge, "Carga explosiva", ItemCategory.Tool, 10, ToolKind.Explosive,
                 description: "Lánzala a una pared o una puerta: explota a los 5 segundos. Madera: 2 cargas; piedra: 4; metal: 8. "
                     + "Puerta de madera: 1; de chapa: 2. Rompe también cajas y armarios cercanos si no hay pared en medio. Aléjate."),
+            new ItemDefinition(ItemIds.Blunderbuss, "Trabuco", ItemCategory.Tool, 1, ToolKind.Shotgun, skinnable: true,
+                description: "Un tubo de metal sobre una culata: un tiro de perdigones que tumba a cualquiera de cerca y poco hace de lejos. Usa cartuchos."),
+            new ItemDefinition(ItemIds.Revolver, "Revólver", ItemCategory.Tool, 1, ToolKind.Revolver, skinnable: true,
+                description: "Seis tiros antes de recargar, certero a media distancia. Usa balas de pistola."),
+            new ItemDefinition(ItemIds.Shell, "Cartucho", ItemCategory.Ammo, 64,
+                description: "Pólvora y piedras en un tubo de tela: munición del trabuco."),
+            new ItemDefinition(ItemIds.PistolBullet, "Bala de pistola", ItemCategory.Ammo, 128,
+                description: "Pólvora y una punta de metal: munición del revólver."),
             new ItemDefinition(ItemIds.Arrow, "Flecha", ItemCategory.Ammo, 64,
                 description: "Madera con punta de piedra. El arco las gasta una a una."),
 

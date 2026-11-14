@@ -183,6 +183,9 @@ namespace Oxfall.Core.Net
                 record.Survivor.Looting = 0;
                 _online.Remove(playerId);
                 _arrows.Remove(playerId);
+                _lastShot.Remove(playerId);
+                _guns.Remove((playerId, ToolKind.Shotgun));
+                _guns.Remove((playerId, ToolKind.Revolver));
                 // Alive, they fall asleep where they stood.
                 if (!record.Survivor.Vitals.IsDead) SleepersChanged = true;
             }
@@ -336,6 +339,14 @@ namespace Oxfall.Core.Net
         /// </summary>
         public static void GiveTestKit(Inventory inventory, int kit = 0)
         {
+            if (kit == 2)
+            {
+                inventory.Add(ItemIds.Blunderbuss, 1);
+                inventory.Add(ItemIds.Revolver, 1);
+                inventory.Add(ItemIds.Shell, 40);
+                inventory.Add(ItemIds.PistolBullet, 60);
+                return;
+            }
             if (kit == 1)
             {
                 inventory.Add(ItemIds.SatchelCharge, 8);

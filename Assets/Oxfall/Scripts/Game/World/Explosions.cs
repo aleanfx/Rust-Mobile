@@ -62,7 +62,8 @@ namespace Oxfall.Game.World
         private readonly Stack<Puff> _freePuffs = new Stack<Puff>();
         private readonly List<Chunk> _chunks = new List<Chunk>();
         private readonly Stack<Chunk> _freeChunks = new Stack<Chunk>();
-        private readonly List<(Light Light, float Age, float Peak)> _flashes = new List<(Light, float, float)>();
+        private readonly List<(Light Light, float Age, float Peak, float Rate, float Life)> _flashes = new List<(Light, float, float, float, float)>();
+        private float _punch;
         private readonly List<(Vector3 At, float Time)> _recent = new List<(Vector3, float)>();
         private readonly List<int> _scratch = new List<int>();
         private MaterialPropertyBlock _block;
@@ -195,7 +196,7 @@ namespace Oxfall.Game.World
             flash.range = 22f;
             flash.intensity = 9f;
             flash.shadows = LightShadows.None;
-            _flashes.Add((flash, 0f, 9f));
+            _flashes.Add((flash, 0f, 9f, 6f, 0.7f));
 
             if (_puffsReal)
             {
@@ -297,37 +298,106 @@ namespace Oxfall.Game.World
             TickChunks(dt);
             for (int i = _flashes.Count - 1; i >= 0; i--)
             {
-                var (light, age, peak) = _flashes[i];
+                var (light, age, peak, rate, life) = _flashes[i];
                 age += dt;
-                if (age >= 0.7f || light == null)
+                if (age >= life || light == null)
                 {
                     if (light != null) Destroy(light.gameObject);
                     _flashes.RemoveAt(i);
                     continue;
                 }
-                light.intensity = peak * Mathf.Exp(-age * 6f);
-                _flashes[i] = (light, age, peak);
+                light.intensity = peak * Mathf.Exp(-age * rate);
+                _flashes[i] = (light, age, peak, rate, life);
             }
         }
 
         private void LateUpdate()
         {
             if (_camera == null || _camera.parent == null) return;
-            if (_shake <= 0.001f)
+            if (_shake <= 0.001f && _punch <= 0.01f)
             {
-                if (_shake > 0f)
+                if (_shake > 0f || _punch > 0f)
                 {
                     _shake = 0f;
+                    _punch = 0f;
                     _camera.localRotation = Quaternion.identity;
                     _camera.localPosition = Vector3.zero;
                 }
                 return;
             }
             float t = Time.time * 32f, s = _shake * _shake;
-            _camera.localRotation = Quaternion.Euler((Mathf.PerlinNoise(t, 1.3f) - 0.5f) * 5f * s,
+            // A gun's kick: the view jumps up and settles back at once.
+            _camera.localRotation = Quaternion.Euler((Mathf.PerlinNoise(t, 1.3f) - 0.5f) * 5f * s - _punch,
                 (Mathf.PerlinNoise(2.7f, t) - 0.5f) * 5f * s, (Mathf.PerlinNoise(t, 7.1f) - 0.5f) * 3f * s);
             _camera.localPosition = new Vector3(Mathf.PerlinNoise(t, 4.4f) - 0.5f, Mathf.PerlinNoise(5.5f, t) - 0.5f, 0f) * 0.12f * s;
             _shake = Mathf.Max(0f, _shake - Time.deltaTime * 1.6f);
+            _punch *= Mathf.Exp(-Time.deltaTime * 14f);
+        }
+
+        // ---- Guns
+
+        /// <summary>The view kicks up this many degrees and settles back (a gun just fired).</summary>
+        public void Punch(float degrees) => _punch = Mathf.Max(_punch, degrees);
+
+        /// <summary>
+        /// A gun fired at <paramref name="at"/> (its muzzle) along <paramref name="forward"/>: a flash of
+        /// light, a tongue of fire out of the muzzle, and smoke that drifts off; bigger for a shotgun.
+        /// </summary>
+        public void MuzzleFlash(Vector3 at, Vector3 forward, bool big)
+        {
+            var flash = new GameObject("Muzzle flash").AddComponent<Light>();
+            flash.transform.position = at + forward * 0.15f;
+            flash.type = LightType.Point;
+            flash.color = new Color(1f, 0.78f, 0.45f);
+            flash.range = big ? 9f : 7f;
+            flash.intensity = big ? 5f : 3.5f;
+            flash.shadows = LightShadows.None;
+            _flashes.Add((flash, 0f, flash.intensity, 40f, 0.1f));
+            if (!_puffsReal) return;
+            int fire = big ? 4 : 2;
+            for (int i = 0; i < fire; i++)
+            {
+                float along = (i + 1f) / fire;
+                Spawn(true, at + forward * (0.04f + 0.12f * along * (big ? 1.4f : 1f)), forward * Random.Range(1f, 3f), Random.Range(0.05f, 0.08f),
+                    (big ? 0.16f : 0.1f) * (1.2f - along * 0.5f), (big ? 0.26f : 0.16f) * (1.2f - along * 0.5f),
+                    new Color(1f, 0.85f, 0.55f, 1f), new Color(1f, 0.45f, 0.1f, 0f), 6f, 0f, 0f, 0f);
+            }
+            int smoke = big ? 5 : 2;
+            for (int i = 0; i < smoke; i++)
+                Spawn(false, at + forward * Random.Range(0.05f, 0.3f), forward * Random.Range(0.6f, 2.2f) + Random.insideUnitSphere * 0.3f,
+                    Random.Range(0.9f, 1.6f), big ? 0.18f : 0.1f, big ? 0.9f : 0.5f,
+                    new Color(0.62f, 0.6f, 0.57f, big ? 0.45f : 0.32f), new Color(0.75f, 0.74f, 0.72f, 0f), 2.4f, 0.35f, 0f, 0f);
+        }
+
+        /// <summary>A bullet or a pellet streaking from <paramref name="from"/> to <paramref name="to"/>: a hot spark that flies there.</summary>
+        public void Bullet(Vector3 from, Vector3 to)
+        {
+            var path = to - from;
+            float length = path.magnitude;
+            if (length < 1.5f || !_puffsReal) return;
+            const float speed = 260f;
+            Spawn(true, from + path / length * 1.2f, path / length * speed, (length - 1.2f) / speed, 0.035f, 0.03f,
+                new Color(1f, 0.85f, 0.55f, 0.9f), new Color(1f, 0.6f, 0.25f, 0.5f), 0f, 0f, 0f, 0f);
+        }
+
+        /// <summary>Where a bullet struck: a puff of dust and a few chips off a hard surface, or a red mist off flesh.</summary>
+        public void Impact(Vector3 at, Vector3 normal, bool flesh)
+        {
+            if (_puffsReal)
+            {
+                if (flesh)
+                    Spawn(false, at + normal * 0.05f, normal * 0.6f + Random.insideUnitSphere * 0.3f, 0.35f, 0.12f, 0.35f,
+                        new Color(0.45f, 0.06f, 0.05f, 0.7f), new Color(0.4f, 0.08f, 0.06f, 0f), 5f, 0f, 1f, 0f);
+                else
+                {
+                    Spawn(false, at + normal * 0.05f, normal * Random.Range(1f, 2f) + Random.insideUnitSphere * 0.4f, Random.Range(0.6f, 1f),
+                        0.08f, 0.45f, new Color(0.5f, 0.46f, 0.4f, 0.55f), new Color(0.58f, 0.55f, 0.5f, 0f), 4f, 0.2f, 0f, 0f);
+                    Spawn(true, at + normal * 0.02f, (normal + Random.insideUnitSphere * 0.6f) * Random.Range(2f, 4f), 0.12f, 0.03f, 0.015f,
+                        new Color(1f, 0.8f, 0.45f, 1f), new Color(1f, 0.4f, 0.1f, 0f), 1f, 0f, 9f, 0f);
+                }
+            }
+            if (!flesh && Random.value < 0.6f)
+                SpawnChunk(at + normal * 0.03f, (normal + Random.insideUnitSphere * 0.5f) * Random.Range(1.5f, 3f), Random.Range(0.015f, 0.03f), _char);
         }
 
         private void TickArcs(float now)

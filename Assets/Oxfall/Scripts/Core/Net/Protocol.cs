@@ -12,7 +12,7 @@ namespace Oxfall.Core.Net
     public static class Protocol
     {
         /// <summary>Raised whenever a message changes shape; a client of another version is turned away.</summary>
-        public const ushort Version = 8;
+        public const ushort Version = 9;
 
         /// <summary>Snapshots per second the server sends.</summary>
         public const int TickRate = 20;
@@ -109,6 +109,12 @@ namespace Oxfall.Core.Net
         StrikeSleeper = 41,
         /// <summary>A satchel charge thrown: what it stuck to, where, and which way that surface faces.</summary>
         Throw = 42,
+        /// <summary>A gun fired: which kind, from where, which way (yaw and pitch, degrees), and the seed of its spray.</summary>
+        Fire = 43,
+        /// <summary>Pellets of the player's last shot hit something: what (a player, an animal, a sleeper), which, how many.</summary>
+        GunHit = 44,
+        /// <summary>The player reloads the gun of this kind before it is empty.</summary>
+        Reload = 45,
 
         // Server to client
         Welcome = 10,
@@ -149,6 +155,8 @@ namespace Oxfall.Core.Net
         ChargeArmed = 35,
         /// <summary>A charge went off: its id and where.</summary>
         Blast = 36,
+        /// <summary>Someone fired a gun: who, which kind, from where, which way and the seed of its spray (for everyone else).</summary>
+        Gunshot = 37,
     }
 
     /// <summary>What a player does to their own belongings (inside an <see cref="MessageType.Act"/> message).</summary>
@@ -871,6 +879,77 @@ namespace Oxfall.Core.Net
             z = r.Float();
             yaw = r.Float();
             pitch = r.Float();
+        }
+
+        // ---- Guns
+
+        public static void Fire(NetWriter w, Items.ToolKind tool, float x, float y, float z, float yaw, float pitch, ushort seed)
+        {
+            w.Reset();
+            w.Byte((byte)MessageType.Fire);
+            w.Byte((byte)tool);
+            w.Float(x);
+            w.Float(y);
+            w.Float(z);
+            w.Float(yaw);
+            w.Float(pitch);
+            w.UShort(seed);
+        }
+
+        public static void ReadFire(NetReader r, out Items.ToolKind tool, out float x, out float y, out float z, out float yaw, out float pitch, out ushort seed)
+        {
+            tool = (Items.ToolKind)r.Byte();
+            x = r.Float();
+            y = r.Float();
+            z = r.Float();
+            yaw = r.Float();
+            pitch = r.Float();
+            seed = r.UShort();
+        }
+
+        public static void GunHit(NetWriter w, Rules.ArrowTarget kind, int target, int pellets)
+        {
+            w.Reset();
+            w.Byte((byte)MessageType.GunHit);
+            w.Byte((byte)kind);
+            w.Int(target);
+            w.Byte((byte)Math.Max(0, Math.Min(255, pellets)));
+        }
+
+        public static void ReadGunHit(NetReader r, out Rules.ArrowTarget kind, out int target, out int pellets)
+        {
+            kind = (Rules.ArrowTarget)r.Byte();
+            target = r.Int();
+            pellets = r.Byte();
+        }
+
+        public static void Reload(NetWriter w, Items.ToolKind tool)
+        {
+            w.Reset();
+            w.Byte((byte)MessageType.Reload);
+            w.Byte((byte)tool);
+        }
+
+        public static Items.ToolKind ReadReload(NetReader r) => (Items.ToolKind)r.Byte();
+
+        public static void Gunshot(NetWriter w, ushort shooter, Items.ToolKind tool, float x, float y, float z, float yaw, float pitch, ushort seed)
+        {
+            w.Reset();
+            w.Byte((byte)MessageType.Gunshot);
+            w.UShort(shooter);
+            w.Byte((byte)tool);
+            w.Float(x);
+            w.Float(y);
+            w.Float(z);
+            w.Float(yaw);
+            w.Float(pitch);
+            w.UShort(seed);
+        }
+
+        public static void ReadGunshot(NetReader r, out ushort shooter, out Items.ToolKind tool, out float x, out float y, out float z, out float yaw, out float pitch, out ushort seed)
+        {
+            shooter = r.UShort();
+            ReadFire(r, out tool, out x, out y, out z, out yaw, out pitch, out seed);
         }
 
         // ---- Satchel charges

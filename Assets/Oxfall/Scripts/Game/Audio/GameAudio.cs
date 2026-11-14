@@ -23,6 +23,10 @@ namespace Oxfall.Game.Audio
         BowDraw,
         BowShot,
         Metal,
+        Revolver,
+        Shotgun,
+        Reload,
+        DryFire,
     }
 
     /// <summary>
@@ -138,6 +142,10 @@ namespace Oxfall.Game.Audio
                 case SoundCue.BowDraw: Shot(_bank.BowDraw, 0.5f, 0.05f); break;
                 case SoundCue.BowShot: Shot(_bank.BowShot, 0.9f, 0.06f); break;
                 case SoundCue.Metal: Shot(_bank.HitMetal, 0.75f, 0.08f); break;
+                case SoundCue.Revolver: Shot(_bank.RevolverShot, 1f, 0.05f); break;
+                case SoundCue.Shotgun: Shot(_bank.ShotgunShot, 1f, 0.05f); break;
+                case SoundCue.Reload: Shot(_bank.GunReload, 0.7f, 0f); break;
+                case SoundCue.DryFire: Shot(_bank.DryFire, 0.7f, 0.05f); break;
             }
         }
 
