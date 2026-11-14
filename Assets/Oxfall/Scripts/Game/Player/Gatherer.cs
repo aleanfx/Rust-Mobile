@@ -136,7 +136,7 @@ namespace Oxfall.Game.Player
 
             if (_input.Attack && _cooldown <= 0f && CanSwing)
             {
-                _cooldown = SwingSeconds;
+                _cooldown = Mathf.Max(SwingSeconds, Combat.SwingSeconds(_hotbar.HeldTool));
                 _swing = 0f;
                 Sound?.Invoke(SoundCue.Swing);
                 Strike();
@@ -162,13 +162,36 @@ namespace Oxfall.Game.Player
             else if (_hotbar.HeldDefinition?.Category == ItemCategory.Food) Eat(_hotbar.HeldDefinition);
         }
 
+        /// <summary>
+        /// Online, a blow that lands on another player goes to the server (their id, the tool in
+        /// hand), which judges it. Null when playing alone.
+        /// </summary>
+        public Action<ushort, ToolKind> StrikePlayer;
+
+        /// <summary>A blow that lands on an animal, living or a carcass (its id, the tool in hand).</summary>
+        public Action<int, ToolKind> StrikeAnimal;
+
         private void Strike()
         {
             var ray = new Ray(_head.position, _head.forward);
-            if (!Physics.SphereCast(ray, AimRadius, out var hit, Reach, Physics.DefaultRaycastLayers,
+            var tool = _hotbar.HeldTool;
+            if (!Physics.SphereCast(ray, AimRadius, out var hit, Mathf.Max(Reach, Combat.MeleeReach(tool)), Physics.DefaultRaycastLayers,
                     QueryTriggerInteraction.Collide))
             {
                 TryDrink();
+                return;
+            }
+
+            var player = hit.collider.GetComponent<Net.PlayerTag>();
+            if (player != null)
+            {
+                if (StrikePlayer != null && Combat.CanHurt(tool)) StrikePlayer(player.Id, tool);
+                return;
+            }
+            var animal = hit.collider.GetComponent<World.AnimalTag>();
+            if (animal != null)
+            {
+                StrikeAnimal?.Invoke(animal.Id, tool);
                 return;
             }
 
@@ -188,6 +211,7 @@ namespace Oxfall.Game.Player
             _text.Append("Comes ").Append(food.DisplayName.ToLowerInvariant());
             if (food.Nourishment.Food > 0f) _text.Append("   +").Append(Mathf.RoundToInt(food.Nourishment.Food)).Append(" comida");
             if (food.Nourishment.Water > 0f) _text.Append("   +").Append(Mathf.RoundToInt(food.Nourishment.Water)).Append(" agua");
+            else if (food.Nourishment.Water < 0f) _text.Append("   ").Append(Mathf.RoundToInt(food.Nourishment.Water)).Append(" agua");
             Message?.Invoke(_text.ToString());
         }
 
@@ -293,6 +317,14 @@ namespace Oxfall.Game.Player
             _swing += dt;
             float t = Mathf.Clamp01(_swing / (SwingSeconds * 0.6f));
             float arc = Mathf.Sin(t * Mathf.PI);
+            if (_held.Thrusts)
+            {
+                // A stab: quick out, slower back.
+                float stab = t < 0.35f ? Mathf.SmoothStep(0f, 1f, t / 0.35f) : 1f - Mathf.SmoothStep(0f, 1f, (t - 0.35f) / 0.65f);
+                _hand.localPosition = _held.HandPosition + new Vector3(-0.1f * stab, 0.05f * stab, 0.42f * stab);
+                _hand.localRotation = _held.HandRotation;
+                return;
+            }
             _hand.localPosition = _held.HandPosition + new Vector3(-0.08f * arc, -0.06f * arc, 0.22f * arc);
             _hand.localRotation = Quaternion.AngleAxis(55f * arc, Vector3.right) * _held.HandRotation;
         }

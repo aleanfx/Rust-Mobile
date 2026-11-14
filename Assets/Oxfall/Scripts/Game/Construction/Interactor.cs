@@ -66,6 +66,9 @@ namespace Oxfall.Game.Construction
 
         private int Me => Actions != null ? Actions.Owner : 0;
 
+        /// <summary>True while a panel is open over the world: the buttons stay out of its way.</summary>
+        public Func<bool> Busy;
+
         /// <summary>A lock in sight that keeps this player out.</summary>
         private bool Barred => _hasLock && !_settlement.CanPass(_lock, Me);
 
@@ -91,6 +94,12 @@ namespace Oxfall.Game.Construction
             _timer -= Time.deltaTime;
             if (_timer > 0f) return;
             _timer = 0.1f;
+            if (Busy != null && Busy())
+            {
+                _hud.SetLockButton(false, false);
+                _hud.SetUseButton(null);
+                return;
+            }
             Look();
             CodeLockState state = null;
             bool manage = _target != Target.None && _hasLock && _settlement.TryGetLock(_lock, out state) && state.CanManage(Me);
@@ -106,8 +115,11 @@ namespace Oxfall.Game.Construction
                     _hud.SetUseButton(_grid.IsDoorOpen(_door) ? "CERRAR" : "ABRIR");
                     break;
                 case Target.Box:
-                    bool furnace = _settlement.TryGet(_deployable, out var d) && d.Kind == DeployableKind.Furnace;
-                    _hud.SetUseButton(furnace ? "HORNO" : "ABRIR", furnace ? Icons.Flame : Icons.Box);
+                    _settlement.TryGet(_deployable, out var d);
+                    if (d.Kind == DeployableKind.Bag) _hud.SetUseButton("BOLSA", Icons.Bag);
+                    else if (d.Kind == DeployableKind.Furnace) _hud.SetUseButton("HORNO", Icons.Flame);
+                    else if (d.Kind == DeployableKind.Campfire) _hud.SetUseButton("FOGATA", Icons.Flame);
+                    else _hud.SetUseButton("ABRIR", Icons.Box);
                     break;
                 case Target.Cupboard:
                     _hud.SetUseButton("ARMARIO", Icons.Shield);

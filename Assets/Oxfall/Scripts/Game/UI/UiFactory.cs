@@ -105,6 +105,32 @@ namespace Oxfall.Game.UI
             rt.offsetMax = Vector2.zero;
         }
 
+        private static Sprite _vignette;
+
+        /// <summary>Clear in the middle, darkening towards the edges and most in the corners (for the hurt flash).</summary>
+        public static Sprite Vignette => _vignette != null ? _vignette : (_vignette = MakeVignette(128));
+
+        private static Sprite MakeVignette(int size)
+        {
+            var texture = new Texture2D(size, size, TextureFormat.RGBA32, false)
+            {
+                wrapMode = TextureWrapMode.Clamp,
+                filterMode = FilterMode.Bilinear,
+            };
+            var pixels = new Color32[size * size];
+            for (int y = 0; y < size; y++)
+            for (int x = 0; x < size; x++)
+            {
+                float u = (x + 0.5f) / size * 2f - 1f, v = (y + 0.5f) / size * 2f - 1f;
+                float d = Mathf.Sqrt(u * u + v * v) / 1.41421356f;
+                float a = Mathf.SmoothStep(0f, 1f, Mathf.InverseLerp(0.42f, 1f, d));
+                pixels[y * size + x] = new Color(1f, 1f, 1f, a);
+            }
+            texture.SetPixels32(pixels);
+            texture.Apply(false, true);
+            return Sprite.Create(texture, new Rect(0, 0, size, size), new Vector2(0.5f, 0.5f), 100f);
+        }
+
         private static Sprite MakeCircle(int size, float fillAlpha)
         {
             var texture = new Texture2D(size, size, TextureFormat.RGBA32, false)

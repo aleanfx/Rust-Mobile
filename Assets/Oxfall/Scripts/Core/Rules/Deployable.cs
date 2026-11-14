@@ -11,6 +11,9 @@ namespace Oxfall.Core.Rules
         Furnace = 3,
         SleepingBag = 4,
         ToolCupboard = 5,
+
+        /// <summary>What a player had on them when they died, left where they fell (no item makes one).</summary>
+        Bag = 6,
     }
 
     /// <summary>One thing set down: what it is, where it stands, which way it faces, and who put it there.</summary>
@@ -49,6 +52,9 @@ namespace Oxfall.Core.Rules
         /// <summary>How long after waking up in a sleeping bag it can be used again.</summary>
         public const float BagCooldown = 120f;
 
+        /// <summary>How long a dead player's bag lies there before it rots away (sooner once emptied).</summary>
+        public const float DeathBagSeconds = 600f;
+
         public static bool IsKnown(DeployableKind kind) => Enum.IsDefined(typeof(DeployableKind), kind);
 
         /// <summary>The item that becomes this deployable when set down (and comes back when it is picked up).</summary>
@@ -61,6 +67,8 @@ namespace Oxfall.Core.Rules
                 case DeployableKind.Furnace: return ItemIds.Furnace;
                 case DeployableKind.SleepingBag: return ItemIds.SleepingBag;
                 case DeployableKind.ToolCupboard: return ItemIds.ToolCupboard;
+                // Nothing is made into a bag, and a bag is not picked up.
+                case DeployableKind.Bag: return null;
                 default: throw new ArgumentOutOfRangeException(nameof(kind));
             }
         }
@@ -86,6 +94,10 @@ namespace Oxfall.Core.Rules
             {
                 case DeployableKind.StorageBox: return 12;
                 case DeployableKind.Furnace: return 6;
+                // Meat to roast.
+                case DeployableKind.Campfire: return 4;
+                // Everything a player can carry.
+                case DeployableKind.Bag: return Inventory.DefaultSlotCount;
                 default: return 0;
             }
         }
@@ -100,6 +112,7 @@ namespace Oxfall.Core.Rules
                 case DeployableKind.Furnace: return 0.6f;
                 case DeployableKind.SleepingBag: return 0.55f;
                 case DeployableKind.ToolCupboard: return 0.4f;
+                case DeployableKind.Bag: return 0.35f;
                 default: return 0.5f;
             }
         }

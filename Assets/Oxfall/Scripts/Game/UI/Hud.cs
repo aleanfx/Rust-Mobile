@@ -152,6 +152,29 @@ namespace Oxfall.Game.UI
             var dot = UiFactory.NewRect("Crosshair", _safeArea, centre, centre, Vector2.zero, new Vector2(7f, 7f));
             UiFactory.AddImage(dot, UiFactory.Circle, new Color(1f, 1f, 1f, 0.9f));
 
+            // A blow that lands: four short ticks round the crosshair (red when it kills).
+            _hitMarker = UiFactory.NewRect("Hit marker", _safeArea, centre, centre, Vector2.zero, new Vector2(60f, 60f));
+            _hitMarkerGroup = _hitMarker.gameObject.AddComponent<CanvasGroup>();
+            _hitMarkerGroup.alpha = 0f;
+            _hitMarkerGroup.blocksRaycasts = false;
+            _hitTicks = new Image[4];
+            for (int i = 0; i < 4; i++)
+            {
+                float angle = 45f + i * 90f;
+                var dir = Quaternion.Euler(0f, 0f, angle) * Vector3.right;
+                var tick = UiFactory.NewRect("Tick", _hitMarker, centre, centre, dir * 17f, new Vector2(15f, 4f));
+                tick.localRotation = Quaternion.Euler(0f, 0f, angle);
+                _hitTicks[i] = UiFactory.AddImage(tick, null, Color.white);
+            }
+
+            // Being hurt: the edges of the screen flush red and fade.
+            var hurt = UiFactory.NewRect("Hurt", transform, Vector2.zero, new Vector2(0.5f, 0.5f), Vector2.zero, Vector2.zero);
+            UiFactory.Fill(hurt);
+            hurt.SetAsFirstSibling();
+            _hurt = UiFactory.AddImage(hurt, UiFactory.Vignette, new Color(0.75f, 0.05f, 0.04f, 0f));
+            _hurt.type = Image.Type.Simple;
+            _hurt.enabled = false;
+
             // Under the crosshair: what is aimed at (the hammer's view of a piece).
             _aimChip = Chip("Aim info", centre, new Vector2(0f, -78f), 26, out _aimInfo);
             _aimChip.gameObject.SetActive(false);
@@ -302,6 +325,28 @@ namespace Oxfall.Game.UI
 
         private Image _useIcon;
         private Image _lockIcon;
+        private RectTransform _hitMarker;
+        private CanvasGroup _hitMarkerGroup;
+        private Image[] _hitTicks;
+        private float _hitTimer;
+        private Image _hurt;
+        private float _hurtAlpha;
+
+        /// <summary>A blow of this player's landed (and killed, if <paramref name="kill"/>).</summary>
+        public void ShowHitMarker(bool kill)
+        {
+            _hitTimer = kill ? 0.6f : 0.3f;
+            foreach (var tick in _hitTicks) tick.color = kill ? UiTheme.Bad : Color.white;
+            _hitMarker.localScale = Vector3.one * (kill ? 1.35f : 1f);
+            _hitMarkerGroup.alpha = 1f;
+        }
+
+        /// <summary>This player was hurt: the screen's edges flush red, more for a harder blow.</summary>
+        public void ShowHurt(float damage)
+        {
+            _hurtAlpha = Mathf.Max(_hurtAlpha, Mathf.Clamp01(0.35f + damage / 50f));
+            _hurt.enabled = true;
+        }
 
         /// <summary>The lock button, shown on a lock the player may manage, its pictogram locked or open.</summary>
         public void SetLockButton(bool show, bool locked)
@@ -515,6 +560,17 @@ namespace Oxfall.Game.UI
             {
                 _toastTimer -= dt;
                 _toastGroup.alpha = Mathf.Clamp01(_toastTimer / 0.4f);
+            }
+            if (_hitTimer > 0f)
+            {
+                _hitTimer -= dt;
+                _hitMarkerGroup.alpha = Mathf.Clamp01(_hitTimer / 0.15f);
+            }
+            if (_hurt.enabled)
+            {
+                _hurtAlpha = Mathf.MoveTowards(_hurtAlpha, 0f, dt * 0.9f);
+                _hurt.color = new Color(0.75f, 0.05f, 0.04f, _hurtAlpha);
+                if (_hurtAlpha <= 0f) _hurt.enabled = false;
             }
 
             if (HeadingSource != null) _compass.SetHeading(HeadingSource.eulerAngles.y);

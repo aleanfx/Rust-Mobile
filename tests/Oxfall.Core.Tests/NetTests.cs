@@ -112,9 +112,9 @@ namespace Oxfall.Core.Tests
         public void SnapshotRoundTrip()
         {
             var w = new NetWriter();
-            var players = new List<(ushort, Pose)> { (1, new Pose(1f, 0f, 0f, 0f)), (2, new Pose(0f, 0f, 2f, 180f)) };
+            var players = new List<(ushort, Pose, bool)> { (1, new Pose(1f, 0f, 0f, 0f), false), (2, new Pose(0f, 0f, 2f, 180f), true) };
             Messages.Snapshot(w, 12.5f, players);
-            var read = new List<(ushort Id, Pose Pose)>();
+            var read = new List<(ushort Id, Pose Pose, bool Down)>();
             float time = Messages.ReadSnapshot(After(w, MessageType.Snapshot), read);
             Assert.AreEqual(12.5f, time);
             CollectionAssert.AreEqual(players, read);

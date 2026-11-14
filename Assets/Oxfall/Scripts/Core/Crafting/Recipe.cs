@@ -89,6 +89,8 @@ namespace Oxfall.Core.Crafting
                 new Ingredient(ItemIds.Wood, 100)),
             new Recipe("hammer", ItemIds.Hammer, 1, 5f,
                 new Ingredient(ItemIds.Wood, 100)),
+            new Recipe("wooden_spear", ItemIds.WoodenSpear, 1, 15f,
+                new Ingredient(ItemIds.Wood, 300)),
             new Recipe("wooden_door", ItemIds.WoodenDoor, 1, 10f,
                 new Ingredient(ItemIds.Wood, 150)),
             new Recipe("storage_box", ItemIds.StorageBox, 1, 10f,

@@ -21,6 +21,9 @@ namespace Oxfall.Core.Rules
         /// <summary>Seconds a burning furnace takes to turn one metal ore into one metal fragment.</summary>
         public const float SmeltSeconds = 2f;
 
+        /// <summary>Seconds a campfire takes to roast one piece of raw meat.</summary>
+        public const float CookSeconds = 5f;
+
         private sealed class Furnace
         {
             public float Fuel;
@@ -32,6 +35,8 @@ namespace Oxfall.Core.Rules
         private readonly Dictionary<int, Furnace> _lit = new Dictionary<int, Furnace>();
         private readonly Dictionary<int, HashSet<int>> _authorized = new Dictionary<int, HashSet<int>>();
         private readonly Dictionary<int, float> _bagReady = new Dictionary<int, float>();
+        private readonly Dictionary<int, float> _rotting = new Dictionary<int, float>();
+        private readonly Dictionary<int, float> _cooking = new Dictionary<int, float>();
         private readonly Dictionary<PieceRef, int> _owners = new Dictionary<PieceRef, int>();
         private readonly Dictionary<LockTarget, CodeLockState> _locks = new Dictionary<LockTarget, CodeLockState>();
         private readonly List<int> _scratch = new List<int>();
@@ -76,6 +81,7 @@ namespace Oxfall.Core.Rules
             int slots = Rules.Deployables.Slots(deployable.Kind);
             if (slots > 0) _containers.Add(deployable.Id, new Inventory(Catalog, slots, hasHotbar: false));
             if (deployable.Kind == DeployableKind.ToolCupboard) _authorized[deployable.Id] = new HashSet<int> { deployable.Owner };
+            if (deployable.Kind == DeployableKind.Bag) _rotting[deployable.Id] = Rules.Deployables.DeathBagSeconds;
             DeployableAdded?.Invoke(deployable);
             return deployable;
         }
@@ -87,6 +93,8 @@ namespace Oxfall.Core.Rules
             _lit.Remove(id);
             _authorized.Remove(id);
             _bagReady.Remove(id);
+            _rotting.Remove(id);
+            _cooking.Remove(id);
             RemoveLock(LockTarget.On(id));
             DeployableRemoved?.Invoke(id);
             return true;
@@ -276,9 +284,59 @@ namespace Oxfall.Core.Rules
         /// charcoal, and meanwhile metal ore turns into fragments. One with no wood left goes out;
         /// its id goes in <paramref name="wentOut"/> (when given) so the server can tell everyone.
         /// </summary>
-        public void Tick(float dt, List<int> wentOut = null)
+        /// <summary>Campfires always burn: raw meat in one roasts, a piece every <see cref="CookSeconds"/>.</summary>
+        private void Cook(float dt)
         {
-            if (_lit.Count == 0 || dt <= 0f) return;
+            foreach (var d in _deployables.Values)
+            {
+                if (d.Kind != DeployableKind.Campfire || !_containers.TryGetValue(d.Id, out var fire)) continue;
+                if (!fire.Has(ItemIds.RawMeat, 1))
+                {
+                    _cooking.Remove(d.Id);
+                    continue;
+                }
+                _cooking.TryGetValue(d.Id, out float t);
+                t += dt;
+                while (t >= CookSeconds && fire.Has(ItemIds.RawMeat, 1))
+                {
+                    t -= CookSeconds;
+                    if (fire.SpaceFor(ItemIds.CookedMeat) < 1) break;
+                    fire.Remove(ItemIds.RawMeat, 1);
+                    fire.Add(ItemIds.CookedMeat, 1);
+                }
+                _cooking[d.Id] = Math.Min(t, CookSeconds);
+            }
+        }
+
+        /// <summary>Seconds until a dead player's bag rots away (0 for anything else).</summary>
+        public float RotsIn(int id) => _rotting.TryGetValue(id, out float t) ? t : 0f;
+
+        /// <summary>
+        /// Time passing: furnaces burn (those that run out of wood go out, listed in
+        /// <paramref name="wentOut"/>), and dead players' bags rot away (removed, and listed in
+        /// <paramref name="rotted"/>).
+        /// </summary>
+        public void Tick(float dt, List<int> wentOut = null, List<int> rotted = null)
+        {
+            if (dt <= 0f) return;
+            if (_rotting.Count > 0)
+            {
+                _scratch.Clear();
+                _scratch.AddRange(_rotting.Keys);
+                foreach (int id in _scratch)
+                {
+                    float left = _rotting[id] - dt;
+                    if (left > 0f)
+                    {
+                        _rotting[id] = left;
+                        continue;
+                    }
+                    Remove(id);
+                    rotted?.Add(id);
+                }
+            }
+            Cook(dt);
+            if (_lit.Count == 0) return;
             _scratch.Clear();
             _scratch.AddRange(_lit.Keys);
             foreach (int id in _scratch)

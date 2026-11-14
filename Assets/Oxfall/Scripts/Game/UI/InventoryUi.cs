@@ -59,6 +59,7 @@ namespace Oxfall.Game.UI
         private RectTransform _lootQuick;
         private Text _lootQuickLabel;
         private int _box;
+        private DeployableKind _boxKind;
         private Inventory _boxInventory;
         private bool _pickedInBox;
 
@@ -131,11 +132,14 @@ namespace Oxfall.Game.UI
             _boxInventory = box;
             _boxInventory.Changed += OnBoxChanged;
             _picked = -1;
-            bool furnace = _settlement.TryGet(id, out var d) && d.Kind == DeployableKind.Furnace;
-            _lootTitle.text = furnace ? "HORNO" : "CAJA";
+            _settlement.TryGet(id, out var d);
+            _boxKind = d.Kind;
+            bool furnace = d.Kind == DeployableKind.Furnace, bag = d.Kind == DeployableKind.Bag, fire = d.Kind == DeployableKind.Campfire;
+            _lootTitle.text = furnace ? "HORNO" : bag ? "BOLSA" : fire ? "FOGATA" : "CAJA";
             for (int i = 0; i < _boxSlots.Length; i++) _boxSlots[i].Rect.gameObject.SetActive(i < box.SlotCount);
-            _lightButton.gameObject.SetActive(furnace);
-            _lootStatus.gameObject.SetActive(furnace);
+            // A furnace's switch; on a dead player's bag the same button takes everything.
+            _lightButton.gameObject.SetActive(furnace || bag);
+            _lootStatus.gameObject.SetActive(furnace || bag || fire);
             _details.gameObject.SetActive(false);
             _loot.gameObject.SetActive(true);
             Refresh();
@@ -208,10 +212,17 @@ namespace Oxfall.Game.UI
             Refresh();
         }
 
-        /// <summary>Lights the open furnace, or puts it out.</summary>
+        /// <summary>Lights the open furnace, or puts it out; on a bag, takes everything.</summary>
         public void ToggleFurnace()
         {
             if (_box == 0) return;
+            if (_boxKind == DeployableKind.Bag)
+            {
+                Report(_actions.TakeAll());
+                _picked = -1;
+                if (_box != 0) Refresh();
+                return;
+            }
             bool on = !_settlement.IsLit(_box);
             var result = _actions.Build(BuildOp.Light(_box, on));
             if (result != ActionResult.Ok) _hud.ShowToast(GameActions.Explain(result));
@@ -245,7 +256,19 @@ namespace Oxfall.Game.UI
         {
             for (int i = 0; i < _boxInventory.SlotCount && i < _boxSlots.Length; i++)
                 Draw(_boxSlots[i], _boxInventory[i], i == _picked && _pickedInBox ? Picked : Color.clear);
-            bool furnace = _lightButton.gameObject.activeSelf;
+            bool furnace = _boxKind == DeployableKind.Furnace;
+            if (_boxKind == DeployableKind.Bag)
+            {
+                int stacks = 0;
+                for (int i = 0; i < _boxInventory.SlotCount; i++)
+                    if (!_boxInventory[i].IsEmpty) stacks++;
+                _lightLabel.text = "TOMAR TODO";
+                _lightFill.color = UiTheme.Accent;
+                _lootStatus.text = stacks > _boxSlots.Length
+                    ? $"Y {stacks - _boxSlots.Length} más debajo · la bolsa se pudre en unos minutos"
+                    : "Lo que llevaba al morir · la bolsa se pudre en unos minutos";
+                _lootStatus.color = UiTheme.TextMuted;
+            }
             if (furnace)
             {
                 bool lit = _settlement.IsLit(_box);
@@ -256,9 +279,16 @@ namespace Oxfall.Game.UI
                     : "Mete madera y mineral de metal, y enciéndelo";
                 _lootStatus.color = lit ? UiTheme.Accent : UiTheme.TextMuted;
             }
-            bool any = _picked >= 0;
+            if (_boxKind == DeployableKind.Campfire)
+            {
+                int raw = _boxInventory.Count(ItemIds.RawMeat);
+                _lootStatus.text = raw > 0 ? $"Asando · {raw} de carne cruda" : "Pon carne cruda al fuego: se asa sola";
+                _lootStatus.color = raw > 0 ? UiTheme.Accent : UiTheme.TextMuted;
+            }
+            // Nothing goes into a bag: it only empties.
+            bool any = _picked >= 0 && (_pickedInBox || _boxKind != DeployableKind.Bag);
             _lootQuick.gameObject.SetActive(any);
-            if (any) _lootQuickLabel.text = _pickedInBox ? "AL INVENTARIO" : furnace ? "AL HORNO" : "A LA CAJA";
+            if (any) _lootQuickLabel.text = _pickedInBox ? "AL INVENTARIO" : furnace ? "AL HORNO" : _boxKind == DeployableKind.Campfire ? "AL FUEGO" : "A LA CAJA";
         }
 
         private void Draw(SlotView view, ItemStack stack, Color frame)

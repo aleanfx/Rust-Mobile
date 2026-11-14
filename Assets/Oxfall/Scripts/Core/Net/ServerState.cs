@@ -31,10 +31,12 @@ namespace Oxfall.Core.Net
             public float LastHitTime { get; internal set; } = -100f;
             /// <summary>Ground speed lately (metres a second), to tell running from walking.</summary>
             public float Speed { get; internal set; }
+            /// <summary>Dead, lying where they fell until they wake up somewhere.</summary>
+            public bool Down { get; internal set; }
         }
 
         private readonly Dictionary<ushort, Player> _players = new Dictionary<ushort, Player>();
-        private readonly List<(ushort, Pose)> _snapshot = new List<(ushort, Pose)>();
+        private readonly List<(ushort, Pose, bool)> _snapshot = new List<(ushort, Pose, bool)>();
         private ushort _nextId = 1;
 
         public ServerState(int seed) => Seed = seed;
@@ -116,13 +118,18 @@ namespace Oxfall.Core.Net
             player.Speed = 0f;
         }
 
-        /// <summary>Everyone's position (once known), for the snapshot sent to all.</summary>
-        public IReadOnlyList<(ushort Id, Pose Pose)> Snapshot()
+        /// <summary>Everyone's position (once known) and whether they are down, for the snapshot sent to all.</summary>
+        public IReadOnlyList<(ushort Id, Pose Pose, bool Down)> Snapshot()
         {
             _snapshot.Clear();
             foreach (var p in _players.Values)
-                if (p.Placed) _snapshot.Add((p.Id, p.Pose));
+                if (p.Placed) _snapshot.Add((p.Id, p.Pose, p.Down));
             return _snapshot;
+        }
+
+        public void SetDown(ushort id, bool down)
+        {
+            if (_players.TryGetValue(id, out var player)) player.Down = down;
         }
 
         private ushort NextId()

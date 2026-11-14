@@ -18,6 +18,8 @@ namespace Oxfall.Game.Audio
         KeyBeep,
         Accepted,
         Denied,
+        HitBody,
+        Hurt,
     }
 
     /// <summary>
@@ -86,6 +88,26 @@ namespace Oxfall.Game.Audio
             return source;
         }
 
+        /// <summary>An animal's call from where it stands, fading with distance.</summary>
+        public void PlayAnimal(Oxfall.Core.Wildlife.AnimalKind kind, Vector3 at)
+        {
+            var clip = kind == Oxfall.Core.Wildlife.AnimalKind.Wolf ? _bank.Growl
+                : kind == Oxfall.Core.Wildlife.AnimalKind.Boar ? _bank.Grunt : _bank.Bark;
+            var go = new GameObject("Animal call");
+            go.transform.position = at;
+            var source = go.AddComponent<AudioSource>();
+            source.clip = clip;
+            source.spatialBlend = 1f;
+            source.rolloffMode = AudioRolloffMode.Linear;
+            source.minDistance = 2f;
+            source.maxDistance = 45f;
+            source.dopplerLevel = 0f;
+            source.volume = 0.9f;
+            source.pitch = 1f + Random.Range(-0.08f, 0.08f);
+            source.Play();
+            Destroy(go, clip.length / source.pitch + 0.1f);
+        }
+
         public void Play(SoundCue cue)
         {
             switch (cue)
@@ -102,6 +124,8 @@ namespace Oxfall.Game.Audio
                 case SoundCue.KeyBeep: Shot(_bank.KeyBeep, 0.6f, 0.03f); break;
                 case SoundCue.Accepted: Shot(_bank.Accepted, 0.7f, 0f); break;
                 case SoundCue.Denied: Shot(_bank.Denied, 0.85f, 0f); break;
+                case SoundCue.HitBody: Shot(_bank.HitBody, 1f, 0.08f); break;
+                case SoundCue.Hurt: Shot(_bank.Hurt, 1f, 0.06f); break;
             }
         }
 

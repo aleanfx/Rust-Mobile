@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using Oxfall.Core.Building;
 using Oxfall.Core.Crafting;
 using Oxfall.Core.Items;
@@ -139,6 +140,30 @@ namespace Oxfall.Core.Rules
         /// Wakes a dead player up as a fresh one: what they carried and were making is lost (later it
         /// will lie in a bag where they fell). Where they wake up is the caller's choice.
         /// </summary>
+        /// <summary>
+        /// A player just died: everything they carried goes into a bag where they fell, for anyone to
+        /// take, until it rots away. Returns false (and no bag) when they carried nothing.
+        /// </summary>
+        public static bool DropBag(Settlement settlement, Survivor s, int owner, float x, float y, float z, float yaw, out Deployable bag)
+        {
+            bag = default;
+            s.Crafting.Clear();
+            s.Looting = 0;
+            if (s.Inventory.IsEmpty) return false;
+            // A little above the ground or floor, so it never sinks in.
+            float ground = settlement.Ground.Height(x, z);
+            float floor = settlement.Grid.TryGetFoundationTop(BuildingGrid.CellAt(x, z), out float top) && Math.Abs(top - y) < 1.5f ? top : ground;
+            bag = settlement.Add(new Deployable(0, DeployableKind.Bag, x, Math.Max(floor, Math.Min(y, floor + 1f)), z, yaw, owner));
+            var into = settlement.Container(bag.Id);
+            var slots = new List<(int, ItemStack)>();
+            // Packed into the first slots: the hotbar first, then the backpack.
+            for (int i = 0; i < s.Inventory.SlotCount && slots.Count < into.SlotCount; i++)
+                if (!s.Inventory[i].IsEmpty) slots.Add((slots.Count, s.Inventory[i]));
+            into.SetSlots(slots);
+            s.Inventory.Clear();
+            return true;
+        }
+
         public static ActionResult Respawn(Survivor s)
         {
             if (!s.Vitals.IsDead) return ActionResult.Invalid;
@@ -202,7 +227,55 @@ namespace Oxfall.Core.Rules
             if (!IsSlot(box, from) || (to != -1 && !IsSlot(s.Inventory, to))) return ActionResult.Invalid;
             if (box[from].IsEmpty) return ActionResult.Invalid;
             bool moved = to == -1 ? Inventory.TransferAll(box, from, s.Inventory) : Inventory.Transfer(box, from, s.Inventory, to);
-            return moved ? ActionResult.Ok : ActionResult.NoSpace;
+            if (!moved) return ActionResult.NoSpace;
+            AfterTaking(settlement, s, box);
+            return ActionResult.Ok;
+        }
+
+        /// <summary>Everything in the open box that fits goes into the inventory.</summary>
+        public static ActionResult TakeAll(Settlement settlement, Survivor s)
+        {
+            var r = OpenBox(settlement, s, out var box);
+            if (r != ActionResult.Ok) return r;
+            if (box.IsEmpty) return ActionResult.Invalid;
+            bool any = false, left = false;
+            for (int i = 0; i < box.SlotCount; i++)
+            {
+                if (box[i].IsEmpty) continue;
+                Inventory.TransferAll(box, i, s.Inventory);
+                any |= true;
+                left |= !box[i].IsEmpty;
+            }
+            AfterTaking(settlement, s, box);
+            return left ? ActionResult.NoSpace : any ? ActionResult.Ok : ActionResult.Invalid;
+        }
+
+        /// <summary>
+        /// A dead player's bag, emptied, is gone; until then what is left in it moves up to its first
+        /// slots, so a bag of thirty shows on a panel of twelve.
+        /// </summary>
+        private static void AfterTaking(Settlement settlement, Survivor s, Inventory box)
+        {
+            if (!settlement.TryGet(s.Looting, out var d) || d.Kind != DeployableKind.Bag) return;
+            if (box.IsEmpty)
+            {
+                settlement.Remove(d.Id);
+                s.Looting = 0;
+                return;
+            }
+            Pack(box);
+        }
+
+        /// <summary>Moves every stack down into the first free slots, keeping their order.</summary>
+        private static void Pack(Inventory box)
+        {
+            int to = 0;
+            for (int i = 0; i < box.SlotCount; i++)
+            {
+                if (box[i].IsEmpty) continue;
+                if (i != to) box.Move(i, to);
+                to++;
+            }
         }
 
         /// <summary>Puts inventory slot <paramref name="from"/> into the open box's slot <paramref name="to"/> (or anywhere: -1).</summary>
@@ -212,6 +285,8 @@ namespace Oxfall.Core.Rules
             if (r != ActionResult.Ok) return r;
             if (!IsSlot(s.Inventory, from) || (to != -1 && !IsSlot(box, to))) return ActionResult.Invalid;
             if (s.Inventory[from].IsEmpty) return ActionResult.Invalid;
+            // A dead player's bag only empties.
+            if (settlement.TryGet(s.Looting, out var bag) && bag.Kind == DeployableKind.Bag) return ActionResult.Invalid;
             bool moved = to == -1 ? Inventory.TransferAll(s.Inventory, from, box) : Inventory.Transfer(s.Inventory, from, box, to);
             return moved ? ActionResult.Ok : ActionResult.NoSpace;
         }
@@ -352,7 +427,7 @@ namespace Oxfall.Core.Rules
                 case BuildOpKind.Deploy:
                 {
                     var d = op.Deployed;
-                    if (!Deployables.IsKnown(d.Kind)) return ActionResult.Invalid;
+                    if (!Deployables.IsKnown(d.Kind) || Deployables.ItemOf(d.Kind) == null) return ActionResult.Invalid;
                     var r = CanDeploy(settlement, owner, d.Kind, d.X, d.Y, d.Z);
                     if (r != ActionResult.Ok) return r;
                     if (!Near(x, y, z, d.X, d.Y, d.Z, UseReach)) return ActionResult.TooFar;
@@ -364,6 +439,7 @@ namespace Oxfall.Core.Rules
                 case BuildOpKind.Pickup:
                 {
                     if (!settlement.TryGet(op.Id, out var d)) return ActionResult.NoPiece;
+                    if (Deployables.ItemOf(d.Kind) == null) return ActionResult.Invalid;
                     if (d.Owner != 0 && d.Owner != owner) return ActionResult.NotYours;
                     if (!Near(x, y, z, d.X, d.Y, d.Z, UseReach)) return ActionResult.TooFar;
                     var target = LockTarget.On(d.Id);

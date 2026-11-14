@@ -17,7 +17,7 @@ namespace Oxfall.Game.Construction
     {
         // Where a lock sits on what it locks, in that thing's own space (its back on the surface).
         private static readonly Vector3 OnDoor = new Vector3(0.86f, 1.3f, 0.036f);
-        private static readonly Vector3 OnBox = new Vector3(0.15f, 0.26f, 0.281f);
+        private static readonly Vector3 OnBox = new Vector3(0f, 0.25f, 0.281f);
         private static readonly Vector3 OnCupboard = new Vector3(0.15f, 0.98f, 0.236f);
 
         private readonly Settlement _settlement;
@@ -30,6 +30,9 @@ namespace Oxfall.Game.Construction
         public Mesh Mesh { get; }
 
         public int Count => _views.Count;
+
+        /// <summary>Who is looking: the light is green for whoever may pass, red for whoever it keeps out.</summary>
+        public System.Func<int> Me;
 
         public LockViews(Settlement settlement, BuildingViews buildings, DeployableViews deployables, MaterialLibrary materials)
         {
@@ -105,7 +108,7 @@ namespace Oxfall.Game.Construction
                 if (target.IsDoor) renderers.Add(Make(anchor, new Vector3(local.x, local.y, -local.z), true));
                 _views[target] = renderers;
             }
-            var materials = state.Locked ? _locked : _open;
+            var materials = _settlement.CanPass(target, Me != null ? Me() : 0) ? _open : _locked;
             foreach (var r in renderers)
                 if (r != null && r.sharedMaterials[2] != materials[2]) r.sharedMaterials = materials;
         }

@@ -5,6 +5,7 @@ using Oxfall.Core.Environment;
 using Oxfall.Core.Gathering;
 using Oxfall.Core.Items;
 using Oxfall.Core.Rules;
+using Oxfall.Core.Wildlife;
 using Oxfall.Core.World;
 
 namespace Oxfall.Core.Net
@@ -72,8 +73,11 @@ namespace Oxfall.Core.Net
                     if (record.Survivor.Looting == id) record.Survivor.Looting = 0;
             };
             _random = new Random(seed ^ 0x2c1b3c6d);
-            foreach (var spawn in ResourceLayout.Generate(Ground))
+            var spawns = ResourceLayout.Generate(Ground);
+            foreach (var spawn in spawns)
                 _nodes[spawn.Id] = new Node { State = new ResourceNode(spawn.Id, spawn.Type), X = spawn.X, Y = spawn.Y, Z = spawn.Z };
+            Fauna = new Fauna(Ground, seed) { Blocked = Fauna.Barriers(Settlement.Grid, new Obstacles(spawns)) };
+            Fauna.Populate();
         }
 
         public ServerState Players { get; }
@@ -147,8 +151,18 @@ namespace Oxfall.Core.Net
         {
             var record = new SurvivorRecord { Token = token, Owner = owner, Survivor = new Survivor(Catalog), Pose = pose };
             record.Survivor.Crafting.Completed += (recipe, lost) => record.Crafted.Add((recipe.Id, lost));
+            record.Survivor.Vitals.Died += () => DropBag(record);
             _records.Add(token, record);
             return record;
+        }
+
+        /// <summary>A survivor died: what they carried goes into a bag where they fell, and everyone sees it.</summary>
+        private void DropBag(SurvivorRecord record)
+        {
+            var pose = record.PlayerId != 0 && Players.TryGet(record.PlayerId, out var player) ? player.Pose : record.Pose;
+            if (record.PlayerId != 0) Players.SetDown(record.PlayerId, true);
+            if (PlayerActions.DropBag(Settlement, record.Survivor, record.Owner, pose.X, pose.Y, pose.Z, pose.Yaw, out var bag))
+                Announcements.Add(BuildOp.Deploy(bag));
         }
 
         /// <summary>A player goes away; their survivor stays, where they stood.</summary>
@@ -212,6 +226,34 @@ namespace Oxfall.Core.Net
             return _yields;
         }
 
+        /// <summary>
+        /// One player's blow at another with the tool in hand, judged here: both alive and online,
+        /// within reach (with leeway for lag), not faster than the tool swings, and a tool they
+        /// really have. The damage is taken off the target, who may die of it (and drop their bag).
+        /// False when the blow does not count.
+        /// </summary>
+        public bool Strike(ushort attackerId, ushort targetId, ToolKind tool, float now, out float damage, out bool killed)
+        {
+            damage = 0f;
+            killed = false;
+            if (attackerId == targetId) return false;
+            if (!Players.TryGet(attackerId, out var attacker) || !attacker.Placed) return false;
+            if (!Players.TryGet(targetId, out var target) || !target.Placed) return false;
+            if (!_online.TryGetValue(attackerId, out var a) || !_online.TryGetValue(targetId, out var t)) return false;
+            if (a.Survivor.Vitals.IsDead || t.Survivor.Vitals.IsDead) return false;
+            if (!Enum.IsDefined(typeof(ToolKind), tool) || !Combat.CanHurt(tool) || !a.Survivor.HasTool(tool)) return false;
+            // A little faster than the swing itself, for messages that arrive bunched.
+            if (now - attacker.LastHitTime < Combat.SwingSeconds(tool) * 0.75f) return false;
+            float reach = Combat.MeleeReach(tool) + Combat.ReachSlack;
+            if (attacker.Pose.HorizontalDistance(target.Pose) > reach || Math.Abs(attacker.Pose.Y - target.Pose.Y) > 2.2f) return false;
+
+            attacker.LastHitTime = now;
+            damage = Math.Min(Combat.MeleeDamage(tool), t.Survivor.Vitals.Health);
+            t.Survivor.Vitals.Damage(Combat.MeleeDamage(tool));
+            killed = t.Survivor.Vitals.IsDead;
+            return true;
+        }
+
         /// <summary>Something a player does to their own belongings.</summary>
         public ActionResult Act(ushort playerId, ActKind kind, int a, int b, string recipeId)
         {
@@ -233,22 +275,46 @@ namespace Oxfall.Core.Net
                     {
                         // In one of their sleeping bags, if it is ready.
                         var bagResult = PlayerActions.RespawnInBag(Settlement, s, record.Owner, a, Time, out var bag);
-                        if (bagResult == ActionResult.Ok) Players.Place(playerId, new Pose(bag.X, bag.Y + 0.1f, bag.Z, bag.Yaw), player.LastMoveTime);
+                        if (bagResult == ActionResult.Ok)
+                        {
+                            Players.Place(playerId, new Pose(bag.X, bag.Y + 0.1f, bag.Z, bag.Yaw), player.LastMoveTime);
+                            Players.SetDown(playerId, false);
+                        }
                         return bagResult;
                     }
                     var r = PlayerActions.Respawn(s);
-                    if (r == ActionResult.Ok) Players.Place(playerId, SpawnPose(), player.LastMoveTime);
+                    if (r == ActionResult.Ok)
+                    {
+                        Players.Place(playerId, SpawnPose(), player.LastMoveTime);
+                        Players.SetDown(playerId, false);
+                    }
                     return r;
                 }
                 case ActKind.Open: return PlayerActions.Open(Settlement, s, record.Owner, a, player.Pose.X, player.Pose.Y, player.Pose.Z);
                 case ActKind.Close: return PlayerActions.Close(s);
-                case ActKind.Take: return PlayerActions.Take(Settlement, s, a, b);
+                case ActKind.Take:
+                case ActKind.TakeAll:
+                {
+                    int looting = s.Looting;
+                    var r = kind == ActKind.Take ? PlayerActions.Take(Settlement, s, a, b) : PlayerActions.TakeAll(Settlement, s);
+                    // The last thing out of a dead player's bag: the bag is gone for everyone.
+                    if (r == ActionResult.Ok && looting != 0 && !Settlement.TryGet(looting, out _)) Announcements.Add(BuildOp.Pickup(looting));
+                    return r;
+                }
                 case ActKind.Put: return PlayerActions.Put(Settlement, s, a, b);
                 case ActKind.MoveInBox: return PlayerActions.MoveInBox(Settlement, s, a, b);
                 case ActKind.DevGive:
                     if (!DevMode) return ActionResult.Invalid;
                     GiveTestKit(s.Inventory);
                     return ActionResult.Ok;
+                case ActKind.DevSpawnAnimal:
+                {
+                    if (!DevMode || !Animals.IsKnown((AnimalKind)a)) return ActionResult.Invalid;
+                    float yaw = player.Pose.Yaw * (float)(Math.PI / 180.0);
+                    float x = player.Pose.X + (float)Math.Sin(yaw) * 7f, z = player.Pose.Z + (float)Math.Cos(yaw) * 7f;
+                    Fauna.Add((AnimalKind)a, x, z, player.Pose.Yaw + 180f);
+                    return ActionResult.Ok;
+                }
                 default: return ActionResult.Invalid;
             }
         }
@@ -270,6 +336,7 @@ namespace Oxfall.Core.Net
             inventory.Add(ItemIds.CodeLock, 2);
             inventory.Add(ItemIds.MetalHatchet, 1);
             inventory.Add(ItemIds.MetalPickaxe, 1);
+            inventory.Add(ItemIds.WoodenSpear, 1);
             inventory.Add(ItemIds.Wood, 1500);
             inventory.Add(ItemIds.Stone, 700);
             inventory.Add(ItemIds.MetalOre, 240);
@@ -296,8 +363,11 @@ namespace Oxfall.Core.Net
             Time += deltaSeconds;
             Day.Tick(deltaSeconds);
             _wentOut.Clear();
-            Settlement.Tick(deltaSeconds, _wentOut);
+            _rotted.Clear();
+            Settlement.Tick(deltaSeconds, _wentOut, _rotted);
             foreach (int id in _wentOut) Announcements.Add(BuildOp.Light(id, false));
+            foreach (int id in _rotted) Announcements.Add(BuildOp.Pickup(id));
+            TickFauna(deltaSeconds);
             foreach (var record in _online.Values)
             {
                 var s = record.Survivor;
@@ -317,6 +387,7 @@ namespace Oxfall.Core.Net
         }
 
         private readonly List<int> _wentOut = new List<int>();
+        private readonly List<int> _rotted = new List<int>();
 
         /// <summary>Grows depleted nodes back; returns the ones that came back this tick (id, amount).</summary>
         public IReadOnlyList<(int Id, int Remaining)> TickRespawn(float deltaSeconds)

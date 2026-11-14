@@ -6,6 +6,8 @@ using Oxfall.Core.Items;
 using Oxfall.Core.Net;
 using Oxfall.Core.Rules;
 using Oxfall.Core.Survival;
+using Oxfall.Core.Wildlife;
+using Oxfall.Core.World;
 using Oxfall.Game.Audio;
 using Oxfall.Game.Construction;
 using Oxfall.Game.Controls;
@@ -101,6 +103,16 @@ namespace Oxfall.Game
         private bool _menuView;
         private float _menuAngle;
         private float _gameFog, _gameFar;
+        // Who dealt the last blow that killed this player (online), for the death screen.
+        private string _killer;
+
+        // The island's animals: alone the game runs them, online the server does and says where they are.
+        private Fauna _fauna;
+        private AnimalViews _animalViews;
+        private readonly System.Collections.Generic.List<AnimalSnap> _animalSnaps = new System.Collections.Generic.List<AnimalSnap>();
+        private readonly System.Collections.Generic.List<Fauna.Prey> _prey = new System.Collections.Generic.List<Fauna.Prey>();
+        private readonly System.Collections.Generic.List<Fauna.Bite> _bites = new System.Collections.Generic.List<Fauna.Bite>();
+        private float _bladeHintAt;
 
         private void Start()
         {
@@ -146,6 +158,15 @@ namespace Oxfall.Game
             _gatherer = gatherer;
             gatherer.Actions = _actions;
 
+            // Boars, wolves and deer: walking round trunks and rocks, kept out of bases.
+            var ground = _world.Shape.Ground;
+            _fauna = new Fauna(ground, s_seed) { Blocked = Fauna.Barriers(_settlement.Grid, new Obstacles(ResourceLayout.Generate(ground))) };
+            _fauna.Populate();
+            _actions.Fauna = _fauna;
+            _animalViews = new AnimalViews(materials, (x, z) => _world.Shape.Height(x, z));
+            gatherer.StrikeAnimal = _actions.StrikeAnimal;
+            _actions.AnimalHit += OnAnimalHit;
+
             _hud = Hud.Create();
             _hud.HeadingSource = player.Head;
             var controls = _hud.gameObject.AddComponent<TouchControls>();
@@ -170,6 +191,7 @@ namespace Oxfall.Game
             var audio = GameAudio.Create(playerObject.transform, _world.Shape);
             _audio = audio;
             gatherer.Sound += audio.Play;
+            _animalViews.Called += audio.PlayAnimal;
             gatherer.FireSound = audio.Bank.FireLoop;
             controls.Tapped += () => audio.Play(SoundCue.Tap);
 
@@ -264,6 +286,7 @@ namespace Oxfall.Game
             // Code locks: drawn on doors, boxes and cupboards; one in hand goes on with attack, and
             // then its keypad opens to choose the code.
             _lockViews = new LockViews(_settlement, _buildings, _deployables, materials);
+            _lockViews.Me = () => _actions.Owner;
             _keypad = new KeypadUi(_hud, _settlement, _actions);
             _keypad.Sound += audio.Play;
             _lockPlacer = playerObject.AddComponent<LockPlacer>();
@@ -279,6 +302,7 @@ namespace Oxfall.Game
             _interactor = playerObject.AddComponent<Interactor>();
             _interactor.Init(_settlement, player.Head, _hud);
             _interactor.Actions = _actions;
+            _interactor.Busy = () => (_keypad != null && _keypad.IsOpen) || (_cupboard != null && _cupboard.IsOpen) || (_inventoryUi != null && _inventoryUi.IsOpen);
             _interactor.DoorUsed += () => audio.Play(SoundCue.Wood);
             _interactor.OpenBox += OpenBox;
             _interactor.OpenCupboard += OpenCupboard;
@@ -398,6 +422,14 @@ namespace Oxfall.Game
                 foreach (var op in ops)
                     if (!BuildOps.Apply(_settlement, op)) Debug.LogWarning("[Oxfall] A building change did not fit: " + op);
             };
+            _net.Hurt += OnHurt;
+            _net.Bitten += (target, kind, damage, killed) =>
+            {
+                Debug.Log($"[Oxfall] Bitten: {_net.NameOf(target) ?? "someone"} by {kind}, -{damage}{(killed ? ", killed" : "")}");
+                if (target == _net.PlayerId) OnBitten(kind, damage, killed);
+            };
+            _net.AnimalHit += _actions.OnServerAnimalHit;
+            _net.AnimalsSeen += animals => _animalViews.Apply(animals);
             _nameTags = new NameTags(_hud);
 
             // Straight in when the address says so (?server=… joins it, ?solo plays alone: for links
@@ -605,17 +637,23 @@ namespace Oxfall.Game
                     _hud.ShowToast("Conectado al servidor");
                     // From now on the server decides what trees and rocks give, and when they grow back.
                     _gatherer.RemoteHit = _net.SendHit;
+                    // And whether a blow at another player lands.
+                    _gatherer.StrikePlayer = _net.SendStrike;
+                    // And where the animals are.
+                    _animalViews.Clear();
                     break;
                 case NetClient.Status.Failed:
                     _title?.ShowError(_net.FailReason);
                     // Carries on alone with what the server last said.
                     _gatherer.RemoteHit = null;
+                    _gatherer.StrikePlayer = null;
                     _crafting.Mirror = false;
                     _hud.SetOnline("SIN CONEXIÓN", false);
                     _hud.ShowToast(_net.FailReason);
                     break;
                 default:
                     _gatherer.RemoteHit = null;
+                    _gatherer.StrikePlayer = null;
                     _crafting.Mirror = false;
                     _hud.SetOnline(null, false);
                     break;
@@ -635,9 +673,162 @@ namespace Oxfall.Game
                     _hud.SetOnline(_shownOnline.ToString(), true);
                 }
                 foreach (var other in _net.Players.Values)
-                    if (other.Visible) _nameTags.Show(_camera, other.Root.position + Vector3.up * 2.05f, other.Name);
+                    if (other.Visible && !other.Down) _nameTags.Show(_camera, other.Root.position + Vector3.up * 2.05f, other.Name);
             }
             _nameTags.End();
+        }
+
+        /// <summary>A blow landed somewhere: felt if it hit this player, marked if this player struck it.</summary>
+        private void OnHurt(ushort target, ushort attacker, int damage, bool killed)
+        {
+            string by = _net.NameOf(attacker) ?? "Alguien";
+            string whom = _net.NameOf(target) ?? "alguien";
+            Debug.Log($"[Oxfall] Hurt: {whom} by {by}, -{damage}{(killed ? ", killed" : "")}");
+            if (target == _net.PlayerId)
+            {
+                _hud.ShowHurt(damage);
+                _audio.Play(SoundCue.Hurt);
+                if (killed) _killer = by;
+                else _hud.ShowToast($"{by} te golpea  −{damage}");
+            }
+            else if (attacker == _net.PlayerId)
+            {
+                _hud.ShowHitMarker(killed);
+                _audio.Play(SoundCue.HitBody);
+                if (killed) _hud.ShowToast($"Has derribado a {whom}");
+            }
+        }
+
+        private static string AnimalName(AnimalKind kind) => "un " + Animals.Name(kind).ToLowerInvariant();
+
+        /// <summary>An animal hurt this player.</summary>
+        private void OnBitten(AnimalKind kind, int damage, bool killed)
+        {
+            Debug.Log($"[Oxfall] Bitten by {kind}, -{damage}{(killed ? ", killed" : "")}");
+            _hud.ShowHurt(damage);
+            _audio.Play(SoundCue.Hurt);
+            if (killed) _killer = AnimalName(kind);
+            else _hud.ShowToast(kind == AnimalKind.Boar ? $"Un jabalí te embiste  −{damage}" : $"{char.ToUpperInvariant(AnimalName(kind)[0])}{AnimalName(kind).Substring(1)} te muerde  −{damage}");
+        }
+
+        /// <summary>What this player's blow at an animal did.</summary>
+        private void OnAnimalHit(int id, AnimalBlow blow, float damage)
+        {
+            _animalViews.TryGet(id, out var kind, out _, out _);
+            Debug.Log($"[Oxfall] Animal hit: {kind} {id} {blow} -{damage:0}");
+            switch (blow)
+            {
+                case AnimalBlow.Hurt:
+                case AnimalBlow.Killed:
+                    _hud.ShowHitMarker(blow == AnimalBlow.Killed);
+                    _audio.Play(SoundCue.HitBody);
+                    _animalViews.Flinch(id);
+                    if (blow == AnimalBlow.Killed)
+                        _hud.ShowToast($"Has abatido {AnimalName(kind)}: golpea el cuerpo para sacar carne y cuero");
+                    break;
+                case AnimalBlow.Cut:
+                    _audio.Play(SoundCue.HitBody);
+                    _animalViews.Flinch(id);
+                    break;
+                case AnimalBlow.UsedUp:
+                    _audio.Play(SoundCue.HitBody);
+                    _hud.ShowToast("No queda nada que aprovechar");
+                    break;
+                case AnimalBlow.NeedsBlade:
+                    if (Time.time < _bladeHintAt) break;
+                    _bladeHintAt = Time.time + 2.5f;
+                    _hud.ShowToast("Para despiezarlo necesitas una piedra, un hacha o una lanza");
+                    break;
+            }
+        }
+
+        /// <summary>Alone: the animals move on and attack. Online the server does that. Either way they are drawn.</summary>
+        private void TickAnimals(float dt)
+        {
+            if (_animalViews == null) return;
+            if (!_actions.Online && _fauna != null)
+            {
+                _prey.Clear();
+                // On the title screen they roam the island behind the menu, minding no one.
+                if (_title == null && !_vitals.IsDead)
+                {
+                    var p = _player.transform.position;
+                    _prey.Add(new Fauna.Prey(0, p.x, p.y, p.z));
+                }
+                _bites.Clear();
+                _fauna.Tick(dt, _prey, _bites);
+                foreach (var bite in _bites)
+                {
+                    if (_vitals.IsDead || !_fauna.TryGet(bite.Animal, out var animal)) continue;
+                    int damage = Mathf.RoundToInt(Mathf.Min(bite.Damage, _vitals.Health));
+                    // Named before the blow lands, in case it is the last.
+                    _killer = AnimalName(animal.Kind);
+                    _vitals.Damage(bite.Damage);
+                    if (!_vitals.IsDead)
+                    {
+                        _killer = null;
+                        OnBitten(animal.Kind, damage, false);
+                    }
+                    else
+                    {
+                        _hud.ShowHurt(damage);
+                        _audio.Play(SoundCue.Hurt);
+                    }
+                }
+                _animalSnaps.Clear();
+                foreach (var a in _fauna.All) _animalSnaps.Add(AnimalSnap.Of(a));
+                _animalViews.Apply(_animalSnaps);
+            }
+            _animalViews.Tick(dt, _camera != null ? _camera.transform.position : Vector3.zero);
+        }
+
+        /// <summary>Test view: the nearest animal (living or dead): turns to it, or walks up to it first.</summary>
+        private void FaceAnimal(bool approach)
+        {
+            int best = -1;
+            float bestDistance = float.MaxValue;
+            Vector3 at = default;
+            var here = _player.transform.position;
+            foreach (int id in _animalViews.Ids)
+            {
+                if (!_animalViews.TryGet(id, out _, out var position, out _)) continue;
+                float d = (position - here).sqrMagnitude;
+                if (d < bestDistance)
+                {
+                    bestDistance = d;
+                    best = id;
+                    at = position;
+                }
+            }
+            if (best < 0) return;
+            _animalViews.TryGet(best, out var kind, out _, out var state);
+            var to = at - here;
+            to.y = 0f;
+            if (approach && to.magnitude > 2.2f)
+            {
+                var stand = at - to.normalized * 2.0f;
+                stand.y = _world.Shape.Height(stand.x, stand.z) + 0.05f;
+                here = stand;
+                to = at - stand;
+                to.y = 0f;
+            }
+            float yaw = Mathf.Atan2(to.x, to.z) * Mathf.Rad2Deg;
+            float pitch = Mathf.Atan2(here.y + 1.6f - (at.y + Animals.HalfSize(kind).Y * (state == AnimalState.Dead ? 0.4f : 1f)), to.magnitude) * Mathf.Rad2Deg;
+            _player.Teleport(here, yaw, pitch);
+            Debug.Log($"[Oxfall] Facing {kind} {best} ({state}), {to.magnitude:0.0} m away");
+        }
+
+        /// <summary>Test: an animal of this kind a few metres ahead (alone, or on a test server).</summary>
+        private void SpawnAnimal(AnimalKind kind)
+        {
+            if (_actions.Online)
+            {
+                _net.SendAct(ActKind.DevSpawnAnimal, (int)kind);
+                return;
+            }
+            var t = _player.transform;
+            var at = t.position + t.forward * 7f;
+            _fauna.Add(kind, at.x, at.z, t.eulerAngles.y + 180f);
         }
 
         private void OnDied()
@@ -646,9 +837,13 @@ namespace Oxfall.Game
             _inventoryUi.Close();
             _cupboard.Close();
             _keypad.Close();
+            // What they carried stays where they fell, in a bag anyone can empty.
+            _actions.DropBag();
             _hud.CloseCraftPanel();
             _player.enabled = false;
             _gatherer.enabled = false;
+            _vitalsUi.SetCause(_killer != null ? $"Te mató {_killer}." : null);
+            _killer = null;
             _vitalsUi.SetBags(MyBags());
             _vitalsUi.ShowDeath(true);
         }
@@ -792,6 +987,20 @@ namespace Oxfall.Game
             {
                 case "settings": _hud.ToggleSettings(); break;
                 case "face-player": FacePlayer(); break;
+                case "face-animal": FaceAnimal(false); break;
+                case "approach-animal": FaceAnimal(true); break;
+                case "spawn-boar": SpawnAnimal(AnimalKind.Boar); break;
+                case "spawn-wolf": SpawnAnimal(AnimalKind.Wolf); break;
+                case "spawn-deer": SpawnAnimal(AnimalKind.Deer); break;
+                case "clear-animals":
+                    // Test, alone: no animals at all, so a shot is not spoiled by a passing wolf.
+                    if (!_actions.Online) _fauna.Clear();
+                    break;
+                case "animals":
+                    foreach (int id in _animalViews.Ids)
+                        if (_animalViews.TryGet(id, out var k, out var pos, out var st))
+                            Debug.Log($"[Oxfall] Animal {id} {k} {st} at {pos} ({Vector3.Distance(pos, _player.transform.position):0.0} m)");
+                    break;
                 case "nearest-tree": FaceNearest(ResourceNodeType.Tree); break;
                 case "view-hill": ViewFromHill(); break;
                 case "view-forest": ViewInForest(); break;
@@ -834,6 +1043,22 @@ namespace Oxfall.Game
                 case "face-box": FaceDeployable(Nearest(DeployableKind.StorageBox)); break;
                 case "face-furnace": FaceDeployable(Nearest(DeployableKind.Furnace)); break;
                 case "face-cupboard": FaceDeployable(Nearest(DeployableKind.ToolCupboard)); break;
+                case "face-bag": FaceDeployable(Nearest(DeployableKind.Bag)); break;
+                case "open-bag": OpenBox(Nearest(DeployableKind.Bag)); break;
+                case "open-fire": OpenBox(Nearest(DeployableKind.Campfire)); break;
+                case "face-fire": FaceDeployable(Nearest(DeployableKind.Campfire)); break;
+                case "hatchet": HoldItem(ItemIds.StoneHatchet); break;
+                case "raw-meat": HoldItem(ItemIds.RawMeat); break;
+                case "cooked-meat": HoldItem(ItemIds.CookedMeat); break;
+                case "put-meat":
+                    // Test: the raw meat carried goes into the open campfire (or box).
+                    for (int i = 0; i < _inventory.SlotCount; i++)
+                        if (_inventory[i].ItemId == ItemIds.RawMeat)
+                        {
+                            Debug.Log($"[Oxfall] Put meat: {_actions.Put(i, -1)}");
+                            break;
+                        }
+                    break;
                 case "across": _inventoryUi.MoveAcross(); break;
                 case "light": _inventoryUi.ToggleFurnace(); break;
                 case "authorize": _cupboard.Authorize(); break;
@@ -850,6 +1075,7 @@ namespace Oxfall.Game
                 case "metal-door": HoldItem(ItemIds.SheetMetalDoor); break;
                 case "metal-hatchet": HoldItem(ItemIds.MetalHatchet); break;
                 case "metal-pickaxe": HoldItem(ItemIds.MetalPickaxe); break;
+                case "spear": HoldItem(ItemIds.WoodenSpear); break;
                 case "code-lock": HoldItem(ItemIds.CodeLock); break;
                 case "place-lock": _lockPlacer.Place(); break;
                 case "lock-button": _interactor.UseLock(); break;
@@ -901,7 +1127,8 @@ namespace Oxfall.Game
                               $"ponds={_world.Shape.Ponds.Count} berries={_inventory.Count(ItemIds.Berries)} " +
                               $"pieces={_buildings.Grid.PieceCount} views={_buildings.Count} doorLook={_interactor.LookingAtDoor} lookAt={_interactor.LookingAt} " +
                               $"locks={_lockViews.Count} keypad={(_keypad.IsOpen ? _keypad.Current.ToString() : "closed")} " +
-                              $"metal={_inventory.Count(ItemIds.MetalFragments)} " +
+                              $"metal={_inventory.Count(ItemIds.MetalFragments)} animals={_animalViews.Count} " +
+                              $"meat={_inventory.Count(ItemIds.RawMeat)} cooked={_inventory.Count(ItemIds.CookedMeat)} leather={_inventory.Count(ItemIds.Leather)} " +
                               $"pos={_player.transform.position} quality={GraphicsQuality.Name(_quality.Tier)} " +
                               $"screen={Screen.width}x{Screen.height} grass={_grass.BladeCount} " +
                               $"net={_net.State} id={_net.PlayerId} online={_net.OnlineCount} " +
@@ -1144,6 +1371,7 @@ namespace Oxfall.Game
             _vitalsUi?.Tick();
             _keypad?.Tick(Time.unscaledDeltaTime);
             TickNet();
+            TickAnimals(Time.deltaTime);
 
             // Trees and rocks grow back on their own timers; checking once a second is plenty.
             _crafting?.Tick(Time.deltaTime);

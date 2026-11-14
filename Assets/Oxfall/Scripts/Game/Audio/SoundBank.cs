@@ -26,6 +26,13 @@ namespace Oxfall.Game.Audio
         public AudioClip KeyBeep { get; }
         public AudioClip Accepted { get; }
         public AudioClip Denied { get; }
+        public AudioClip HitBody { get; }
+        public AudioClip Hurt { get; }
+
+        /// <summary>A wolf's low snarl, a boar's grunts, a deer's alarm bark.</summary>
+        public AudioClip Growl { get; }
+        public AudioClip Grunt { get; }
+        public AudioClip Bark { get; }
         public AudioClip FireLoop { get; }
         public AudioClip WindLoop { get; }
         public AudioClip WavesLoop { get; }
@@ -59,9 +66,39 @@ namespace Oxfall.Game.Audio
             KeyBeep = Make("key beep", 0.07f, (t, i) => Mathf.Clamp(Tone(t, 2100f) * 2.2f, -1f, 1f) * Env(t, 0.001f, 0.02f) * 0.16f);
             Accepted = Make("accepted", 0.32f, (t, i) =>
                 (Tone(t, 1320f) * Env(t, 0.002f, 0.05f) + Tone(t - 0.1f, 1760f) * Env(t - 0.1f, 0.002f, 0.09f)) * 0.22f);
+            // A blow landing on someone: a dull, heavy knock with a slap on top; being hit: lower, longer.
+            HitBody = Make("hit body", 0.25f, (t, i) =>
+                Thump(t, 85f, 0.05f) * 0.95f + Dark(0.4f) * Env(t, 0.001f, 0.02f) * 0.5f + Tone(t, 300f) * Env(t, 0.001f, 0.015f) * 0.15f);
+            Hurt = Make("hurt", 0.4f, (t, i) =>
+                Thump(t, 60f, 0.09f) * 0.9f + Dark(0.6f) * Env(t, 0.003f, 0.06f) * 0.45f);
             Denied = Make("denied", 0.45f, (t, i) =>
                 Mathf.Clamp(Tone(t, 180f) * 3f, -1f, 1f) * Env(t, 0.004f, 0.16f) * 0.2f
                 + Noise() * Env(t, 0.001f, 0.05f) * (0.5f + 0.5f * Mathf.Sign(Tone(t, 37f))) * 0.3f);
+            // A rasping, rumbling snarl that swells and fades.
+            Growl = Make("growl", 1.3f, (t, i) =>
+            {
+                float swell = Mathf.Clamp01(t / 0.25f) * Mathf.Clamp01((1.3f - t) / 0.4f);
+                float rasp = 0.55f + 0.45f * Mathf.Sin(2f * Mathf.PI * 27f * t + Mathf.Sin(t * 13f) * 2f);
+                float voice = Tone(t, 82f + 9f * Mathf.Sin(t * 17f)) * 0.5f + Tone(t, 164f + 14f * Mathf.Sin(t * 11f)) * 0.25f;
+                return (Dark(0.35f) * 0.8f + voice) * rasp * swell;
+            });
+            // Two snorting grunts.
+            Grunt = Make("grunt", 0.55f, (t, i) =>
+            {
+                float g = 0f;
+                foreach (float at in new[] { 0f, 0.24f })
+                {
+                    float u = t - at;
+                    if (u < 0f) continue;
+                    float pitch = 105f - u * 120f;
+                    g += (Tone(u, pitch) + 0.6f * Tone(u, pitch * 2f) + 0.35f * Tone(u, pitch * 3f)) * Env(u, 0.008f, 0.07f);
+                }
+                return g * 0.5f + Dark(0.5f) * Env(t, 0.005f, 0.2f) * 0.35f;
+            });
+            // A single hoarse cough of alarm.
+            Bark = Make("bark", 0.35f, (t, i) =>
+                (Tone(t, 420f - t * 500f) * 0.5f + Tone(t, 840f - t * 900f) * 0.2f) * Env(t, 0.006f, 0.06f)
+                + Noise() * Env(t, 0.002f, 0.05f) * 0.4f);
             FireLoop = MakeLoop("fire", 3f, FireSample);
             WindLoop = MakeLoop("wind", 6f, WindSample);
             WavesLoop = MakeLoop("waves", 8f, WavesSample);

@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using Oxfall.Core.Items;
 using Oxfall.Core.Net;
 using Oxfall.Core.Rules;
+using Oxfall.Core.Wildlife;
 using Oxfall.Game.Rendering;
 using UnityEngine;
 using Pose = Oxfall.Core.Net.Pose;
@@ -25,7 +26,7 @@ namespace Oxfall.Game.Net
         private Transform _others;
         private readonly NetWriter _writer = new NetWriter();
         private readonly Dictionary<ushort, RemotePlayer> _players = new Dictionary<ushort, RemotePlayer>();
-        private readonly List<(ushort Id, Pose Pose)> _snapshot = new List<(ushort, Pose)>();
+        private readonly List<(ushort Id, Pose Pose, bool Down)> _snapshot = new List<(ushort, Pose, bool)>();
         private readonly ServerClock _clock = new ServerClock();
         private float _sendTimer;
         private bool _teleportPending;
@@ -82,6 +83,20 @@ namespace Oxfall.Game.Net
         /// <summary>The open box or furnace: (id, slot count, slots that changed); id 0 when it closed.</summary>
         public event Action<int, int, List<(int Slot, ItemStack Stack)>> Looted;
 
+        /// <summary>Someone was hurt: target, attacker (0: nobody), damage, whether it killed them.</summary>
+        public event Action<ushort, ushort, int, bool> Hurt;
+
+        /// <summary>The animals near this player now (the list is reused: copy what is kept).</summary>
+        public event Action<List<AnimalSnap>> AnimalsSeen;
+
+        /// <summary>What this player's blow at an animal did: its id, the blow, the damage.</summary>
+        public event Action<int, AnimalBlow, int> AnimalHit;
+
+        /// <summary>An animal hurt someone: who, what kind of animal, how much, whether it killed them.</summary>
+        public event Action<ushort, AnimalKind, int, bool> Bitten;
+
+        private readonly List<AnimalSnap> _animals = new List<AnimalSnap>();
+
         private readonly List<(int, ItemStack)> _loot = new List<(int, ItemStack)>();
 
         private readonly List<(int Id, int Remaining)> _nodeStates = new List<(int, int)>();
@@ -97,6 +112,24 @@ namespace Oxfall.Game.Net
             Messages.Hit(_writer, nodeId, (byte)tool);
             _socket.Send(_writer.Buffer, _writer.Length);
         }
+
+        /// <summary>A blow at another player; the server judges it and tells everyone if it landed.</summary>
+        public void SendStrike(ushort target, ToolKind tool)
+        {
+            if (State != Status.Online || _socket == null) return;
+            Messages.Strike(_writer, target, (byte)tool);
+            _socket.Send(_writer.Buffer, _writer.Length);
+        }
+
+        public void SendStrikeAnimal(int animal, ToolKind tool)
+        {
+            if (State != Status.Online || _socket == null) return;
+            Messages.StrikeAnimal(_writer, animal, (byte)tool);
+            _socket.Send(_writer.Buffer, _writer.Length);
+        }
+
+        /// <summary>A player's name by id (this player's own included), or null.</summary>
+        public string NameOf(ushort id) => id == PlayerId ? "tú" : _players.TryGetValue(id, out var p) ? p.Name : null;
 
         /// <summary>Something done to the player's own belongings; the server answers with the change.</summary>
         public void SendAct(ActKind kind, int a = 0, int b = 0, string recipe = null)
@@ -268,8 +301,12 @@ namespace Oxfall.Game.Net
                 {
                     float time = Messages.ReadSnapshot(reader, _snapshot);
                     _clock.Observe(time, Time.unscaledTime);
-                    foreach (var (id, pose) in _snapshot)
-                        if (_players.TryGetValue(id, out var player)) player.Poses.Add(time, pose);
+                    foreach (var (id, pose, down) in _snapshot)
+                    {
+                        if (!_players.TryGetValue(id, out var player)) continue;
+                        player.Poses.Add(time, pose);
+                        player.SetDown(down);
+                    }
                     break;
                 }
                 case MessageType.NodeStates:
@@ -310,6 +347,30 @@ namespace Oxfall.Game.Net
                 case MessageType.TimeOfDay:
                     TimeOfDay?.Invoke(Messages.ReadTimeOfDay(reader));
                     break;
+                case MessageType.Hurt:
+                {
+                    Messages.ReadHurt(reader, out ushort target, out ushort attacker, out int damage, out bool killed);
+                    if (_players.TryGetValue(target, out var victim)) victim.Flinch();
+                    Hurt?.Invoke(target, attacker, damage, killed);
+                    break;
+                }
+                case MessageType.Animals:
+                    Messages.ReadAnimals(reader, _animals);
+                    AnimalsSeen?.Invoke(_animals);
+                    break;
+                case MessageType.AnimalHit:
+                {
+                    Messages.ReadAnimalHit(reader, out int animal, out var blow, out int damage);
+                    AnimalHit?.Invoke(animal, blow, damage);
+                    break;
+                }
+                case MessageType.Bitten:
+                {
+                    Messages.ReadBitten(reader, out ushort target, out var kind, out int damage, out bool killed);
+                    if (_players.TryGetValue(target, out var victim)) victim.Flinch();
+                    Bitten?.Invoke(target, kind, damage, killed);
+                    break;
+                }
                 case MessageType.Loot:
                 {
                     int box = Messages.ReadLoot(reader, out int slotCount, _loot);

@@ -2,6 +2,7 @@ using Oxfall.Core.Crafting;
 using Oxfall.Core.Items;
 using Oxfall.Core.Net;
 using Oxfall.Core.Rules;
+using Oxfall.Core.Wildlife;
 using UnityEngine;
 
 namespace Oxfall.Game.Net
@@ -35,6 +36,51 @@ namespace Oxfall.Game.Net
         public int Owner => Online ? _net.Owner : 0;
 
         private Inventory Inventory => _survivor.Inventory;
+
+        /// <summary>The island's animals when playing alone (online the server keeps them).</summary>
+        public Fauna Fauna { get; set; }
+
+        /// <summary>What a blow at an animal did (its id, the blow, the damage): at once alone, when the server says online.</summary>
+        public event System.Action<int, AnimalBlow, float> AnimalHit;
+
+        /// <summary>
+        /// A blow at an animal with the tool in hand: a living one is hurt and may die, a carcass is
+        /// cut up into the inventory. Online the server judges it and answers.
+        /// </summary>
+        public void StrikeAnimal(int id, ToolKind tool)
+        {
+            if (Online)
+            {
+                _net.SendStrikeAnimal(id, tool);
+                return;
+            }
+            if (Fauna == null || !Fauna.TryGet(id, out var animal) || _survivor.Vitals.IsDead) return;
+            var blow = AnimalBlow.None;
+            float damage = 0f;
+            if (animal.IsDead)
+            {
+                if (animal.Carcass <= 0) return;
+                var yields = Fauna.Harvest(id, tool);
+                if (yields.Length == 0) blow = AnimalBlow.NeedsBlade;
+                else
+                {
+                    foreach (var (item, amount) in yields)
+                        if (amount > 0) Inventory.Add(item, amount);
+                    blow = animal.Carcass > 0 ? AnimalBlow.Cut : AnimalBlow.UsedUp;
+                }
+            }
+            else
+            {
+                if (!Combat.CanHurt(tool)) return;
+                damage = Mathf.Min(Combat.MeleeDamage(tool), animal.Health);
+                var p = _player.position;
+                blow = Fauna.Hit(id, Combat.MeleeDamage(tool), 0, p.x, p.z) ? AnimalBlow.Killed : AnimalBlow.Hurt;
+            }
+            AnimalHit?.Invoke(id, blow, damage);
+        }
+
+        /// <summary>Online: the server's answer to a blow at an animal.</summary>
+        public void OnServerAnimalHit(int id, AnimalBlow blow, int damage) => AnimalHit?.Invoke(id, blow, damage);
 
         public ActionResult MoveSlot(int from, int to)
         {
@@ -154,6 +200,27 @@ namespace Oxfall.Game.Net
             if (box == null || from < 0 || from >= box.SlotCount || box[from].IsEmpty) return ActionResult.Invalid;
             _net.SendAct(ActKind.Take, from, to);
             return ActionResult.Ok;
+        }
+
+        /// <summary>Everything in the open box that fits into the inventory.</summary>
+        public ActionResult TakeAll()
+        {
+            if (!Online) return PlayerActions.TakeAll(_settlement, _survivor);
+            var box = _settlement.Container(_survivor.Looting);
+            if (box == null || box.IsEmpty) return ActionResult.Invalid;
+            _net.SendAct(ActKind.TakeAll);
+            return ActionResult.Ok;
+        }
+
+        /// <summary>
+        /// The player just died: alone, what they carried goes into a bag where they fell. Online the
+        /// server does that itself, and the bag arrives with everything else it changes.
+        /// </summary>
+        public void DropBag()
+        {
+            if (Online) return;
+            var p = _player.position;
+            PlayerActions.DropBag(_settlement, _survivor, 0, p.x, p.y, p.z, _player.eulerAngles.y, out _);
         }
 
         /// <summary>From an inventory slot into the open box (-1: wherever it fits).</summary>

@@ -362,6 +362,130 @@ namespace Oxfall.Game.World
             return b.Build("BerryBush", 70f);
         }
 
+        // ---- Animals: a body (feet at the origin, facing +Z) and one leg that hangs from its hip, drawn four times.
+        // Submeshes: coat, dark (nose, eyes, hooves), horn (tusks, antlers).
+
+        /// <summary>The hips' places on the body, front left, front right, back left, back right.</summary>
+        public static Vector3[] AnimalHips(Oxfall.Core.Wildlife.AnimalKind kind)
+        {
+            switch (kind)
+            {
+                case Oxfall.Core.Wildlife.AnimalKind.Boar:
+                    return new[] { new Vector3(-0.13f, 0.34f, 0.3f), new Vector3(0.13f, 0.34f, 0.3f), new Vector3(-0.13f, 0.34f, -0.34f), new Vector3(0.13f, 0.34f, -0.34f) };
+                case Oxfall.Core.Wildlife.AnimalKind.Wolf:
+                    return new[] { new Vector3(-0.09f, 0.5f, 0.27f), new Vector3(0.09f, 0.5f, 0.27f), new Vector3(-0.09f, 0.5f, -0.32f), new Vector3(0.09f, 0.5f, -0.32f) };
+                default:
+                    return new[] { new Vector3(-0.1f, 0.75f, 0.33f), new Vector3(0.1f, 0.75f, 0.33f), new Vector3(-0.1f, 0.75f, -0.36f), new Vector3(0.1f, 0.75f, -0.36f) };
+            }
+        }
+
+        public static Mesh AnimalBody(Oxfall.Core.Wildlife.AnimalKind kind)
+        {
+            var b = new FlatMeshBuilder(3) { UvScale = 0.5f };
+            var random = new System.Random(71 + (int)kind);
+            switch (kind)
+            {
+                case Oxfall.Core.Wildlife.AnimalKind.Boar:
+                    // Heavy in front, a bristly ridge down the back, a long wedge of a head with tusks.
+                    b.AddBlob(0, new Vector3(0f, 0.5f, -0.08f), new Vector3(0.25f, 0.23f, 0.44f), random, 0.12f);
+                    b.AddBlob(0, new Vector3(0f, 0.55f, 0.2f), new Vector3(0.25f, 0.25f, 0.27f), random, 0.12f);
+                    b.AddBlob(1, new Vector3(0f, 0.75f, 0.08f), new Vector3(0.05f, 0.07f, 0.38f), random, 0.35f);
+                    b.AddBlob(0, new Vector3(0f, 0.5f, 0.55f), new Vector3(0.15f, 0.16f, 0.19f), random, 0.08f);
+                    b.AddTube(0, new Vector3(0f, 0.47f, 0.68f), new Vector3(0f, 0.38f, 0.9f), 0.1f, 0.065f, 9, 1);
+                    foreach (float x in new[] { -1f, 1f })
+                    {
+                        b.AddCone(0, new Vector3(x * 0.08f, 0.62f, 0.52f), 0.045f, 0.1f, 6, 0f);
+                        b.AddBlob(1, new Vector3(x * 0.1f, 0.55f, 0.66f), new Vector3(0.018f, 0.018f, 0.018f), random, 0f);
+                        b.AddTube(2, new Vector3(x * 0.06f, 0.39f, 0.84f), new Vector3(x * 0.1f, 0.47f, 0.82f), 0.016f, 0.006f, 5);
+                    }
+                    b.AddTube(0, new Vector3(0f, 0.6f, -0.5f), new Vector3(0f, 0.47f, -0.6f), 0.025f, 0.012f, 5);
+                    break;
+                case Oxfall.Core.Wildlife.AnimalKind.Wolf:
+                    // Lean: a deep chest, a narrow waist, a long muzzle, ears up and a bushy tail low.
+                    b.AddBlob(0, new Vector3(0f, 0.62f, -0.08f), new Vector3(0.14f, 0.15f, 0.38f), random, 0.1f);
+                    b.AddBlob(0, new Vector3(0f, 0.64f, 0.22f), new Vector3(0.16f, 0.2f, 0.21f), random, 0.12f);
+                    b.AddTube(0, new Vector3(0f, 0.68f, 0.33f), new Vector3(0f, 0.81f, 0.53f), 0.12f, 0.085f, 9);
+                    b.AddBlob(0, new Vector3(0f, 0.83f, 0.6f), new Vector3(0.1f, 0.1f, 0.12f), random, 0.06f);
+                    b.AddTube(0, new Vector3(0f, 0.8f, 0.67f), new Vector3(0f, 0.765f, 0.85f), 0.055f, 0.03f, 8, 1);
+                    foreach (float x in new[] { -1f, 1f })
+                    {
+                        b.AddCone(0, new Vector3(x * 0.055f, 0.89f, 0.57f), 0.035f, 0.1f, 5, 0f);
+                        b.AddBlob(1, new Vector3(x * 0.06f, 0.86f, 0.68f), new Vector3(0.014f, 0.012f, 0.014f), random, 0f);
+                    }
+                    b.AddTube(0, new Vector3(0f, 0.66f, -0.42f), new Vector3(0f, 0.5f, -0.7f), 0.065f, 0.045f, 7);
+                    b.AddTube(1, new Vector3(0f, 0.5f, -0.7f), new Vector3(0f, 0.38f, -0.8f), 0.045f, 0.012f, 7);
+                    break;
+                default:
+                    // Long-legged and slender: a long neck, big ears, antlers, a short tail.
+                    b.AddBlob(0, new Vector3(0f, 0.93f, 0f), new Vector3(0.18f, 0.21f, 0.46f), random, 0.08f);
+                    b.AddTube(0, new Vector3(0f, 1.0f, 0.34f), new Vector3(0f, 1.33f, 0.55f), 0.11f, 0.065f, 9);
+                    b.AddBlob(0, new Vector3(0f, 1.37f, 0.61f), new Vector3(0.075f, 0.085f, 0.12f), random, 0.05f);
+                    b.AddTube(0, new Vector3(0f, 1.34f, 0.69f), new Vector3(0f, 1.28f, 0.83f), 0.05f, 0.032f, 8, 1);
+                    b.AddBlob(0, new Vector3(0f, 1.02f, -0.48f), new Vector3(0.04f, 0.06f, 0.03f), random, 0.1f);
+                    foreach (float x in new[] { -1f, 1f })
+                    {
+                        b.AddTube(0, new Vector3(x * 0.06f, 1.42f, 0.58f), new Vector3(x * 0.15f, 1.47f, 0.55f), 0.03f, 0.012f, 5);
+                        b.AddBlob(1, new Vector3(x * 0.055f, 1.4f, 0.69f), new Vector3(0.014f, 0.014f, 0.014f), random, 0f);
+                        b.AddTube(2, new Vector3(x * 0.035f, 1.44f, 0.6f), new Vector3(x * 0.13f, 1.66f, 0.52f), 0.02f, 0.013f, 5);
+                        b.AddTube(2, new Vector3(x * 0.13f, 1.66f, 0.52f), new Vector3(x * 0.2f, 1.8f, 0.47f), 0.013f, 0.005f, 5);
+                        b.AddTube(2, new Vector3(x * 0.1f, 1.58f, 0.55f), new Vector3(x * 0.07f, 1.73f, 0.63f), 0.011f, 0.004f, 4);
+                        b.AddTube(2, new Vector3(x * 0.05f, 1.49f, 0.6f), new Vector3(x * 0.05f, 1.54f, 0.71f), 0.01f, 0.004f, 4);
+                    }
+                    break;
+            }
+            return b.Build("Animal " + kind, 55f);
+        }
+
+        /// <summary>One leg hanging from its hip at the origin, the hoof or paw at the ground.</summary>
+        public static Mesh AnimalLeg(Oxfall.Core.Wildlife.AnimalKind kind)
+        {
+            var b = new FlatMeshBuilder(3) { UvScale = 0.5f };
+            switch (kind)
+            {
+                case Oxfall.Core.Wildlife.AnimalKind.Boar:
+                    b.AddTube(0, new Vector3(0f, 0.04f, 0f), new Vector3(0f, -0.26f, 0.01f), 0.065f, 0.042f, 6);
+                    b.AddTube(1, new Vector3(0f, -0.26f, 0.01f), new Vector3(0f, -0.34f, 0.025f), 0.042f, 0.038f, 6, 1);
+                    break;
+                case Oxfall.Core.Wildlife.AnimalKind.Wolf:
+                    b.AddTube(0, new Vector3(0f, 0.04f, 0f), new Vector3(0f, -0.25f, -0.025f), 0.055f, 0.034f, 6);
+                    b.AddTube(0, new Vector3(0f, -0.25f, -0.025f), new Vector3(0f, -0.46f, 0f), 0.034f, 0.027f, 6);
+                    b.AddBlob(1, new Vector3(0f, -0.48f, 0.02f), new Vector3(0.033f, 0.02f, 0.045f), new System.Random(5), 0.05f);
+                    break;
+                default:
+                    b.AddTube(0, new Vector3(0f, 0.05f, 0f), new Vector3(0f, -0.34f, -0.035f), 0.06f, 0.033f, 6);
+                    b.AddTube(0, new Vector3(0f, -0.34f, -0.035f), new Vector3(0f, -0.66f, 0f), 0.03f, 0.024f, 6);
+                    b.AddTube(1, new Vector3(0f, -0.66f, 0f), new Vector3(0f, -0.75f, 0.02f), 0.028f, 0.03f, 6, 1);
+                    break;
+            }
+            return b.Build("Animal leg " + kind, 55f);
+        }
+
+        /// <summary>A thick cut of meat with a bone through it, lying flat. Submeshes: meat, bone.</summary>
+        public static Mesh MeatCut()
+        {
+            var b = new FlatMeshBuilder(2) { UvScale = 0.3f };
+            var random = new System.Random(83);
+            b.AddBlob(0, new Vector3(0f, 0f, 0f), new Vector3(0.12f, 0.045f, 0.09f), random, 0.12f);
+            b.AddBlob(0, new Vector3(0.06f, 0.005f, 0.03f), new Vector3(0.07f, 0.04f, 0.06f), random, 0.12f);
+            b.AddTube(1, new Vector3(-0.17f, 0f, -0.02f), new Vector3(0.04f, 0f, 0.0f), 0.022f, 0.02f, 7, 1);
+            b.AddBlob(1, new Vector3(-0.18f, 0f, -0.02f), new Vector3(0.03f, 0.03f, 0.035f), random, 0.1f);
+            return b.Build("MeatCut", 60f);
+        }
+
+        /// <summary>A folded hide, flat, its edges uneven. Submeshes: leather, cord.</summary>
+        public static Mesh FoldedHide()
+        {
+            var b = new FlatMeshBuilder(2) { UvScale = 0.3f };
+            var random = new System.Random(89);
+            b.AddBlob(0, new Vector3(0f, 0f, 0f), new Vector3(0.16f, 0.025f, 0.12f), random, 0.25f);
+            b.AddBlob(0, new Vector3(0.02f, 0.04f, -0.01f), new Vector3(0.14f, 0.022f, 0.1f), random, 0.25f);
+            b.AddBlob(0, new Vector3(-0.01f, 0.075f, 0.01f), new Vector3(0.12f, 0.02f, 0.085f), random, 0.25f);
+            b.AddTube(1, new Vector3(0f, -0.03f, -0.13f), new Vector3(0f, 0.1f, -0.06f), 0.012f, 0.012f, 4);
+            b.AddTube(1, new Vector3(0f, 0.1f, -0.06f), new Vector3(0f, 0.1f, 0.08f), 0.012f, 0.012f, 4);
+            b.AddTube(1, new Vector3(0f, 0.1f, 0.08f), new Vector3(0f, -0.03f, 0.13f), 0.012f, 0.012f, 4);
+            return b.Build("FoldedHide", 60f);
+        }
+
         // ---- Other players: a plain survivor in parts that swing (legs and arms hang from their tops).
 
         /// <summary>Torso, neck and head, feet at the origin. Submeshes: shirt, skin.</summary>
@@ -481,6 +605,22 @@ namespace Oxfall.Game.World
         }
 
         /// <summary>A torch: a stick with a wrap of charred cloth at the top. Submeshes: wood, cloth.</summary>
+        /// <summary>
+        /// A wooden spear 2.2 m long, gripped at the origin: a straight shaft along +Y with its point
+        /// whittled and hardened black in the fire, and a cord wrap where the hand goes. Submeshes:
+        /// wood, charred point, cord.
+        /// </summary>
+        public static Mesh WoodenSpear()
+        {
+            var b = new FlatMeshBuilder(3) { UvScale = 0.25f };
+            b.AddTube(0, new Vector3(0f, -0.95f, 0f), new Vector3(0f, 1.02f, 0f), 0.019f, 0.017f, 7, 0);
+            b.AddTube(1, new Vector3(0f, 1.02f, 0f), new Vector3(0f, 1.12f, 0f), 0.017f, 0.012f, 7);
+            b.AddCone(1, new Vector3(0f, 1.12f, 0f), 0.012f, 0.13f, 7, 0f);
+            b.AddTube(2, new Vector3(0f, -0.09f, 0f), new Vector3(0f, 0.09f, 0f), 0.023f, 0.023f, 8, 2);
+            b.AddTube(2, new Vector3(0f, 0.62f, 0f), new Vector3(0f, 0.68f, 0f), 0.021f, 0.021f, 8, 2);
+            return b.Build("WoodenSpear", 55f);
+        }
+
         public static Mesh Torch()
         {
             var b = new FlatMeshBuilder(2) { UvScale = 0.25f };
@@ -774,6 +914,25 @@ namespace Oxfall.Game.World
             b.AddBox(1, new Vector3(-0.28f, 0.02f, 0.88f), new Vector3(0.28f, 0.17f, 1.08f));
             b.AddTube(2, new Vector3(-0.38f, 0.07f, -0.8f), new Vector3(0.38f, 0.07f, -0.8f), 0.075f, 0.075f, 6);
             return b.Build("SleepingBag", 30f);
+        }
+
+        /// <summary>
+        /// What a dead player leaves: a lumpy sack of coarse cloth about 0.6 m long, lying on its side
+        /// with its gathered neck tied off towards +Z. Submeshes: cloth, cord.
+        /// </summary>
+        public static Mesh LootBag()
+        {
+            var b = new FlatMeshBuilder(2) { UvScale = 0.6f };
+            var random = new System.Random(61);
+            b.AddBlob(0, new Vector3(0f, 0.16f, -0.06f), new Vector3(0.25f, 0.16f, 0.27f), random, 0.16f);
+            b.AddBlob(0, new Vector3(0.04f, 0.12f, 0.12f), new Vector3(0.19f, 0.12f, 0.16f), random, 0.14f);
+            // The neck, gathered and tied, and the cloth above the knot splayed open.
+            b.AddTube(0, new Vector3(0.02f, 0.15f, 0.22f), new Vector3(0.03f, 0.12f, 0.33f), 0.07f, 0.035f, 7);
+            b.AddTube(0, new Vector3(0.03f, 0.12f, 0.33f), new Vector3(0.04f, 0.1f, 0.42f), 0.035f, 0.075f, 7);
+            b.AddTube(1, new Vector3(0.025f, 0.13f, 0.315f), new Vector3(0.03f, 0.125f, 0.345f), 0.045f, 0.045f, 8);
+            // A loose end of the cord.
+            b.AddTube(1, new Vector3(0.06f, 0.12f, 0.34f), new Vector3(0.16f, 0.02f, 0.4f), 0.012f, 0.01f, 4);
+            return b.Build("LootBag", 50f);
         }
 
         /// <summary>

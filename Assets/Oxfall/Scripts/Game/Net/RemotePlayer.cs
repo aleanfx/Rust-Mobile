@@ -5,6 +5,12 @@ using UnityEngine;
 
 namespace Oxfall.Game.Net
 {
+    /// <summary>Marks another player's collider, so a blow that lands on it knows whom it hit.</summary>
+    public sealed class PlayerTag : MonoBehaviour
+    {
+        public ushort Id;
+    }
+
     /// <summary>
     /// Another player as this phone sees them: a survivor figure drawn a moment in the past, moving
     /// smoothly between the positions the server sent, legs and arms swinging with their speed.
@@ -19,7 +25,13 @@ namespace Oxfall.Game.Net
         public PoseBuffer Poses { get; } = new PoseBuffer();
         public bool Visible => Root.gameObject.activeSelf;
 
-        private readonly Transform _legL, _legR, _armL, _armR;
+        /// <summary>Dead: lying where they fell until they wake up somewhere.</summary>
+        public bool Down { get; private set; }
+
+        private readonly Transform _figure, _legL, _legR, _armL, _armR;
+        private readonly CapsuleCollider _capsule;
+        private float _fall;
+        private float _flinch;
         private Vector3 _last;
         private float _speed;
         private float _phase;
@@ -34,11 +46,14 @@ namespace Oxfall.Game.Net
 
             Root = new GameObject("Player " + id + " " + name).transform;
             Root.SetParent(parent, false);
-            Part("Body", Root, Vector3.zero, _body, materials.Shirt, materials.Skin);
-            _legL = Part("Leg L", Root, new Vector3(-0.09f, 0.92f, 0f), _leg, materials.Trousers, materials.Char);
-            _legR = Part("Leg R", Root, new Vector3(0.09f, 0.92f, 0f), _leg, materials.Trousers, materials.Char);
-            _armL = Part("Arm L", Root, new Vector3(-0.23f, 1.4f, 0f), _arm, materials.Shirt, materials.Skin);
-            _armR = Part("Arm R", Root, new Vector3(0.23f, 1.4f, 0f), _arm, materials.Shirt, materials.Skin);
+            // The figure in a child of its own, so it can fall over without the root turning.
+            _figure = new GameObject("Figure").transform;
+            _figure.SetParent(Root, false);
+            Part("Body", _figure, Vector3.zero, _body, materials.Shirt, materials.Skin);
+            _legL = Part("Leg L", _figure, new Vector3(-0.09f, 0.92f, 0f), _leg, materials.Trousers, materials.Char);
+            _legR = Part("Leg R", _figure, new Vector3(0.09f, 0.92f, 0f), _leg, materials.Trousers, materials.Char);
+            _armL = Part("Arm L", _figure, new Vector3(-0.23f, 1.4f, 0f), _arm, materials.Shirt, materials.Skin);
+            _armR = Part("Arm R", _figure, new Vector3(0.23f, 1.4f, 0f), _arm, materials.Shirt, materials.Skin);
             _armL.localRotation = Quaternion.Euler(0f, 0f, -6f);
             _armR.localRotation = Quaternion.Euler(0f, 0f, 6f);
 
@@ -47,8 +62,22 @@ namespace Oxfall.Game.Net
             capsule.center = new Vector3(0f, 0.9f, 0f);
             capsule.height = 1.8f;
             capsule.radius = 0.3f;
+            _capsule = capsule;
+            Root.gameObject.AddComponent<PlayerTag>().Id = id;
             Root.gameObject.SetActive(false);
         }
+
+        /// <summary>Falls over on dying (and can no longer be hit); stands again on waking up.</summary>
+        public void SetDown(bool down)
+        {
+            if (down == Down) return;
+            Down = down;
+            _capsule.enabled = !down;
+            if (!down) _fall = 0f;
+        }
+
+        /// <summary>A blow landed: a quick jolt backwards.</summary>
+        public void Flinch() => _flinch = 1f;
 
         private static Transform Part(string name, Transform parent, Vector3 at, Mesh mesh, params Material[] materials)
         {
@@ -81,6 +110,13 @@ namespace Oxfall.Game.Net
                 _speed = Mathf.Lerp(_speed, step.magnitude / dt, 1f - Mathf.Exp(-dt * 10f));
             }
             _last = position;
+            // Falling over when dead (face down, ahead), a jolt when hit.
+            _fall = Mathf.MoveTowards(_fall, Down ? 1f : 0f, dt * 2.5f);
+            _flinch = Mathf.MoveTowards(_flinch, 0f, dt * 6f);
+            float f = _fall * _fall;
+            _figure.localRotation = Quaternion.Euler(f * 88f - _flinch * 9f, 0f, 0f);
+            _figure.localPosition = new Vector3(0f, f * 0.16f, 0f);
+            if (Down) _speed = 0f;
             float swing = Mathf.Clamp01(_speed / 4f) * 32f;
             _phase += dt * Mathf.Lerp(4f, 9f, Mathf.Clamp01(_speed / 6.6f));
             float s = Mathf.Sin(_phase) * swing;

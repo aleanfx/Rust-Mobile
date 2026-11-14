@@ -10,9 +10,12 @@ namespace Oxfall.Core.Items
         public const string Cloth = "cloth";
         public const string MetalFragments = "metal_fragments";
         public const string Charcoal = "charcoal";
+        public const string Leather = "leather";
 
         // Food
         public const string Berries = "berries";
+        public const string RawMeat = "raw_meat";
+        public const string CookedMeat = "cooked_meat";
 
         // Tools
         public const string Rock = "rock";
@@ -33,5 +36,6 @@ namespace Oxfall.Core.Items
         public const string ToolCupboard = "tool_cupboard";
         public const string SheetMetalDoor = "sheet_metal_door";
         public const string CodeLock = "code_lock";
+        public const string WoodenSpear = "wooden_spear";
     }
 }

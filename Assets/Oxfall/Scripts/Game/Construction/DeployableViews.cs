@@ -39,7 +39,12 @@ namespace Oxfall.Game.Construction
         {
             _settlement = settlement;
             foreach (DeployableKind kind in Enum.GetValues(typeof(DeployableKind)))
-                if (models.TryGetValue(Deployables.ItemOf(kind), out var model)) _models[kind] = model;
+            {
+                string item = Deployables.ItemOf(kind);
+                if (item != null && models.TryGetValue(item, out var model)) _models[kind] = model;
+            }
+            // A dead player's bag is made from no item, so it has a model of its own.
+            _models[DeployableKind.Bag] = new ItemModel { Mesh = MeshFactory.LootBag(), Materials = new[] { materials.Cloth, materials.Rope } };
             _flame = MeshFactory.Flame();
             _flameMaterial = materials.Flame;
             _root = new GameObject("Deployables").transform;

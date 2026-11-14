@@ -80,7 +80,7 @@ namespace Oxfall.Game.UI
             UiFactory.AddText(title, "HAS MUERTO", 110, TextAnchor.MiddleCenter, UiTheme.Bad, true);
             var line = UiFactory.NewRect("Line", _death, half, half, new Vector2(0f, 38f), new Vector2(80f, 4f));
             UiFactory.AddImage(line, null, UiTheme.Accent);
-            var hint = UiFactory.NewRect("Hint", _death, half, half, new Vector2(0f, -10f), new Vector2(1300f, 50f));
+            var hint = UiFactory.NewRect("Hint", _death, half, half, new Vector2(0f, -26f), new Vector2(1300f, 50f));
             _hint = UiFactory.AddText(hint, "", 32, TextAnchor.MiddleCenter, UiTheme.TextMuted);
             _beach = UiFactory.NewRect("Wake up", _death, half, half, new Vector2(0f, -130f), new Vector2(ChoiceWidth, 110f));
             UiFactory.AddImage(_beach, UiFactory.Soft, UiTheme.Accent);
@@ -118,6 +118,11 @@ namespace Oxfall.Game.UI
         /// The sleeping bags to offer on the death screen (up to three): their ids and how many
         /// seconds until each is ready. None: only the beach.
         /// </summary>
+        private string _cause;
+
+        /// <summary>What killed the player ("Te mató Bea."), shown above the choices; null for nothing said.</summary>
+        public void SetCause(string cause) => _cause = cause;
+
         public void SetBags(IReadOnlyList<(int Id, Func<float> ReadyIn)> bags)
         {
             _bagCount = bags == null ? 0 : Math.Min(bags.Count, MaxBags);
@@ -139,9 +144,10 @@ namespace Oxfall.Game.UI
             for (int i = 0; i < _bagCount; i++)
                 _bags[i].Rect.anchoredPosition = new Vector2(x + (i + 1) * (ChoiceWidth + ChoiceGap), -130f);
             _beachLabel.text = _bagCount > 0 ? "EN LA PLAYA" : "DESPERTAR";
-            _hint.text = _bagCount > 0
+            _hint.text = (string.IsNullOrEmpty(_cause) ? "" : _cause + "  ") + (_bagCount > 0
                 ? "Elige dónde despertar: en la playa o en uno de tus sacos de dormir."
-                : "Despiertas en la playa con una roca y una antorcha.";
+                : "Despiertas en la playa con una roca y una antorcha.") +
+                "\nLo que llevabas quedó en una bolsa donde caíste: corre a por ella.";
             TickBags();
         }
 

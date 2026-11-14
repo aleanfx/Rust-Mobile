@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using Oxfall.Core.Wildlife;
 
 namespace Oxfall.Core.Net
 {
@@ -11,7 +12,7 @@ namespace Oxfall.Core.Net
     public static class Protocol
     {
         /// <summary>Raised whenever a message changes shape; a client of another version is turned away.</summary>
-        public const ushort Version = 6;
+        public const ushort Version = 7;
 
         /// <summary>Snapshots per second the server sends.</summary>
         public const int TickRate = 20;
@@ -62,6 +63,10 @@ namespace Oxfall.Core.Net
         Hit = 3,
         Act = 4,
         Build = 5,
+        /// <summary>A blow at another player (their id, the tool in hand).</summary>
+        Strike = 6,
+        /// <summary>A blow at an animal, living (to kill it) or dead (to cut it up): its id, the tool in hand.</summary>
+        StrikeAnimal = 7,
 
         // Server to client
         Welcome = 10,
@@ -80,6 +85,14 @@ namespace Oxfall.Core.Net
         Built = 23,
         TimeOfDay = 24,
         Loot = 25,
+        /// <summary>Someone was hurt by someone: who, by whom, how much, and whether it killed them.</summary>
+        Hurt = 26,
+        /// <summary>Where the animals near a player are and what they are doing (a few times a second).</summary>
+        Animals = 27,
+        /// <summary>What a player's blow at an animal did (to that player alone).</summary>
+        AnimalHit = 28,
+        /// <summary>An animal hurt a player: who, what kind of animal, how much, and whether it killed them.</summary>
+        Bitten = 29,
     }
 
     /// <summary>What a player does to their own belongings (inside an <see cref="MessageType.Act"/> message).</summary>
@@ -104,6 +117,10 @@ namespace Oxfall.Core.Net
         Put = 13,
         /// <summary>Within the open box, slot a onto slot b.</summary>
         MoveInBox = 14,
+        /// <summary>Everything in the open box that fits into the inventory.</summary>
+        TakeAll = 15,
+        /// <summary>Test servers only: an animal of kind a a few metres ahead of the player.</summary>
+        DevSpawnAnimal = 16,
     }
 
     /// <summary>Where a player stands and which way the body faces (degrees about up).</summary>
@@ -588,28 +605,157 @@ namespace Oxfall.Core.Net
 
         public static Pose ReadCorrection(NetReader r) => Pose.Read(r);
 
-        /// <summary>Where every player is at <paramref name="serverTime"/>.</summary>
-        public static void Snapshot(NetWriter w, float serverTime, IReadOnlyList<(ushort Id, Pose Pose)> players)
+        /// <summary>Where every player is at <paramref name="serverTime"/>, and who is down (dead).</summary>
+        public static void Snapshot(NetWriter w, float serverTime, IReadOnlyList<(ushort Id, Pose Pose, bool Down)> players)
         {
             w.Reset();
             w.Byte((byte)MessageType.Snapshot);
             w.Float(serverTime);
             w.UShort((ushort)players.Count);
-            foreach (var (id, pose) in players)
+            foreach (var (id, pose, down) in players)
             {
                 w.UShort(id);
                 pose.Write(w);
+                w.Bool(down);
             }
         }
 
-        public static float ReadSnapshot(NetReader r, List<(ushort Id, Pose Pose)> into)
+        public static float ReadSnapshot(NetReader r, List<(ushort Id, Pose Pose, bool Down)> into)
         {
             into.Clear();
             float time = r.Float();
             int n = r.UShort();
             if (n > Protocol.MaxPlayers) throw new ProtocolException("Too many players in a snapshot.");
-            for (int i = 0; i < n; i++) into.Add((r.UShort(), Pose.Read(r)));
+            for (int i = 0; i < n; i++) into.Add((r.UShort(), Pose.Read(r), r.Bool()));
             return time;
+        }
+
+        /// <summary>A blow at another player with the tool in hand.</summary>
+        public static void Strike(NetWriter w, ushort target, byte tool)
+        {
+            w.Reset();
+            w.Byte((byte)MessageType.Strike);
+            w.UShort(target);
+            w.Byte(tool);
+        }
+
+        public static void ReadStrike(NetReader r, out ushort target, out byte tool)
+        {
+            target = r.UShort();
+            tool = r.Byte();
+        }
+
+        /// <summary>Someone hurt someone (attacker 0: nobody, as a fall or hunger).</summary>
+        public static void Hurt(NetWriter w, ushort target, ushort attacker, float damage, bool killed)
+        {
+            w.Reset();
+            w.Byte((byte)MessageType.Hurt);
+            w.UShort(target);
+            w.UShort(attacker);
+            w.Byte((byte)Math.Min(255, Math.Max(0, (int)Math.Round(damage))));
+            w.Bool(killed);
+        }
+
+        public static void ReadHurt(NetReader r, out ushort target, out ushort attacker, out int damage, out bool killed)
+        {
+            target = r.UShort();
+            attacker = r.UShort();
+            damage = r.Byte();
+            killed = r.Bool();
+        }
+            // ---- Animals
+
+        public static void StrikeAnimal(NetWriter w, int animal, byte tool)
+        {
+            w.Reset();
+            w.Byte((byte)MessageType.StrikeAnimal);
+            w.Int(animal);
+            w.Byte(tool);
+        }
+
+        public static void ReadStrikeAnimal(NetReader r, out int animal, out byte tool)
+        {
+            animal = r.Int();
+            tool = r.Byte();
+        }
+
+        /// <summary>The animals within <paramref name="range"/> of (x, z): where, which way, how fast, how hurt.</summary>
+        public static void Animals(NetWriter w, IEnumerable<Animal> animals, float x, float z, float range)
+        {
+            w.Reset();
+            w.Byte((byte)MessageType.Animals);
+            int countAt = w.Length;
+            w.UShort(0);
+            int count = 0;
+            float r2 = range * range;
+            foreach (var a in animals)
+            {
+                float dx = a.X - x, dz = a.Z - z;
+                if (dx * dx + dz * dz > r2) continue;
+                if (count == ushort.MaxValue) break;
+                w.Int(a.Id);
+                w.Byte((byte)a.Kind);
+                w.Byte((byte)a.State);
+                w.Float(a.X);
+                w.Float(a.Z);
+                w.Byte((byte)((int)Math.Round(a.Yaw / 360f * 256f) & 0xFF));
+                w.Byte((byte)Math.Min(255, (int)Math.Round(a.Speed * 20f)));
+                w.Byte((byte)Math.Min(255, Math.Max(0, (int)Math.Round(a.Health / Wildlife.Animals.MaxHealth(a.Kind) * 255f))));
+                count++;
+            }
+            w.PatchUShort(countAt, (ushort)count);
+        }
+
+        public static void ReadAnimals(NetReader r, List<AnimalSnap> into)
+        {
+            into.Clear();
+            int count = r.UShort();
+            for (int i = 0; i < count; i++)
+            {
+                int id = r.Int();
+                var kind = (AnimalKind)r.Byte();
+                var state = (AnimalState)r.Byte();
+                float x = r.Float(), z = r.Float();
+                float yaw = r.Byte() / 256f * 360f;
+                float speed = r.Byte() / 20f;
+                float health = r.Byte() / 255f;
+                if (!Wildlife.Animals.IsKnown(kind)) continue;
+                into.Add(new AnimalSnap(id, kind, state, x, z, yaw, speed, health));
+            }
+        }
+
+        public static void AnimalHit(NetWriter w, int animal, AnimalBlow blow, float damage)
+        {
+            w.Reset();
+            w.Byte((byte)MessageType.AnimalHit);
+            w.Int(animal);
+            w.Byte((byte)blow);
+            w.Byte((byte)Math.Min(255, Math.Max(0, (int)Math.Round(damage))));
+        }
+
+        public static void ReadAnimalHit(NetReader r, out int animal, out AnimalBlow blow, out int damage)
+        {
+            animal = r.Int();
+            blow = (AnimalBlow)r.Byte();
+            damage = r.Byte();
+        }
+
+        public static void Bitten(NetWriter w, ushort target, AnimalKind kind, float damage, bool killed)
+        {
+            w.Reset();
+            w.Byte((byte)MessageType.Bitten);
+            w.UShort(target);
+            w.Byte((byte)kind);
+            w.Byte((byte)Math.Min(255, Math.Max(0, (int)Math.Round(damage))));
+            w.Bool(killed);
+        }
+
+        public static void ReadBitten(NetReader r, out ushort target, out AnimalKind kind, out int damage, out bool killed)
+        {
+            target = r.UShort();
+            kind = (AnimalKind)r.Byte();
+            damage = r.Byte();
+            killed = r.Bool();
         }
     }
 }

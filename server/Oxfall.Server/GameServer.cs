@@ -10,6 +10,7 @@ using Microsoft.Extensions.Logging;
 using Oxfall.Core.Items;
 using Oxfall.Core.Net;
 using Oxfall.Core.Rules;
+using Oxfall.Core.Wildlife;
 
 namespace Oxfall.Server
 {
@@ -117,6 +118,7 @@ namespace Oxfall.Server
             var period = TimeSpan.FromSeconds(1.0 / Protocol.TickRate);
             using var timer = new PeriodicTimer(period);
             float lastTick = Now, lastRespawn = Now, lastSave = Now, lastClock = Now;
+            long ticks = 0;
             while (await timer.WaitForNextTickAsync(stop))
             {
                 if (Now - lastSave >= SaveInterval)
@@ -129,6 +131,14 @@ namespace Oxfall.Server
                     float now = Now;
                     _world.Tick(now - lastTick);
                     lastTick = now;
+                    ticks++;
+                    // Animals' bites, for everyone to see who was hurt (the victim's health follows in their update).
+                    foreach (var (target, kind, damage, killed) in _world.Bites)
+                    {
+                        Messages.Bitten(writer, target, kind, damage, killed);
+                        Broadcast(writer.ToArray());
+                    }
+                    _world.Bites.Clear();
                     // A furnace that burned out, for everyone to see.
                     if (_world.Announcements.Count > 0)
                     {
@@ -161,6 +171,14 @@ namespace Oxfall.Server
                     }
                     Messages.Snapshot(writer, now, _state.Snapshot());
                     Broadcast(writer.ToArray());
+                    // The animals near each player, five times a second (their phones walk them on in between).
+                    if (ticks % (Protocol.TickRate / 5) == 0)
+                        foreach (var session in _sessions.Values)
+                        {
+                            if (!_state.TryGet(session.Id, out var player)) continue;
+                            Messages.Animals(writer, _world.Fauna.All, player.Pose.X, player.Pose.Z, ServerWorld.AnimalRange);
+                            session.Connection.Send(writer.ToArray());
+                        }
                     foreach (var session in _sessions.Values) Flush(session, now);
                 }
             }
@@ -262,6 +280,25 @@ namespace Oxfall.Server
                     _world.TryGetNode(nodeId, out var node, out _, out _);
                     Messages.NodeStates(writer, new[] { (node.Id, node.Remaining) });
                     Broadcast(writer.ToArray());
+                    break;
+                }
+                case MessageType.Strike:
+                {
+                    Messages.ReadStrike(reader, out ushort target, out byte tool);
+                    if (!_world.Strike(id, target, (ToolKind)tool, now, out float damage, out bool killed)) break;
+                    // Everyone sees the blow land (the victim's own health follows in their next update).
+                    Messages.Hurt(writer, target, id, damage, killed);
+                    Broadcast(writer.ToArray());
+                    break;
+                }
+                case MessageType.StrikeAnimal:
+                {
+                    Messages.ReadStrikeAnimal(reader, out int animal, out byte tool);
+                    var blow = _world.StrikeAnimal(id, animal, (ToolKind)tool, now, out float damage, out int lost);
+                    if (blow == AnimalBlow.None) break;
+                    Messages.AnimalHit(writer, animal, blow, damage);
+                    session.Connection.Send(writer.ToArray());
+                    if (lost > 0) Fail(session, writer, ActionResult.InventoryFull);
                     break;
                 }
                 case MessageType.Act:

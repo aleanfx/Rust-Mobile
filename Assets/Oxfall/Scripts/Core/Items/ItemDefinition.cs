@@ -22,6 +22,7 @@ namespace Oxfall.Core.Items
         Hammer,
         MetalHatchet,
         MetalPickaxe,
+        Spear,
     }
 
     /// <summary>

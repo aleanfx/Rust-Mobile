@@ -51,10 +51,18 @@ namespace Oxfall.Core.Items
                 description: "Salen del horno, fundiendo mineral de metal."),
             new ItemDefinition(ItemIds.Charcoal, "Carbón", ItemCategory.Resource, 1000,
                 description: "Lo que deja la madera al arder en el horno."),
+            new ItemDefinition(ItemIds.Leather, "Cuero", ItemCategory.Resource, 1000,
+                description: "Sale de los animales que cazas. Para ropa y armaduras."),
 
             new ItemDefinition(ItemIds.Berries, "Moras", ItemCategory.Food, 20,
                 description: "Llévalas en la mano y toca COMER: algo de comida y de agua.",
                 nourishment: new Nourishment(35f, 15f)),
+            new ItemDefinition(ItemIds.RawMeat, "Carne cruda", ItemCategory.Food, 20,
+                description: "Alimenta poco y da sed. Ásala en una fogata: ábrela y métela dentro.",
+                nourishment: new Nourishment(15f, -10f)),
+            new ItemDefinition(ItemIds.CookedMeat, "Carne asada", ItemCategory.Food, 20,
+                description: "La mejor comida de la isla.",
+                nourishment: new Nourishment(75f, 5f)),
 
             new ItemDefinition(ItemIds.Rock, "Roca", ItemCategory.Tool, 1, ToolKind.Rock, skinnable: true,
                 description: "Golpea árboles y piedras. Mejor que nada."),
@@ -70,6 +78,8 @@ namespace Oxfall.Core.Items
                 description: "Tala árboles mucho más rápido que la de piedra."),
             new ItemDefinition(ItemIds.MetalPickaxe, "Pico de metal", ItemCategory.Tool, 1, ToolKind.MetalPickaxe, skinnable: true,
                 description: "Pica piedra y mineral mucho más rápido que el de piedra."),
+            new ItemDefinition(ItemIds.WoodenSpear, "Lanza de madera", ItemCategory.Tool, 1, ToolKind.Spear, skinnable: true,
+                description: "Un palo largo con la punta endurecida al fuego: llega más lejos y hace más daño que cualquier herramienta."),
 
             new ItemDefinition(ItemIds.BuildingPlan, "Plano de construcción", ItemCategory.Placeable, 1,
                 description: "Llévalo en la mano para construir."),

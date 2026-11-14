@@ -29,6 +29,9 @@ namespace Oxfall.Game.Items
         /// <summary>Whether it burns while held (the torch), and where the flame sits on the model.</summary>
         public bool Burns;
         public Vector3 FirePosition;
+
+        /// <summary>Whether a blow is a stab straight ahead (a spear) rather than a swing.</summary>
+        public bool Thrusts;
     }
 
     /// <summary>
@@ -57,6 +60,18 @@ namespace Oxfall.Game.Items
                 [ItemIds.Hammer] = Tool(MeshFactory.Hammer(), new[] { m.Bark, m.Stone, m.Rope }),
                 [ItemIds.MetalHatchet] = Tool(MeshFactory.MetalHatchet(), new[] { m.Bark, m.Steel, m.Rope }),
                 [ItemIds.MetalPickaxe] = Tool(MeshFactory.MetalPickaxe(), new[] { m.Bark, m.Steel, m.Rope }),
+                [ItemIds.WoodenSpear] = new ItemModel
+                {
+                    Mesh = MeshFactory.WoodenSpear(),
+                    Materials = new[] { m.Bark, m.Char, m.Rope },
+                    ShowInHand = true,
+                    Thrusts = true,
+                    // Low on the right, the point ahead and a little left, into the middle of the view.
+                    HandPosition = new Vector3(0.3f, -0.36f, 0.3f),
+                    HandRotation = Grip(new Vector3(-0.2f, 0.16f, 1f), Vector3.up),
+                    IconRotation = Diagonal(new Vector3(0.7f, 0.7f, 0f), new Vector3(0.7f, -0.7f, 0f)),
+                    IconZoom = 1.5f,
+                },
                 [ItemIds.SheetMetalDoor] = new ItemModel
                 {
                     Mesh = MeshFactory.MetalDoor(),
@@ -189,9 +204,30 @@ namespace Oxfall.Game.Items
                     Materials = new[] { m.Cloth, m.Rope },
                     IconRotation = Quaternion.AngleAxis(-20f, Vector3.right) * Quaternion.AngleAxis(-30f, Vector3.up),
                 },
+                [ItemIds.Leather] = new ItemModel
+                {
+                    Mesh = MeshFactory.FoldedHide(),
+                    Materials = new[] { m.Leather, m.Rope },
+                    IconRotation = Tilt(-38f, 30f),
+                },
+                [ItemIds.RawMeat] = Meat(MeshFactory.MeatCut(), new[] { m.RawMeat, m.Bone }),
+                [ItemIds.CookedMeat] = Meat(MeshFactory.MeatCut(), new[] { m.CookedMeat, m.Bone }),
             };
             return models;
         }
+
+        /// <summary>A cut of meat held out low on the right, ready to eat; lying flat, bone to the left, in its icon.</summary>
+        private static ItemModel Meat(Mesh mesh, Material[] materials) => new ItemModel
+        {
+            Mesh = mesh,
+            Materials = materials,
+            ShowInHand = true,
+            HandPosition = new Vector3(0.24f, -0.26f, 0.48f),
+            HandRotation = Quaternion.Euler(-50f, 20f, 10f),
+            HandScale = 1.2f,
+            IconRotation = Tilt(-42f, 15f),
+            IconZoom = 1.05f,
+        };
 
         /// <summary>
         /// A hatchet or pickaxe: gripped low in the right hand, the haft leaning up, in and ahead, so

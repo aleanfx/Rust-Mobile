@@ -89,6 +89,19 @@ namespace Oxfall.Game.Rendering
         public Material Trousers { get; }
         public Material Skin { get; }
 
+        /// <summary>The animals' coats (a boar's bristles, a wolf's grey, a deer's tan), their noses and hooves, and horn.</summary>
+        public Material BoarHide { get; }
+        public Material WolfFur { get; }
+        public Material DeerHide { get; }
+        public Material Hoof { get; }
+        public Material Horn { get; }
+
+        /// <summary>What an animal gives: raw and roasted meat, bone, and leather.</summary>
+        public Material RawMeat { get; }
+        public Material CookedMeat { get; }
+        public Material Bone { get; }
+        public Material Leather { get; }
+
         public MaterialLibrary()
         {
             _base = Resources.Load<Material>(BaseMaterialResource);
@@ -173,8 +186,9 @@ namespace Oxfall.Game.Rendering
             Metal = Make("Metal", new Color(0.40f, 0.36f, 0.33f), 0.42f);
             Bedroll = Make("Bedroll", new Color(0.30f, 0.34f, 0.22f), 0.04f);
             SheetMetal = MakeSheetMetal(StoneWall);
-            Steel = Make("Steel", new Color(0.60f, 0.61f, 0.62f), 0.62f);
-            Steel.SetFloat(Metallic, 0.35f);
+            // Forged steel: darker and more metallic than paint, so it takes the sky's light along its edges.
+            Steel = Make("Steel", new Color(0.50f, 0.51f, 0.53f), 0.58f);
+            Steel.SetFloat(Metallic, 0.6f);
             LockBody = Make("Lock body", new Color(0.15f, 0.16f, 0.17f), 0.55f);
             LockKeys = Make("Lock keys", new Color(0.58f, 0.59f, 0.57f), 0.4f);
             LedRed = Make("Lock red", new Color(1f, 0.16f, 0.1f), 0.9f);
@@ -184,6 +198,15 @@ namespace Oxfall.Game.Rendering
             Shirt = Make("Shirt", new Color(0.46f, 0.42f, 0.33f), 0.05f);
             Trousers = Make("Trousers", new Color(0.17f, 0.18f, 0.20f), 0.05f);
             Skin = Make("Skin", new Color(0.78f, 0.58f, 0.45f), 0.25f);
+            BoarHide = Make("Boar hide", new Color(0.22f, 0.17f, 0.13f), 0.08f);
+            WolfFur = Make("Wolf fur", new Color(0.44f, 0.42f, 0.39f), 0.06f);
+            DeerHide = Make("Deer hide", new Color(0.56f, 0.39f, 0.24f), 0.08f);
+            Hoof = Make("Hoof", new Color(0.07f, 0.06f, 0.055f), 0.35f);
+            Horn = Make("Horn", new Color(0.78f, 0.71f, 0.58f), 0.3f);
+            RawMeat = Make("Raw meat", new Color(0.66f, 0.17f, 0.15f), 0.55f);
+            CookedMeat = Make("Cooked meat", new Color(0.40f, 0.21f, 0.10f), 0.35f);
+            Bone = Make("Bone", new Color(0.88f, 0.84f, 0.74f), 0.25f);
+            Leather = Make("Leather", new Color(0.47f, 0.31f, 0.18f), 0.22f);
             Pond = new Material(Water) { name = "Pond" };
             if (Pond.HasProperty("_DepthMap"))
             {
