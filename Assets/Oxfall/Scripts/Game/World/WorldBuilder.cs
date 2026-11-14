@@ -273,6 +273,18 @@ namespace Oxfall.Game.World
         {
             var parent = new GameObject("Monuments").transform;
             parent.SetParent(world.Root, false);
+            var dressingMaterials = new Material[MeshFactory.DressSubmeshes];
+            dressingMaterials[MeshFactory.DressConcrete] = materials.Concrete;
+            dressingMaterials[MeshFactory.DressSteel] = materials.Steel;
+            dressingMaterials[MeshFactory.DressRed] = materials.BarrelPaint[1];
+            dressingMaterials[MeshFactory.DressWhite] = materials.WhitePaint;
+            dressingMaterials[MeshFactory.DressGlass] = materials.Glass;
+            dressingMaterials[MeshFactory.DressRubber] = materials.Rubber;
+            dressingMaterials[MeshFactory.DressSandbag] = materials.Sandbag;
+            dressingMaterials[MeshFactory.DressYellow] = materials.WarnYellow;
+            dressingMaterials[MeshFactory.DressRust] = materials.BarrelRust;
+            dressingMaterials[MeshFactory.DressOlive] = materials.CratePaint;
+            dressingMaterials[MeshFactory.DressStain] = materials.Stain;
             foreach (var m in Monuments.Find(world.Shape.Ground))
             {
                 var root = new GameObject(m.Name).transform;
@@ -299,6 +311,19 @@ namespace Oxfall.Game.World
                     look.AddComponent<MeshFilter>().sharedMesh = MeshFactory.Blocks(m.Name + " " + pair.Key, pair.Value);
                     look.AddComponent<MeshRenderer>().sharedMaterial = pair.Key == PropLook.Concrete ? materials.Concrete
                         : pair.Key == PropLook.Steel ? materials.Steel : materials.BarrelPaint[1];
+                }
+                // Its details (pumps, signs, glass, wire, sandbags...), in its own frame.
+                var solids = new List<Bounds>();
+                var dressing = new GameObject("Dressing");
+                dressing.transform.SetParent(root, false);
+                dressing.transform.localRotation = Quaternion.Euler(0f, m.Yaw, 0f);
+                dressing.AddComponent<MeshFilter>().sharedMesh = MeshFactory.MonumentDressing(m.Kind, solids);
+                dressing.AddComponent<MeshRenderer>().sharedMaterials = dressingMaterials;
+                foreach (var solid in solids)
+                {
+                    var box = dressing.AddComponent<BoxCollider>();
+                    box.center = solid.center;
+                    box.size = solid.size;
                 }
             }
         }

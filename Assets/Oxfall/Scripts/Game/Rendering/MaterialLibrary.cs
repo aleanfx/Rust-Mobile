@@ -86,6 +86,13 @@ namespace Oxfall.Game.Rendering
         public Material ChuteOrange { get; }
         public Material ChuteWhite { get; }
         public Material BarrelRust { get; }
+        /// <summary>The ruins' dressing: white paint, dark glass, rubber, sandbags, warning yellow, oil stains.</summary>
+        public Material WhitePaint { get; }
+        public Material Glass { get; }
+        public Material Rubber { get; }
+        public Material Sandbag { get; }
+        public Material WarnYellow { get; }
+        public Material Stain { get; }
         /// <summary>A code lock: its dark casing, its keys, and its light (red locked, green open).</summary>
         public Material LockBody { get; }
         public Material LockKeys { get; }
@@ -236,6 +243,13 @@ namespace Oxfall.Game.Rendering
             foreach (var paint in BarrelPaint) paint.SetFloat(Metallic, 0.25f);
             BarrelRust = Make("Barrel rust", new Color(0.33f, 0.21f, 0.13f), 0.22f);
             BarrelRust.SetFloat(Metallic, 0.3f);
+            WhitePaint = Make("White paint", new Color(0.8f, 0.8f, 0.77f), 0.32f);
+            Glass = Make("Glass", new Color(0.07f, 0.1f, 0.12f), 0.92f);
+            Glass.SetFloat(Metallic, 0.35f);
+            Rubber = Make("Rubber", new Color(0.075f, 0.075f, 0.08f), 0.18f);
+            Sandbag = Make("Sandbag", new Color(0.5f, 0.45f, 0.33f), 0.05f);
+            WarnYellow = Make("Warning yellow", new Color(0.86f, 0.64f, 0.1f), 0.3f);
+            Stain = Make("Oil stain", new Color(0.2f, 0.19f, 0.18f), 0.62f);
             Concrete = Textured("OxfallConcrete") ?? Tinted(Stone, "Concrete", Stone.HasProperty(BaseMap) && Stone.GetTexture(BaseMap) != null
                 ? new Color(1.05f, 1.05f, 1.02f) : new Color(0.62f, 0.61f, 0.58f));
             CratePaint = Make("Crate paint", new Color(0.25f, 0.29f, 0.17f), 0.28f);

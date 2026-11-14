@@ -10,7 +10,7 @@ namespace Oxfall.Game.World
     /// and natural rather than faceted; building pieces stay flat. These are placeholders with the
     /// right size and collision until real models replace them.
     /// </summary>
-    public static class MeshFactory
+    public static partial class MeshFactory
     {
         public const int BarkSubmesh = 0;
         public const int LeavesSubmesh = 1;
@@ -2271,14 +2271,18 @@ namespace Oxfall.Game.World
                  Mathf.PerlinNoise(p.z + 57.3f, p.x + 11.1f)) / 3f;
 
             /// <summary>A lumpy, squashed sphere (a subdivided icosahedron with its corners pushed about).</summary>
-            public void AddBlob(int submesh, Vector3 centre, Vector3 size, System.Random random, float lumpiness)
+            public void AddBlob(int submesh, Vector3 centre, Vector3 size, System.Random random, float lumpiness) =>
+                AddBlob(submesh, centre, size, Quaternion.identity, random, lumpiness);
+
+            /// <summary>A lumpy blob as above, squashed along its own axes and then turned.</summary>
+            public void AddBlob(int submesh, Vector3 centre, Vector3 size, Quaternion turn, System.Random random, float lumpiness)
             {
                 Icosphere(1, out var points, out var faces);
                 for (int i = 0; i < points.Count; i++)
                 {
                     float push = 1f + ((float)random.NextDouble() * 2f - 1f) * lumpiness;
                     var p = points[i] * push;
-                    points[i] = centre + new Vector3(p.x * size.x, p.y * size.y, p.z * size.z);
+                    points[i] = centre + turn * new Vector3(p.x * size.x, p.y * size.y, p.z * size.z);
                 }
                 for (int f = 0; f < faces.Count; f += 3)
                     Triangle(submesh, points[faces[f]], points[faces[f + 1]], points[faces[f + 2]]);

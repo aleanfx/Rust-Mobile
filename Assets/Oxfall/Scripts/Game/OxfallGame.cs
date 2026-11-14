@@ -1471,6 +1471,13 @@ namespace Oxfall.Game
                 case "to-recycler": ToRecycler(); break;
                 case "to-bandit": ToBandit(); break;
                 case "airdrop": DevAirdrop(); break;
+                case "hide-hud":
+                {
+                    // Test: the controls out of the way, for a clean shot of the world.
+                    var canvas = _hud.GetComponentInParent<Canvas>();
+                    if (canvas != null) canvas.enabled = !canvas.enabled;
+                    break;
+                }
                 case "face-airdrop": FaceAirdrop(); break;
                 case "open-airdrop": OpenBox(Nearest(DeployableKind.SupplyDrop)); break;
                 case "go-airdrop": GoTo(Nearest(DeployableKind.SupplyDrop)); break;
@@ -1623,6 +1630,7 @@ namespace Oxfall.Game
                     else if (command.StartsWith("box-tap-") && int.TryParse(command.Substring(8), out int boxTap))
                         _inventoryUi.TapBoxSlot(boxTap);
                     // time-H jumps to hour H (0 to 23).
+                    else if (command.StartsWith("view-ruin:")) ViewRuin(command.Substring(10));
                     else if (command.StartsWith("time-") && float.TryParse(command.Substring(5),
                                  System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out float hour))
                         _dayNight.SetHour(hour);
@@ -1859,6 +1867,27 @@ namespace Oxfall.Game
         }
 
         /// <summary>For tests: to the middle of the nearest ruins, on their pad, looking at their nearest crate.</summary>
+        /// <summary>
+        /// Test view of a ruin: "index:angle:distance" (angle in degrees round it from its front, metres
+        /// from its middle), standing there and looking at its middle.
+        /// </summary>
+        private void ViewRuin(string spec)
+        {
+            var parts = spec.Split(':');
+            var all = Oxfall.Core.World.Monuments.Find(_world.Shape.Ground);
+            if (parts.Length < 3 || !int.TryParse(parts[0], out int index) || index < 0 || index >= all.Count) return;
+            float.TryParse(parts[1], System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out float angle);
+            float.TryParse(parts[2], System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out float distance);
+            var m = all[index];
+            float a = (m.Yaw + angle) * Mathf.Deg2Rad;
+            float x = m.X + Mathf.Sin(a) * distance, z = m.Z + Mathf.Cos(a) * distance;
+            float y = Monuments.SurfaceHeight(_world.Shape.Ground, x, z);
+            var to = new Vector3(m.X, m.Y + 1.2f, m.Z) - new Vector3(x, y + 1.6f, z);
+            _player.Teleport(new Vector3(x, y + 0.05f, z), Mathf.Atan2(to.x, to.z) * Mathf.Rad2Deg,
+                -Mathf.Atan2(to.y, new Vector2(to.x, to.z).magnitude) * Mathf.Rad2Deg);
+            Debug.Log($"[Oxfall] Viewing {m.Name} ({m.Kind}) from {angle:0} degrees, {distance:0} m");
+        }
+
         private void ToRuins()
         {
             var here = _player.transform.position;
