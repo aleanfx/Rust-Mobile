@@ -385,6 +385,23 @@ namespace Oxfall.Core.Building
         public IEnumerable<KeyValuePair<Edge, bool>> Doors => _doors;
         public int PieceCount => _states.Count;
 
+        /// <summary>Every piece standing.</summary>
+        public IEnumerable<PieceRef> Pieces => _states.Keys;
+
+        /// <summary>The middle of a piece across the ground: its square's, or its edge's.</summary>
+        public static void Centre(PieceRef piece, out float x, out float z)
+        {
+            if (piece.IsEdge)
+            {
+                var e = piece.Edge;
+                x = (e.X + (e.Axis == EdgeAxis.AlongX ? 0.5f : 0f)) * CellSize;
+                z = (e.Z + (e.Axis == EdgeAxis.AlongZ ? 0.5f : 0f)) * CellSize;
+                return;
+            }
+            x = (piece.Cell.X + 0.5f) * CellSize;
+            z = (piece.Cell.Z + 0.5f) * CellSize;
+        }
+
         public bool Exists(PieceRef piece) => _states.ContainsKey(piece);
 
         /// <summary>The piece standing on this edge, if any.</summary>

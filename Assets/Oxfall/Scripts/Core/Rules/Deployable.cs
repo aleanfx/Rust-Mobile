@@ -132,6 +132,8 @@ namespace Oxfall.Core.Rules
                 case DeployableKind.Bag: return Inventory.PlayerSlotCount;
                 case DeployableKind.Recycler: return RecyclerInputSlots * 2;
                 case DeployableKind.SupplyDrop: return 12;
+                // Materials for its upkeep.
+                case DeployableKind.ToolCupboard: return Upkeep.CupboardSlots;
                 default: return 0;
             }
         }

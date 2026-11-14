@@ -457,8 +457,8 @@ namespace Oxfall.Core.Net
         }
 
         /// <summary>
-        /// Time passes: furnaces burn, and for the players online crafting moves on, food and water
-        /// run down, and a box left behind closes.
+        /// Time passes: furnaces burn, cupboards pay their upkeep (what nobody keeps up decays), and
+        /// for the players online crafting moves on, food and water run down, and a box left behind closes.
         /// </summary>
         public void Tick(float deltaSeconds)
         {
@@ -468,7 +468,7 @@ namespace Oxfall.Core.Net
             Day.Tick(deltaSeconds);
             _wentOut.Clear();
             _rotted.Clear();
-            Settlement.Tick(deltaSeconds, _wentOut, _rotted);
+            Settlement.Tick(deltaSeconds, _wentOut, _rotted, Announcements);
             foreach (int id in _wentOut) Announcements.Add(BuildOp.Light(id, false));
             foreach (int id in _rotted) Announcements.Add(BuildOp.Pickup(id));
             TickFauna(deltaSeconds);

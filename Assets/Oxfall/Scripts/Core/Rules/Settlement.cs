@@ -197,6 +197,9 @@ namespace Oxfall.Core.Rules
         public ItemCatalog Catalog { get; }
         public BuildingGrid Grid { get; }
 
+        /// <summary>Cupboards paying for the pieces round them, and the pieces nobody keeps up decaying.</summary>
+        public Upkeep Upkeep { get; } = new Upkeep();
+
         public IEnumerable<Deployable> Deployables => _deployables.Values;
 
         /// <summary>How many things players have set down (the ruins' machines are not counted).</summary>
@@ -512,13 +515,15 @@ namespace Oxfall.Core.Rules
 
         /// <summary>
         /// Time passing: furnaces burn (those that run out of wood go out, listed in
-        /// <paramref name="wentOut"/>), and dead players' bags rot away (removed, and listed in
-        /// <paramref name="rotted"/>).
+        /// <paramref name="wentOut"/>), dead players' bags rot away (removed, and listed in
+        /// <paramref name="rotted"/>), and cupboards keep their pieces up or the pieces decay (their
+        /// new health listed in <paramref name="decayed"/>).
         /// </summary>
-        public void Tick(float dt, List<int> wentOut = null, List<int> rotted = null)
+        public void Tick(float dt, List<int> wentOut = null, List<int> rotted = null, List<BuildOp> decayed = null)
         {
             if (dt <= 0f) return;
             Clock += dt;
+            Upkeep.Tick(this, dt, decayed);
             if (_rotting.Count > 0)
             {
                 _scratch.Clear();
@@ -623,6 +628,7 @@ namespace Oxfall.Core.Rules
             foreach (var target in locks) RemoveLock(target);
             _owners.Clear();
             _deployableHealth.Clear();
+            Upkeep.Clear();
             _nextId = 1;
             _clearing = false;
             PlaceRecyclers();

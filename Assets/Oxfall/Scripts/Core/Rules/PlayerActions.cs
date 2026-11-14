@@ -69,6 +69,8 @@ namespace Oxfall.Core.Rules
         NoTeam,
         /// <summary>Its blueprint has not been learned yet (at a workbench, for scrap).</summary>
         NotLearned,
+        /// <summary>A tool cupboard keeps only what pays its upkeep: wood, stone and metal fragments.</summary>
+        NotUpkeep,
     }
 
     /// <summary>
@@ -354,8 +356,9 @@ namespace Oxfall.Core.Rules
             if (s.Inventory[from].IsEmpty) return ActionResult.Invalid;
             // A dead player's bag, or a supply crate, only empties.
             if (settlement.TryGet(s.Looting, out var bag) && Deployables.IsLoot(bag.Kind)) return ActionResult.Invalid;
-            // A recycler takes only what it can make something of.
+            // A recycler takes only what it can make something of; a cupboard, what pays its upkeep.
             if (bag.Kind == DeployableKind.Recycler && !settlement.Recycling.Takes(s.Inventory[from].ItemId)) return ActionResult.NothingToRecycle;
+            if (bag.Kind == DeployableKind.ToolCupboard && !Upkeep.Takes(s.Inventory[from].ItemId)) return ActionResult.NotUpkeep;
             bool moved = to == -1 ? Inventory.TransferAll(s.Inventory, from, box) : Inventory.Transfer(s.Inventory, from, box, to);
             return moved ? ActionResult.Ok : ActionResult.NoSpace;
         }

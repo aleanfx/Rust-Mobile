@@ -63,6 +63,10 @@ namespace Oxfall.Game.UI
         private float _gridTop;
         private float _barTop;
         private int _lootRows;
+        private readonly System.Collections.Generic.Dictionary<string, float> _upkeepCost = new System.Collections.Generic.Dictionary<string, float>();
+
+        /// <summary>The player taps PERMISOS on an open tool cupboard.</summary>
+        public event System.Action<int> CupboardRequested;
         private float _lootX;
         private Image _lightFill;
         private Text _lightLabel;
@@ -150,7 +154,9 @@ namespace Oxfall.Game.UI
             _boxKind = d.Kind;
             bool furnace = d.Kind == DeployableKind.Furnace, bag = Deployables.IsLoot(d.Kind), fire = d.Kind == DeployableKind.Campfire;
             bool recycler = d.Kind == DeployableKind.Recycler;
-            _lootTitle.text = furnace ? "HORNO" : d.Kind == DeployableKind.SupplyDrop ? "SUMINISTROS" : bag ? "BOLSA" : fire ? "FOGATA" : recycler ? "RECICLADORA" : "CAJA";
+            bool cupboard = d.Kind == DeployableKind.ToolCupboard;
+            _lootTitle.text = furnace ? "HORNO" : d.Kind == DeployableKind.SupplyDrop ? "SUMINISTROS" : bag ? "BOLSA" : fire ? "FOGATA"
+                : recycler ? "RECICLADORA" : cupboard ? "ARMARIO" : "CAJA";
             _lootRows = 0;
             for (int i = 0; i < _boxSlots.Length; i++) _boxSlots[i].Rect.gameObject.SetActive(i < box.SlotCount);
             // A furnace's two rows leave room under them for how it burns and its switch (a bag or a
@@ -159,8 +165,9 @@ namespace Oxfall.Game.UI
             _lootStatus.rectTransform.anchoredPosition = new Vector2(_lootX, under);
             _lightButton.anchoredPosition = new Vector2(_lootX, under - 78f);
             // A furnace's or a recycler's switch; on a dead player's bag the same button takes everything.
-            _lightButton.gameObject.SetActive(furnace || bag || recycler);
-            _lootStatus.gameObject.SetActive(furnace || bag || fire || recycler);
+            // A cupboard's goes back to who may build round it.
+            _lightButton.gameObject.SetActive(furnace || bag || recycler || cupboard);
+            _lootStatus.gameObject.SetActive(furnace || bag || fire || recycler || cupboard);
             _details.gameObject.SetActive(false);
             _loot.gameObject.SetActive(true);
             Refresh();
@@ -244,6 +251,11 @@ namespace Oxfall.Game.UI
         public void ToggleFurnace()
         {
             if (_box == 0) return;
+            if (_boxKind == DeployableKind.ToolCupboard)
+            {
+                CupboardRequested?.Invoke(_box);
+                return;
+            }
             if (Deployables.IsLoot(_boxKind))
             {
                 Report(_actions.TakeAll());
@@ -318,6 +330,14 @@ namespace Oxfall.Game.UI
                 _lootStatus.color = lit ? UiTheme.Accent : UiTheme.TextMuted;
             }
             if (_boxKind == DeployableKind.Recycler) DrawRecycler();
+            if (_boxKind == DeployableKind.ToolCupboard)
+            {
+                _lightLabel.text = "PERMISOS";
+                _lightFill.color = UiTheme.Slot;
+                CupboardUi.Describe(_settlement, _box, _upkeepCost, out string head, out string perDay, out _, out var colour, out _);
+                _lootStatus.text = perDay.Length == 0 ? "Madera, piedra o metal: pagan lo que construyas aquí" : head + "\nAl día: " + perDay;
+                _lootStatus.color = colour;
+            }
             if (_boxKind == DeployableKind.Campfire)
             {
                 int raw = _boxInventory.Count(ItemIds.RawMeat);
@@ -331,7 +351,7 @@ namespace Oxfall.Game.UI
             if (Deployables.IsLoot(_boxKind) && _lootRows > 3) _lightButton.gameObject.SetActive(!any);
             if (any)
                 _lootQuickLabel.text = _pickedInBox ? "AL INVENTARIO" : furnace ? "AL HORNO" : _boxKind == DeployableKind.Campfire ? "AL FUEGO"
-                    : _boxKind == DeployableKind.Recycler ? "A RECICLAR" : "A LA CAJA";
+                    : _boxKind == DeployableKind.Recycler ? "A RECICLAR" : _boxKind == DeployableKind.ToolCupboard ? "AL ARMARIO" : "A LA CAJA";
         }
 
         /// <summary>

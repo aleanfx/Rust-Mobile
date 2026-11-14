@@ -370,6 +370,9 @@ namespace Oxfall.Game
             _placer.Actions = _actions;
             _placer.Placed += () => audio.Play(SoundCue.Place);
             _cupboard = new CupboardUi(_hud, _settlement, _actions);
+            // The cupboard's materials open beside the inventory, like a box; from there PERMISOS goes back.
+            _cupboard.MaterialsRequested += OpenBox;
+            _inventoryUi.CupboardRequested += OpenCupboard;
 
             // Code locks: drawn on doors, boxes and cupboards; one in hand goes on with attack, and
             // then its keypad opens to choose the code.
@@ -1485,6 +1488,39 @@ namespace Oxfall.Game
                 case "open-box": OpenBox(Nearest(DeployableKind.StorageBox)); break;
                 case "open-furnace": OpenBox(Nearest(DeployableKind.Furnace)); break;
                 case "open-cupboard": OpenCupboard(Nearest(DeployableKind.ToolCupboard)); break;
+                case "cupboard-materials": OpenBox(Nearest(DeployableKind.ToolCupboard)); break;
+                // Offline only (online the server keeps the island): stock the nearest cupboard, or run upkeep now.
+                case "stock-cupboard":
+                    if (!_actions.Online && _settlement.Container(Nearest(DeployableKind.ToolCupboard)) is { } stock)
+                    {
+                        stock.Add(ItemIds.Wood, 400);
+                        stock.Add(ItemIds.Stone, 300);
+                    }
+                    break;
+                case "upkeep-now":
+                    if (!_actions.Online) _settlement.Upkeep.Hurry();
+                    break;
+                case "close-cupboard": _cupboard.Close(); break;
+                case "put-materials":
+                    // Test: the first stack of wood and of stone carried go into the open box.
+                    foreach (string material in new[] { ItemIds.Wood, ItemIds.Stone })
+                        for (int i = 0; i < _inventory.SlotCount; i++)
+                            if (_inventory[i].ItemId == material)
+                            {
+                                Debug.Log($"[Oxfall] Put {material}: {_actions.Put(i, -1)}");
+                                break;
+                            }
+                    break;
+                case "upkeep":
+                {
+                    int tc = Nearest(DeployableKind.ToolCupboard);
+                    var cost = new System.Collections.Generic.Dictionary<string, float>();
+                    CupboardUi.Describe(_settlement, tc, cost, out string head, out string perDay, out int kept, out _, out _);
+                    float least = float.MaxValue;
+                    foreach (var piece in _buildings.Grid.Pieces) least = Mathf.Min(least, _buildings.Grid.Health(piece) / _buildings.Grid.MaxHealth(piece));
+                    Debug.Log($"[Oxfall] Upkeep: cupboard={tc} {head} perDay=[{perDay}] pieces={kept} weakest={(least == float.MaxValue ? 1f : least):0.00} next={_settlement.Upkeep.NextIn:0}s");
+                    break;
+                }
                 case "face-box": FaceDeployable(Nearest(DeployableKind.StorageBox)); break;
                 case "face-furnace": FaceDeployable(Nearest(DeployableKind.Furnace)); break;
                 case "face-cupboard": FaceDeployable(Nearest(DeployableKind.ToolCupboard)); break;
