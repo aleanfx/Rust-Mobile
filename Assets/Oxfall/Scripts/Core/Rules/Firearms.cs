@@ -62,13 +62,18 @@ namespace Oxfall.Core.Rules
             pellets: 1, pelletDamage: 30f, spreadDegrees: 0.7f, fullDamageRange: 20f, range: 90f, farShare: 0.45f,
             fireSeconds: 0.3f, capacity: 6, reloadSeconds: 3f);
 
+        /// <summary>The top gun: fast and true at range, three body shots, sixteen to a magazine.</summary>
+        public static readonly GunSpec Rifle = new GunSpec(ToolKind.Rifle, ItemIds.RifleBullet,
+            pellets: 1, pelletDamage: 38f, spreadDegrees: 0.35f, fullDamageRange: 45f, range: 160f, farShare: 0.55f,
+            fireSeconds: 0.2f, capacity: 16, reloadSeconds: 3.4f);
+
         /// <summary>How long after a shot its hits may still be reported (lag).</summary>
         public const float HitWindowSeconds = 1.5f;
 
         /// <summary>Room the server allows round a target for where each side saw the other a moment ago.</summary>
         public const float LagSlack = 1.2f;
 
-        public static bool IsGun(ToolKind tool) => tool == ToolKind.Shotgun || tool == ToolKind.Revolver;
+        public static bool IsGun(ToolKind tool) => tool == ToolKind.Shotgun || tool == ToolKind.Revolver || tool == ToolKind.Rifle;
 
         public static bool TryGet(ToolKind tool, out GunSpec gun)
         {
@@ -76,6 +81,7 @@ namespace Oxfall.Core.Rules
             {
                 case ToolKind.Shotgun: gun = Blunderbuss; return true;
                 case ToolKind.Revolver: gun = Revolver; return true;
+                case ToolKind.Rifle: gun = Rifle; return true;
                 default: gun = null; return false;
             }
         }

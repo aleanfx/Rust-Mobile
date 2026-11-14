@@ -228,6 +228,7 @@ namespace Oxfall.Core.Net
                 _lastShot.Remove(playerId);
                 _guns.Remove((playerId, ToolKind.Shotgun));
                 _guns.Remove((playerId, ToolKind.Revolver));
+                _guns.Remove((playerId, ToolKind.Rifle));
                 // Alive, they fall asleep where they stood.
                 if (!record.Survivor.Vitals.IsDead) SleepersChanged = true;
             }
@@ -414,8 +415,10 @@ namespace Oxfall.Core.Net
             {
                 inventory.Add(ItemIds.Blunderbuss, 1);
                 inventory.Add(ItemIds.Revolver, 1);
+                inventory.Add(ItemIds.SemiRifle, 1);
                 inventory.Add(ItemIds.Shell, 40);
                 inventory.Add(ItemIds.PistolBullet, 60);
+                inventory.Add(ItemIds.RifleBullet, 64);
                 inventory.Add(ItemIds.Bandage, 3);
                 inventory.Add(ItemIds.MedicalSyringe, 1);
                 return;

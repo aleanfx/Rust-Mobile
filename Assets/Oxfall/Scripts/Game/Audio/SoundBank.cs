@@ -51,6 +51,7 @@ namespace Oxfall.Game.Audio
         /// <summary>Guns: the revolver's sharp crack, the shotgun's deep blast, a reload's clicks, and the click of an empty one.</summary>
         public AudioClip RevolverShot { get; }
         public AudioClip ShotgunShot { get; }
+        public AudioClip RifleShot { get; }
         public AudioClip GunReload { get; }
         public AudioClip DryFire { get; }
         public AudioClip WindLoop { get; }
@@ -162,6 +163,14 @@ namespace Oxfall.Game.Audio
                 // The report off the hills behind.
                 float tail = Dark(0.12f) * Env(t, 0.004f, 0.32f) * 0.55f + Dark(0.05f) * Env(t - 0.18f, 0.02f, 0.3f) * 0.3f;
                 return (float)Math.Tanh((crack + body + tail) * 2.4f);
+            });
+            // The rifle: a sharper crack and a longer, rolling report.
+            RifleShot = Make("rifle", 1.6f, (t, i) =>
+            {
+                float crack = Noise() * Env(t, 0.0001f, 0.006f) * 2.1f;
+                float body = Thump(t, 180f, 0.035f) * 0.8f + Thump(t, 75f, 0.12f) * 0.8f;
+                float tail = Dark(0.14f) * Env(t, 0.003f, 0.5f) * 0.6f + Dark(0.05f) * Env(t - 0.25f, 0.03f, 0.55f) * 0.38f;
+                return (float)Math.Tanh((crack + body + tail) * 2.5f);
             });
             ShotgunShot = Make("shotgun", 1.5f, (t, i) =>
             {

@@ -541,6 +541,7 @@ namespace Oxfall.Game.Player
                     Sound?.Invoke(SoundCue.DryFire);
                     Message?.Invoke(gun.Tool == ToolKind.Shotgun
                         ? "Sin cartuchos: fabrícalos con pólvora y piedra"
+                        : gun.Tool == ToolKind.Rifle ? "Sin munición de rifle: fabrícala con pólvora y metal"
                         : "Sin balas: fabrícalas con pólvora y metal");
                 }
                 return;
@@ -560,7 +561,7 @@ namespace Oxfall.Game.Player
             if (!Actions.Fire(gun.Tool, origin, yaw, pitch, seed)) return;
             _gunKick = 0f;
             bool big = gun.Pellets > 1;
-            Sound?.Invoke(big ? SoundCue.Shotgun : SoundCue.Revolver);
+            Sound?.Invoke(big ? SoundCue.Shotgun : gun.Tool == ToolKind.Rifle ? SoundCue.Rifle : SoundCue.Revolver);
             var muzzle = _hand.TransformPoint(_held.Muzzle);
             if (Effects != null)
             {

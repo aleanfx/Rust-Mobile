@@ -960,7 +960,8 @@ namespace Oxfall.Game
             bool big = gun.Pellets > 1;
             _explosions.MuzzleFlash(muzzle, forward, big);
             Gatherer.Spray(gun, origin + forward * 0.5f, muzzle, yaw, pitch, seed, _explosions, null);
-            GameAudio.PlayAt(big ? _audio.Bank.ShotgunShot : _audio.Bank.RevolverShot, muzzle, 1f, 6f, big ? 180f : 200f, 0.05f);
+            var clip = big ? _audio.Bank.ShotgunShot : tool == ToolKind.Rifle ? _audio.Bank.RifleShot : _audio.Bank.RevolverShot;
+            GameAudio.PlayAt(clip, muzzle, 1f, 6f, big ? 180f : tool == ToolKind.Rifle ? 260f : 200f, 0.05f);
         }
 
         /// <summary>The attack button's label for the gun in hand: rounds in it, and how many more are carried.</summary>
@@ -1294,7 +1295,8 @@ namespace Oxfall.Game
         private void ToolBroke(string itemId)
         {
             string name = _inventory.Catalog.TryGet(itemId, out var def) ? def.DisplayName : itemId;
-            bool metal = itemId == ItemIds.MetalHatchet || itemId == ItemIds.MetalPickaxe || itemId == ItemIds.Revolver || itemId == ItemIds.Blunderbuss;
+            bool metal = itemId == ItemIds.MetalHatchet || itemId == ItemIds.MetalPickaxe || itemId == ItemIds.Revolver || itemId == ItemIds.Blunderbuss
+                         || itemId == ItemIds.SemiRifle;
             _audio.Play(metal ? SoundCue.Metal : SoundCue.Wood);
             _hud.ShowToast($"Se rompió: {name}. Fabrica otro");
             Debug.Log("[Oxfall] Broke " + itemId);
@@ -1427,6 +1429,7 @@ namespace Oxfall.Game
                 case "nearest-sulfur": FaceNearest(ResourceNodeType.Sulfur); break;
                 case "satchel": HoldItem(ItemIds.SatchelCharge); break;
                 case "revolver": HoldItem(ItemIds.Revolver); break;
+                case "rifle": HoldItem(ItemIds.SemiRifle); break;
                 case "blunderbuss": HoldItem(ItemIds.Blunderbuss); break;
                 case "bandage": HoldItem(ItemIds.Bandage); break;
                 case "map": _map.Toggle(); break;

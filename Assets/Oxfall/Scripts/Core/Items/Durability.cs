@@ -23,6 +23,7 @@ namespace Oxfall.Core.Items
                 case ItemIds.WoodenBow: return 150;
                 case ItemIds.Blunderbuss: return 80;
                 case ItemIds.Revolver: return 250;
+                case ItemIds.SemiRifle: return 300;
                 default: return 0;
             }
         }

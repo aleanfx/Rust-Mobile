@@ -171,10 +171,16 @@ namespace Oxfall.Core.Crafting
             new Recipe("revolver", ItemIds.Revolver, 1, 30f,
                 new Ingredient(ItemIds.MetalFragments, 125), new Ingredient(ItemIds.MetalPipe, 1), new Ingredient(ItemIds.MetalSpring, 1),
                 new Ingredient(ItemIds.Cloth, 30)).AtWorkbench().Blueprint(100),
+            // The rifle: the top of the tree, learned dear and built from every part there is.
+            new Recipe("semi_auto_rifle", ItemIds.SemiRifle, 1, 45f,
+                new Ingredient(ItemIds.MetalFragments, 500), new Ingredient(ItemIds.MetalPipe, 1), new Ingredient(ItemIds.MetalSpring, 1),
+                new Ingredient(ItemIds.Gears, 1)).AtWorkbench().Blueprint(200),
             new Recipe("handmade_shells", ItemIds.Shell, 2, 5f,
                 new Ingredient(ItemIds.Gunpowder, 5), new Ingredient(ItemIds.Stone, 10)),
             new Recipe("pistol_bullets", ItemIds.PistolBullet, 4, 5f,
                 new Ingredient(ItemIds.Gunpowder, 10), new Ingredient(ItemIds.MetalFragments, 10)).AtWorkbench().Blueprint(40),
+            new Recipe("rifle_bullets", ItemIds.RifleBullet, 3, 6f,
+                new Ingredient(ItemIds.Gunpowder, 15), new Ingredient(ItemIds.MetalFragments, 15)).AtWorkbench().Blueprint(60),
         });
     }
 }

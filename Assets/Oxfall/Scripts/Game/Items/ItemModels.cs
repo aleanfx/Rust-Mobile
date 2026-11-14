@@ -310,6 +310,24 @@ namespace Oxfall.Game.Items
                     Fires = true,
                     Muzzle = MeshFactory.RevolverMuzzle,
                 },
+                [ItemIds.SemiRifle] = new ItemModel
+                {
+                    Mesh = MeshFactory.SemiRifle(),
+                    Materials = new[] { m.Planks, m.GunMetal, m.Brass, m.Char },
+                    ShowInHand = true,
+                    HandPosition = new Vector3(0.18f, -0.2f, 0.3f),
+                    HandRotation = Quaternion.Euler(0f, -91.5f, 0f),
+                    IconRotation = Quaternion.AngleAxis(10f, Vector3.forward),
+                    IconZoom = 1.2f,
+                    Fires = true,
+                    Muzzle = MeshFactory.RifleMuzzle,
+                },
+                [ItemIds.RifleBullet] = new ItemModel
+                {
+                    Mesh = MeshFactory.RifleRounds(),
+                    Materials = new[] { m.Brass, m.Brass },
+                    IconRotation = Tilt(-25f, 20f),
+                },
                 [ItemIds.Shell] = new ItemModel
                 {
                     Mesh = MeshFactory.Shells(),

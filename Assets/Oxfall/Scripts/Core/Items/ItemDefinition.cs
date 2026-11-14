@@ -45,6 +45,8 @@ namespace Oxfall.Core.Items
         Shotgun,
         /// <summary>A gun that fires one bullet at a time, six before it is reloaded.</summary>
         Revolver,
+        /// <summary>A rifle that fires as fast as the trigger is pulled, sixteen before it is reloaded.</summary>
+        Rifle,
     }
 
     /// <summary>

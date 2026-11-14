@@ -28,6 +28,7 @@ namespace Oxfall.Game.Audio
         Reload,
         DryFire,
         Bandage,
+        Rifle,
     }
 
     /// <summary>
@@ -151,6 +152,7 @@ namespace Oxfall.Game.Audio
                 case SoundCue.Metal: Shot(_bank.HitMetal, 0.75f, 0.08f); break;
                 case SoundCue.Revolver: Shot(_bank.RevolverShot, 1f, 0.05f); break;
                 case SoundCue.Shotgun: Shot(_bank.ShotgunShot, 1f, 0.05f); break;
+                case SoundCue.Rifle: Shot(_bank.RifleShot, 1f, 0.04f); break;
                 case SoundCue.Reload: Shot(_bank.GunReload, 0.7f, 0f); break;
                 case SoundCue.DryFire: Shot(_bank.DryFire, 0.7f, 0.05f); break;
             }

@@ -19,7 +19,7 @@ namespace Oxfall.Core.Gathering
         {
             (ItemIds.PistolBullet, 8, 16), (ItemIds.Shell, 6, 12), (ItemIds.Bandage, 2, 4), (ItemIds.MedicalSyringe, 1, 2),
             (ItemIds.Gunpowder, 20, 50), (ItemIds.Revolver, 1, 1), (ItemIds.Blunderbuss, 1, 1), (ItemIds.MetalHatchet, 1, 1),
-            (ItemIds.MetalPickaxe, 1, 1), (ItemIds.HideVest, 1, 1),
+            (ItemIds.MetalPickaxe, 1, 1), (ItemIds.HideVest, 1, 1), (ItemIds.RifleBullet, 6, 12),
         };
 
         public static List<Yield> Barrel(Random random)
@@ -60,6 +60,7 @@ namespace Oxfall.Core.Gathering
         {
             (ItemIds.Revolver, 1, 1), (ItemIds.Blunderbuss, 1, 1), (ItemIds.MedicalSyringe, 2, 3), (ItemIds.SatchelCharge, 1, 2),
             (ItemIds.HideVest, 1, 1), (ItemIds.MetalHatchet, 1, 1), (ItemIds.MetalPickaxe, 1, 1), (ItemIds.SheetMetalDoor, 1, 1),
+            (ItemIds.SemiRifle, 1, 1), (ItemIds.RifleBullet, 30, 60),
         };
 
         /// <summary>

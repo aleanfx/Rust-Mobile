@@ -426,6 +426,62 @@ namespace Oxfall.Game.World
             return b.Build("Revolver", 40f);
         }
 
+        /// <summary>Where the rifle's muzzle is (it points along +X).</summary>
+        public static readonly Vector3 RifleMuzzle = new Vector3(0.64f, 0.032f, 0f);
+
+        /// <summary>
+        /// A semi-automatic rifle: a wooden butt, wrist and pistol grip, a steel receiver with a
+        /// charging handle and rear sight, a curved magazine below, a wooden handguard, a long barrel
+        /// with a gas tube over it and a front sight. Points along +X, the grip at the origin.
+        /// Submeshes: wood, metal, brass (the top round in the magazine), the dark bore.
+        /// </summary>
+        public static Mesh SemiRifle()
+        {
+            var b = new FlatMeshBuilder(4) { UvScale = 0.2f };
+            const float w = 0.021f;
+            // The butt, the wrist and the pistol grip.
+            b.AddPrism(0, -w, w, new Vector2(-0.52f, -0.12f), new Vector2(-0.32f, -0.065f), new Vector2(-0.32f, 0.03f), new Vector2(-0.52f, 0.0f));
+            b.AddBox(1, new Vector3(-0.53f, -0.125f, -w - 0.002f), new Vector3(-0.515f, 0.005f, w + 0.002f));
+            b.AddPrism(0, -w, w, new Vector2(-0.32f, -0.065f), new Vector2(-0.08f, -0.035f), new Vector2(-0.08f, 0.03f), new Vector2(-0.32f, 0.03f));
+            b.AddPrism(0, -0.017f, 0.017f, new Vector2(-0.08f, -0.035f), new Vector2(-0.05f, -0.13f), new Vector2(-0.01f, -0.13f),
+                new Vector2(-0.02f, 0.0f), new Vector2(-0.08f, 0.0f));
+            // The receiver, its charging handle and the rear sight.
+            b.AddBox(1, new Vector3(-0.08f, -0.005f, -0.023f), new Vector3(0.17f, 0.062f, 0.023f));
+            b.AddBox(1, new Vector3(0.08f, 0.03f, 0.023f), new Vector3(0.1f, 0.045f, 0.045f));
+            b.AddBox(1, new Vector3(0.0f, 0.062f, -0.012f), new Vector3(0.03f, 0.08f, 0.012f));
+            // The magazine, curving forward, and the round showing at its top.
+            b.AddPrism(1, -0.015f, 0.015f, new Vector2(0.03f, 0.0f), new Vector2(0.035f, -0.06f), new Vector2(0.07f, -0.155f),
+                new Vector2(0.115f, -0.145f), new Vector2(0.1f, 0.0f));
+            b.AddTube(2, new Vector3(0.04f, 0.0f, 0f), new Vector3(0.09f, 0.0f, 0f), 0.006f, 0.006f, 6, 2);
+            // The trigger and its guard.
+            b.AddBox(1, new Vector3(-0.05f, -0.06f, -0.004f), new Vector3(0.02f, -0.052f, 0.004f));
+            b.AddBox(1, new Vector3(0.012f, -0.06f, -0.004f), new Vector3(0.02f, -0.005f, 0.004f));
+            b.AddBox(1, new Vector3(-0.012f, -0.045f, -0.003f), new Vector3(-0.005f, -0.005f, 0.003f));
+            // The handguard round the barrel, the barrel, the gas tube over it and the front sight.
+            b.AddBox(0, new Vector3(0.17f, -0.004f, -0.025f), new Vector3(0.43f, 0.05f, 0.025f));
+            b.AddTube(1, new Vector3(0.17f, 0.032f, 0f), RifleMuzzle, 0.0115f, 0.0105f, 10, 1);
+            b.AddTube(1, new Vector3(0.43f, 0.058f, 0f), new Vector3(0.52f, 0.058f, 0f), 0.007f, 0.007f, 8, 1);
+            b.AddBox(1, new Vector3(0.515f, 0.03f, -0.008f), new Vector3(0.53f, 0.065f, 0.008f));
+            b.AddBox(1, new Vector3(0.6f, 0.04f, -0.003f), new Vector3(0.612f, 0.078f, 0.003f));
+            b.AddTube(1, new Vector3(0.6f, 0.032f, 0f), RifleMuzzle, 0.015f, 0.015f, 10, 1);
+            b.AddTube(3, RifleMuzzle, RifleMuzzle + new Vector3(0.001f, 0f, 0f), 0.008f, 0.008f, 8, 3);
+            return b.Build("SemiRifle", 40f);
+        }
+
+        /// <summary>A few rifle rounds: long brass cases with copper tips.</summary>
+        public static Mesh RifleRounds()
+        {
+            var b = new FlatMeshBuilder(2) { UvScale = 0.05f };
+            var at = new[] { new Vector3(-0.012f, 0f, 0f), new Vector3(0.012f, 0f, 0.003f), new Vector3(0f, 0f, -0.018f) };
+            foreach (var p in at)
+            {
+                b.AddTube(0, p, p + new Vector3(0f, 0.04f, 0f), 0.0055f, 0.0055f, 10, 0);
+                b.AddTube(0, p + new Vector3(0f, 0.04f, 0f), p + new Vector3(0f, 0.046f, 0f), 0.0055f, 0.0035f, 10, 0);
+                b.AddTube(1, p + new Vector3(0f, 0.046f, 0f), p + new Vector3(0f, 0.062f, 0f), 0.0035f, 0.0008f, 10, 1);
+            }
+            return b.Build("RifleRounds", 40f);
+        }
+
         /// <summary>Three handmade shells standing together: red paper tubes on brass heads.</summary>
         public static Mesh Shells()
         {

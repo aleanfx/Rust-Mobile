@@ -58,6 +58,8 @@ namespace Oxfall.Core.Items
         public const string Revolver = "revolver";
         public const string Shell = "handmade_shell";
         public const string PistolBullet = "pistol_bullet";
+        public const string SemiRifle = "semi_auto_rifle";
+        public const string RifleBullet = "rifle_bullet";
         public const string Bandage = "bandage";
         public const string MedicalSyringe = "medical_syringe";
         public const string Scrap = "scrap";
