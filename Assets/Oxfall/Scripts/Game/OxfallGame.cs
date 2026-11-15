@@ -1533,6 +1533,7 @@ namespace Oxfall.Game
                 case "nearest-crate": FaceNearest(ResourceNodeType.Crate); break;
                 case "workbench": HoldItem(ItemIds.Workbench); break;
                 case "to-ruins": ToRuins(); break;
+                case "to-outpost": ToRuins(Oxfall.Core.World.MonumentKind.Outpost); break;
                 case "nearest-sulfur": FaceNearest(ResourceNodeType.Sulfur); break;
                 case "satchel": HoldItem(ItemIds.SatchelCharge); break;
                 case "beancan": HoldItem(ItemIds.Beancan); break;
@@ -1858,6 +1859,7 @@ namespace Oxfall.Game
                               $"meat={_inventory.Count(ItemIds.RawMeat)} cooked={_inventory.Count(ItemIds.CookedMeat)} leather={_inventory.Count(ItemIds.Leather)} " +
                               $"pos={_player.transform.position} climbing={_player.IsClimbing} walls={_settlement.WallCount} ladders={_settlement.LadderCount} quality={GraphicsQuality.Name(_quality.Tier)} " +
                               $"screen={Screen.width}x{Screen.height} grass={_grass.BladeCount} " +
+                              $"warmth={_warmth:0.00} dose={_dose:0.00} rads={_rads:0} " +
                               $"net={_net.State} id={_net.PlayerId} online={_net.OnlineCount} " +
                               $"others={string.Join(";", System.Linq.Enumerable.Select(_net.Players.Values, p => p.Name + "@" + p.Root.position + (p.Held.Length > 0 ? "+" + p.Held : "")))}");
                     break;
@@ -2273,12 +2275,13 @@ namespace Oxfall.Game
             Debug.Log($"[Oxfall] Viewing {m.Name} ({m.Kind}) from {angle:0} degrees, {distance:0} m");
         }
 
-        private void ToRuins()
+        private void ToRuins(Oxfall.Core.World.MonumentKind? kind = null)
         {
             var here = _player.transform.position;
             Oxfall.Core.World.Monument? best = null;
             foreach (var m in Oxfall.Core.World.Monuments.Find(_world.Shape.Ground))
-                if (best == null || (new Vector2(m.X - here.x, m.Z - here.z)).sqrMagnitude < (new Vector2(best.Value.X - here.x, best.Value.Z - here.z)).sqrMagnitude)
+                if (kind != null && m.Kind != kind.Value) continue;
+                else if (best == null || (new Vector2(m.X - here.x, m.Z - here.z)).sqrMagnitude < (new Vector2(best.Value.X - here.x, best.Value.Z - here.z)).sqrMagnitude)
                     best = m;
             if (best == null) return;
             var ruins = best.Value;
