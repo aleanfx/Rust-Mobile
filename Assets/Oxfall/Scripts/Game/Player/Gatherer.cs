@@ -53,6 +53,7 @@ namespace Oxfall.Game.Player
         private MeshRenderer _handRenderer;
         private ItemModel _held;
         private string _heldId;
+        private string _heldSkin = "";
         private Material _flameMaterial;
         private Fire _fire;
         private Vitals _vitals;
@@ -118,13 +119,15 @@ namespace Oxfall.Game.Player
         public void RefreshHeld()
         {
             var id = _hotbar.Held.ItemId;
-            if (id == _heldId) return;
+            string skin = Skins.EquippedFor(id);
+            if (id == _heldId && skin == _heldSkin) return;
             _heldId = id;
+            _heldSkin = skin;
             _held = id != null && _models.TryGetValue(id, out var model) && model.ShowInHand ? model : null;
             _hand.gameObject.SetActive(_held != null);
             if (_held == null) return;
             _handFilter.sharedMesh = _held.Mesh;
-            _handRenderer.sharedMaterials = _held.Materials;
+            _handRenderer.sharedMaterials = SkinLooks.For(id, _held, skin);
             _hand.localScale = Vector3.one * _held.HandScale;
             _draw = -1f;
             if (_held.Shoots) RigBow();

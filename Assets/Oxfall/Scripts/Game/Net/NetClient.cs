@@ -207,6 +207,13 @@ namespace Oxfall.Game.Net
             _socket.Send(_writer.Buffer, _writer.Length);
         }
 
+        public void SendShop(ShopOp op, string itemId, string skinId)
+        {
+            if (State != Status.Online || _socket == null) return;
+            Messages.Shop(_writer, op, itemId, skinId);
+            _socket.Send(_writer.Buffer, _writer.Length);
+        }
+
         public void SendShoot(Vector3 origin, float yaw, float pitch)
         {
             if (State != Status.Online || _socket == null) return;
@@ -325,6 +332,7 @@ namespace Oxfall.Game.Net
         {
             FailReason = reason;
             Debug.Log("[Oxfall] Offline: " + reason);
+            Oxfall.Game.Items.Skins.UseOffline();
             _socket?.Dispose();
             _socket = null;
             foreach (var p in _players.Values) p.Destroy();
@@ -501,7 +509,7 @@ namespace Oxfall.Game.Net
                 case MessageType.Held:
                 {
                     Messages.ReadHeld(reader, out ushort who, out string item);
-                    if (_players.TryGetValue(who, out var holder)) holder.SetHeld(item, string.IsNullOrEmpty(item) ? null : Models?.Invoke(item));
+                    if (_players.TryGetValue(who, out var holder)) holder.SetHeld(item, string.IsNullOrEmpty(item) ? null : Models?.Invoke(Oxfall.Core.Items.SkinCatalog.Untag(item, out _)));
                     break;
                 }
                 case MessageType.Outfit:
@@ -574,6 +582,9 @@ namespace Oxfall.Game.Net
                     Bitten?.Invoke(target, kind, damage, killed);
                     break;
                 }
+                case MessageType.LockerState:
+                    Oxfall.Game.Items.Skins.FromServer(Messages.ReadLockerState(reader));
+                    break;
                 case MessageType.TrapShot:
                 {
                     Messages.ReadTrapShot(reader, out int trap, out ushort target, out int damage, out bool killed);

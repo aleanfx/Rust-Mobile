@@ -34,7 +34,17 @@ namespace Oxfall.Game.UI
         public static bool Busy { get; private set; }
 
         /// <summary>The icon of an item, or null before they are rendered (or if it failed).</summary>
-        public static Sprite Get(string itemId) => itemId != null && Sprites.TryGetValue(itemId, out var s) ? s : null;
+        /// <summary>An item's icon, in the skin the player has put on it if there is one.</summary>
+        public static Sprite Get(string itemId)
+        {
+            if (itemId == null) return null;
+            string skin = Oxfall.Game.Items.Skins.EquippedFor(itemId);
+            if (skin.Length > 0 && Sprites.TryGetValue(Oxfall.Core.Items.SkinCatalog.Tag(itemId, skin), out var skinned)) return skinned;
+            return Sprites.TryGetValue(itemId, out var s) ? s : null;
+        }
+
+        /// <summary>The icon under exactly this key: an item id, or an id tagged with a skin.</summary>
+        public static Sprite GetExact(string key) => key != null && Sprites.TryGetValue(key, out var s) ? s : null;
 
         public static ItemIcons Render(IReadOnlyDictionary<string, ItemModel> models, Light sun)
         {

@@ -51,6 +51,7 @@ namespace Oxfall.Server
             _savePath = savePath;
             _world = LoadOrCreate(seed, devMode);
             _state = _world.Players;
+            LoadLockers();
             _world.Teams.Changed += owners =>
             {
                 foreach (int owner in owners) _teamNews.Add(owner);
@@ -86,9 +87,63 @@ namespace Oxfall.Server
             return new ServerWorld(seed) { DevMode = devMode };
         }
 
+        /// <summary>Where the skin lockers are kept: beside the island, but never wiped with it.</summary>
+        private string LockerPath => string.IsNullOrEmpty(_savePath) ? null
+            : Path.Combine(Path.GetDirectoryName(Path.GetFullPath(_savePath)) ?? ".", "oxfall-lockers.sav");
+
+        private void LoadLockers()
+        {
+            string path = LockerPath;
+            if (path == null || !File.Exists(path)) return;
+            if (_world.Lockers.Load(File.ReadAllBytes(path), out var why))
+                _log.LogInformation("Loaded {Count} skin lockers from {Path}", _world.Lockers.Count, path);
+            else
+            {
+                File.Copy(path, path + ".old", true);
+                _log.LogWarning("Not loading {Path} ({Why}); kept as {Path}.old", path, why, path);
+            }
+        }
+
+        /// <summary>Tells each player whose locker changed how it stands now.</summary>
+        private void FlushLockers(NetWriter writer)
+        {
+            if (_world.LockerNews.Count == 0) return;
+            foreach (ushort playerId in _world.LockerNews)
+                if (_sessions.TryGetValue(playerId, out var s) && _world.TryGetLocker(playerId, out var locker))
+                {
+                    Messages.LockerState(writer, locker);
+                    s.Connection.Send(writer.ToArray());
+                }
+            _world.LockerNews.Clear();
+        }
+
+        /// <summary>Writes the skin lockers to disk if any changed.</summary>
+        private void SaveLockers()
+        {
+            string path = LockerPath;
+            if (path == null) return;
+            byte[] bytes;
+            lock (_lock)
+            {
+                if (!_world.Lockers.Dirty) return;
+                bytes = _world.Lockers.Save();
+                _world.Lockers.Dirty = false;
+            }
+            try
+            {
+                File.WriteAllBytes(path + ".tmp", bytes);
+                File.Move(path + ".tmp", path, true);
+            }
+            catch (Exception e) when (e is IOException || e is UnauthorizedAccessException)
+            {
+                _log.LogError("Could not save the skin lockers to {Path}: {Message}", path, e.Message);
+            }
+        }
+
         /// <summary>Writes the island to disk now (safely: a new file, then swapped in).</summary>
         public void SaveNow()
         {
+            SaveLockers();
             if (string.IsNullOrEmpty(_savePath)) return;
             byte[] bytes;
             lock (_lock) bytes = _world.Save();
@@ -242,11 +297,13 @@ namespace Oxfall.Server
                     }
                     Messages.Snapshot(writer, now, _state.Snapshot());
                     Broadcast(writer.ToArray());
+                    FlushLockers(writer);
                     // Clothes put on or taken off, twice a second, for everyone to see.
                     if (ticks % (Protocol.TickRate / 2) == 0)
                         foreach (var session in _sessions.Values)
                         {
                             Messages.Worn(session.Record.Survivor.Inventory, _worn);
+                            _world.TagWorn(session.Id, _worn);
                             string outfit = string.Join("|", _worn);
                             if (outfit == session.LastOutfit) continue;
                             session.LastOutfit = outfit;
@@ -476,7 +533,7 @@ namespace Oxfall.Server
                     // What is in their hands, for everyone else to see.
                     string held = _world.Hold(id, Messages.ReadHold(reader));
                     if (held == null) break;
-                    Messages.Held(writer, id, held);
+                    Messages.Held(writer, id, _world.TagHeld(id, held));
                     Broadcast(writer.ToArray());
                     break;
                 }
@@ -511,6 +568,15 @@ namespace Oxfall.Server
                         foreach (var s in _sessions.Values)
                             if (_world.Teams.SameTeam(s.Record.Owner, session.Record.Owner)) s.Connection.Send(line);
                     }
+                    break;
+                }
+                case MessageType.Shop:
+                {
+                    Messages.ReadShop(reader, out var op, out string itemId, out string skinId);
+                    var result = _world.ShopAct(id, op, itemId, skinId);
+                    if (result != ActionResult.Ok) Fail(session, writer, result);
+                    else _log.LogInformation("Shop: {Id} '{Name}' {Op} {Item} {Skin}", id, session.Record.Name, op, itemId, skinId);
+                    FlushLockers(writer);
                     break;
                 }
                 case MessageType.TeamAct:
@@ -647,10 +713,18 @@ namespace Oxfall.Server
                 // What everyone already here is wearing and holding.
                 foreach (var other in _sessions.Values)
                 {
-                    Messages.Outfit(writer, other.Id, Messages.Worn(other.Record.Survivor.Inventory, _worn));
+                    Messages.Worn(other.Record.Survivor.Inventory, _worn);
+                    _world.TagWorn(other.Id, _worn);
+                    Messages.Outfit(writer, other.Id, _worn);
                     connection.Send(writer.ToArray());
                     if (other.Id == player.Id || !_state.TryGet(other.Id, out var them) || string.IsNullOrEmpty(them.Held)) continue;
-                    Messages.Held(writer, other.Id, them.Held);
+                    Messages.Held(writer, other.Id, _world.TagHeld(other.Id, them.Held));
+                    connection.Send(writer.ToArray());
+                }
+                // Their skin locker (Oxcoins, skins bought, what each item wears).
+                if (_world.TryGetLocker(player.Id, out var locker))
+                {
+                    Messages.LockerState(writer, locker);
                     connection.Send(writer.ToArray());
                 }
                 // Who sleeps where (this player no longer among them).

@@ -55,8 +55,14 @@ const wait = ms => new Promise(r => setTimeout(r, ms));
   await cmd(ana, 'Ana', 'near-player', 3000);
   await cmd(beto, 'Beto', 'face-player', 2000);
   await shot(ana, '01-ana-invitar');
-  await cmd(ana, 'Ana', 'team-invite', 2500);
-  log.push(`${stamp()} [test] Beto invited: ${await waitForLog('Beto [log] [Oxfall] Team invitation from Ana', 20000)}`);
+  // Two games on one software GPU run at a frame or two a second: ask again if the first was too early.
+  let invited = false;
+  for (let i = 0; i < 3 && !invited; i++) {
+    if (i > 0) { await cmd(ana, 'Ana', 'near-player', 6000); await cmd(beto, 'Beto', 'face-player', 4000); }
+    await cmd(ana, 'Ana', 'team-invite', 2500);
+    invited = await waitForLog('Beto [log] [Oxfall] Team invitation from Ana', 30000);
+  }
+  log.push(`${stamp()} [test] Beto invited: ${invited}`);
   await shot(beto, '02-beto-invitation');
   await cmd(beto, 'Beto', 'team-accept', 3000);
   log.push(`${stamp()} [test] Beto in a team: ${await waitForLog('Beto [log] [Oxfall] Team ', 20000)}`);
@@ -100,6 +106,26 @@ const wait = ms => new Promise(r => setTimeout(r, ms));
   await cmd(beto, 'Beto', 'team-leave', 3000);
   log.push(`${stamp()} [test] Ana alone again: ${await waitForLog('Ana [log] [Oxfall] Team: none now', 20000)}`);
   await shot(ana, '09-ana-alone');
+
+  // No longer mates: Ana sets a loaded shotgun trap facing Beto, and it fires at him.
+  // Inland first: the beach they woke on runs into the sea, and nothing is set up in water.
+  await cmd(beto, 'Beto', 'nearest-tree', 3000);
+  await cmd(beto, 'Beto', 'back-3', 3000);
+  await cmd(ana, 'Ana', 'give-trap', 1500);
+  await cmd(ana, 'Ana', 'near-player', 6000);
+  await cmd(beto, 'Beto', 'stats', 800);
+  await cmd(ana, 'Ana', 'trap', 1500);
+  await shot(ana, '10-ana-trap-ghost');
+  await cmd(ana, 'Ana', 'deploy', 2000);
+  await cmd(ana, 'Ana', 'open-trap', 1500);
+  await cmd(ana, 'Ana', 'load-trap', 1500);
+  await cmd(ana, 'Ana', 'stats', 800);
+  await cmd(ana, 'Ana', 'close-box', 800);
+  await cmd(ana, 'Ana', 'back-4', 1500);
+  await cmd(beto, 'Beto', 'face-player', 4000);
+  await shot(beto, '11-beto-shot-by-trap');
+  await shot(ana, '12-ana-trap-fires');
+  await cmd(beto, 'Beto', 'stats', 800);
 
   fs.writeFileSync(path.join(out, 'console.log'), log.join('\n'));
   console.log(log.filter(l => /\[(cmd|test|shot|pageerror|error)\]|Oxfall\] (Team|Chat|Online)|xception/.test(l)).join('\n'));

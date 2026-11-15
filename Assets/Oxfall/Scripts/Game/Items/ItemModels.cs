@@ -39,6 +39,14 @@ namespace Oxfall.Game.Items
         /// <summary>Whether it is a gun (attack fires it), and where its muzzle is on the model.</summary>
         public bool Fires;
         public Vector3 Muzzle;
+
+        /// <summary>The same model in other materials (a skin).</summary>
+        public ItemModel WithMaterials(Material[] materials)
+        {
+            var copy = (ItemModel)MemberwiseClone();
+            copy.Materials = materials;
+            return copy;
+        }
     }
 
     /// <summary>

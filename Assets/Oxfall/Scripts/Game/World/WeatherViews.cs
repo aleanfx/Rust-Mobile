@@ -99,7 +99,7 @@ namespace Oxfall.Game.World
 
             if (_dayNight != null)
             {
-                _dayNight.Overcast = Mathf.Max(Rain, Fog * 0.55f);
+                _dayNight.Overcast = Mathf.Max(Rain, Fog * 0.7f);
                 _dayNight.FogBoost = Fog;
                 if (_flash > 0f || _dayNight.Flash > 0f)
                 {

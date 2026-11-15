@@ -1,3 +1,4 @@
+using System.Collections.Generic;
 using Oxfall.Core.Building;
 using Oxfall.Core.Crafting;
 using Oxfall.Core.Environment;
@@ -77,6 +78,7 @@ namespace Oxfall.Game
         private bool _quietPickups;
         private NameTags _nameTags;
         private TeamUi _team;
+        private StoreUi _store;
         private Camera _camera;
         private int _shownOnline = -1;
         private float _respawnTimer;
@@ -234,6 +236,22 @@ namespace Oxfall.Game
                 _inventoryUi.Refresh();
                 _hud.RefreshCraftPanel();
                 OnHeldChanged();
+                // Then every skin's icon, for the store and for items wearing one.
+                var skinned = new Dictionary<string, ItemModel>();
+                foreach (var skin in SkinCatalog.All)
+                    if (models.TryGetValue(skin.ItemId, out var plain))
+                        skinned[SkinCatalog.Tag(skin.ItemId, skin.Id)] = plain.WithMaterials(SkinLooks.For(skin.ItemId, plain, skin.Id));
+                ItemIcons.Render(skinned, _world.Sun).Ready += () =>
+                {
+                    _inventoryUi.Refresh();
+                    _store?.Refresh();
+                };
+            };
+            // A skin bought or put on: the hand, the hotbar and the store show it at once.
+            Skins.Changed += () =>
+            {
+                _inventoryUi.Refresh();
+                gatherer.RefreshHeld();
             };
 
             // Sounds, all made at start-up.
@@ -572,6 +590,17 @@ namespace Oxfall.Game
             _chat.Said += (text, team) => _net.SendChat(text, team);
             _net.ChatLine += (from, name, text, team) => _chat.Add(from == 0 ? null : name, text, from == _net.PlayerId, team);
             // Teams: asked in face to face (the use button on another player), a panel by the chat's button.
+            _store = new StoreUi(_hud);
+            _store.Asked += (op, itemId, skinId) =>
+            {
+                if (_net.State == NetClient.Status.Online) _net.SendShop(op, itemId, skinId);
+                else
+                {
+                    var result = Skins.ApplyOffline(op, itemId, skinId);
+                    if (result != ActionResult.Ok) _hud.ShowToast(GameActions.Explain(result));
+                }
+                if (op == ShopOp.Buy) Debug.Log($"[Oxfall] Store: buy {skinId}");
+            };
             _team = new TeamUi(_hud) { Me = () => _player.transform.position };
             _team.Asked += (op, arg) => _net.SendTeam(op, arg);
             _team.Talk += _chat.AskTeam;
@@ -1692,6 +1721,16 @@ namespace Oxfall.Game
                 case "light": _inventoryUi.ToggleFurnace(); break;
                 case "authorize": _cupboard.Authorize(); break;
                 case "close-box": _inventoryUi.CloseBox(true); break;
+                case "store": _store.Toggle(); break;
+                case "store-act": _store.Act(); break;
+                case "give-coins" when _actions.Online:
+                    _net.SendAct(ActKind.DevGive, ServerWorld.DevCoinsKit);
+                    break;
+                case "give-coins": Skins.AddOfflineCoins(1000); break;
+                case "skins":
+                    Debug.Log($"[Oxfall] Skins: coins={Skins.Current.Coins} owned={string.Join(",", Skins.Current.Owned)} " +
+                              $"rifle={Skins.EquippedFor(ItemIds.SemiRifle)} shirt={Skins.EquippedFor(ItemIds.BurlapShirt)} online={Skins.Online}");
+                    break;
                 case "bag-1":
                 {
                     var bags = MyBags();
@@ -1782,6 +1821,8 @@ namespace Oxfall.Game
                         _hotbar.Select(slot - 1);
                     else if (command.StartsWith("say:"))
                         _chat.Send(command.Substring(4));
+                    else if (command.StartsWith("store-select:"))
+                        _store.Select(command.Substring(13));
                     else if (command.StartsWith("team-say:"))
                         _chat.Send(command.Substring(9), true);
                     else if (command.StartsWith("tap-") && int.TryParse(command.Substring(4), out int tap))

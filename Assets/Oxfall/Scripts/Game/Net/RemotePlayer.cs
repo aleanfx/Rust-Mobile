@@ -37,6 +37,7 @@ namespace Oxfall.Game.Net
         private static Mesh _hood, _wrap, _facemask, _chestPlate, _kilt;
         private Transform _headwear, _armour, _skirt;
         private string _outfit = "";
+        private string _heldTag;
         private readonly CapsuleCollider _capsule;
         private float _fall;
         private float _flinch;
@@ -108,13 +109,16 @@ namespace Oxfall.Game.Net
             if (outfit == _outfit) return;
             _outfit = outfit;
             var m = _materials;
-            string head = worn.Length > 0 ? worn[0] : "", chest = worn.Length > 1 ? worn[1] : "";
-            string legs = worn.Length > 2 ? worn[2] : "", feet = worn.Length > 3 ? worn[3] : "";
-            var shirt = chest == ItemIds.BurlapShirt ? m.Cloth : chest == ItemIds.HideVest ? m.Leather : m.Shirt;
+            // Each id may carry its skin ("burlap_shirt@shirt_sand"): its first material recoloured.
+            string head = SkinCatalog.Untag(worn.Length > 0 ? worn[0] : "", out var headSkin);
+            string chest = SkinCatalog.Untag(worn.Length > 1 ? worn[1] : "", out var chestSkin);
+            string legs = SkinCatalog.Untag(worn.Length > 2 ? worn[2] : "", out var legsSkin);
+            string feet = SkinCatalog.Untag(worn.Length > 3 ? worn[3] : "", out var feetSkin);
+            var shirt = SkinLooks.Slot(chest == ItemIds.BurlapShirt ? m.Cloth : chest == ItemIds.HideVest ? m.Leather : m.Shirt, chestSkin, 0);
             // A vest has no sleeves: the arms keep the shirt underneath.
-            var sleeves = chest == ItemIds.BurlapShirt ? m.Cloth : m.Shirt;
-            var trousers = legs == ItemIds.BurlapTrousers ? m.Cloth : legs == ItemIds.HidePants ? m.Leather : m.Trousers;
-            var boots = feet == ItemIds.HideBoots ? m.Leather : m.Char;
+            var sleeves = chest == ItemIds.BurlapShirt ? shirt : m.Shirt;
+            var trousers = SkinLooks.Slot(legs == ItemIds.BurlapTrousers ? m.Cloth : legs == ItemIds.HidePants ? m.Leather : m.Trousers, legsSkin, 0);
+            var boots = SkinLooks.Slot(feet == ItemIds.HideBoots ? m.Leather : m.Char, feetSkin, 0);
             Dress(_figure.Find("Body"), shirt, m.Skin);
             Dress(_armL, sleeves, m.Skin);
             Dress(_armR, sleeves, m.Skin);
@@ -127,18 +131,18 @@ namespace Oxfall.Game.Net
             {
                 bool hood = head == ItemIds.HideHood;
                 var mesh = hood ? (_hood ??= MeshFactory.Headwear(true)) : (_wrap ??= MeshFactory.Headwear(false));
-                _headwear = Part("Headwear", _figure, Vector3.zero, mesh, hood ? m.Leather : m.Cloth, m.Rope);
+                _headwear = Part("Headwear", _figure, Vector3.zero, mesh, SkinLooks.Slot(hood ? m.Leather : m.Cloth, headSkin, 0), m.Rope);
             }
             else if (head == ItemIds.MetalFacemask)
-                _headwear = Part("Headwear", _figure, Vector3.zero, _facemask ??= MeshFactory.MetalFacemask(), m.Metal, m.Leather, m.Char);
+                _headwear = Part("Headwear", _figure, Vector3.zero, _facemask ??= MeshFactory.MetalFacemask(), SkinLooks.Slot(m.Metal, headSkin, 0), m.Leather, m.Char);
 
             if (_armour != null) Object.Destroy(_armour.gameObject);
             _armour = chest == ItemIds.MetalChestPlate
-                ? Part("Chest plate", _figure, Vector3.zero, _chestPlate ??= MeshFactory.MetalChestPlate(), m.Metal, m.Leather)
+                ? Part("Chest plate", _figure, Vector3.zero, _chestPlate ??= MeshFactory.MetalChestPlate(), SkinLooks.Slot(m.Metal, chestSkin, 0), m.Leather)
                 : null;
             if (_skirt != null) Object.Destroy(_skirt.gameObject);
             _skirt = legs == ItemIds.RoadsignKilt
-                ? Part("Kilt", _figure, Vector3.zero, _kilt ??= MeshFactory.RoadsignKilt(), m.Metal, m.Leather, m.WarnYellow)
+                ? Part("Kilt", _figure, Vector3.zero, _kilt ??= MeshFactory.RoadsignKilt(), SkinLooks.Slot(m.Metal, legsSkin, 0), m.Leather, m.WarnYellow)
                 : null;
         }
 
@@ -168,7 +172,10 @@ namespace Oxfall.Game.Net
         public void SetHeld(string itemId, ItemModel model)
         {
             itemId ??= "";
-            if (itemId == _heldId) return;
+            if (itemId == _heldTag) return;
+            _heldTag = itemId;
+            // It may carry its skin: "semi_auto_rifle@rifle_gold".
+            itemId = SkinCatalog.Untag(itemId, out var skin);
             _heldId = itemId;
             if (_held != null) Object.Destroy(_held.gameObject);
             _held = null;
@@ -177,7 +184,7 @@ namespace Oxfall.Game.Net
             _armL.localScale = _armR.localScale = Vector3.one;
             if (model == null || !model.ShowInHand || model.Mesh == null) return;
             _heldModel = model;
-            _held = Part("Held " + itemId, _figure, Vector3.zero, model.Mesh, model.Materials);
+            _held = Part("Held " + itemId, _figure, Vector3.zero, model.Mesh, SkinLooks.For(itemId, model, skin));
             _held.localScale = Vector3.one * model.HandScale;
             _hands = model.Fires ? (itemId == ItemIds.Revolver ? Hands.Pistol : Hands.Rifle) : model.Shoots ? Hands.Bow : Hands.One;
             if (model.Burns)

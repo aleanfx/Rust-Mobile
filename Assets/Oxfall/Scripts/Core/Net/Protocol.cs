@@ -12,7 +12,7 @@ namespace Oxfall.Core.Net
     public static class Protocol
     {
         /// <summary>Raised whenever a message changes shape; a client of another version is turned away.</summary>
-        public const ushort Version = 19;
+        public const ushort Version = 20;
 
         /// <summary>Snapshots per second the server sends.</summary>
         public const int TickRate = 20;
@@ -87,6 +87,9 @@ namespace Oxfall.Core.Net
         }
     }
 
+    /// <summary>What a player asks of the skin store.</summary>
+    public enum ShopOp : byte { Buy = 1, Equip = 2 }
+
     public enum MessageType : byte
     {
         // Client to server
@@ -119,6 +122,8 @@ namespace Oxfall.Core.Net
         Hold = 46,
         /// <summary>Something asked of the player's team (<see cref="Rules.TeamOp"/>) and whom it is about.</summary>
         TeamAct = 47,
+        /// <summary>The skin store: buy a skin, or put one on (or take it off) an item.</summary>
+        Shop = 48,
 
         // Server to client
         Welcome = 10,
@@ -178,6 +183,8 @@ namespace Oxfall.Core.Net
         Broke = 63,
         /// <summary>A shotgun trap fired: which, at whom, what it took off and whether it killed them.</summary>
         TrapShot = 64,
+        /// <summary>The player's skin locker: Oxcoins, skins bought, and the skin each item wears.</summary>
+        LockerState = 65,
     }
 
     /// <summary>What a player does to their own belongings (inside an <see cref="MessageType.Act"/> message).</summary>
@@ -1276,6 +1283,33 @@ namespace Oxfall.Core.Net
             int count = r.Byte();
             for (int i = 0; i < count; i++) into.Add(r.String());
         }
+
+        // ---- Skins
+
+        public static void Shop(NetWriter w, ShopOp op, string itemId, string skinId)
+        {
+            w.Reset();
+            w.Byte((byte)MessageType.Shop);
+            w.Byte((byte)op);
+            w.String(itemId ?? "", 64);
+            w.String(skinId ?? "", 64);
+        }
+
+        public static void ReadShop(NetReader r, out ShopOp op, out string itemId, out string skinId)
+        {
+            op = (ShopOp)r.Byte();
+            itemId = r.String();
+            skinId = r.String();
+        }
+
+        public static void LockerState(NetWriter w, Items.Locker locker)
+        {
+            w.Reset();
+            w.Byte((byte)MessageType.LockerState);
+            locker.Write(w);
+        }
+
+        public static Items.Locker ReadLockerState(NetReader r) => Items.Locker.Read(r);
 
         // ---- Teams
 

@@ -154,10 +154,12 @@ namespace Oxfall.Game.World
             // Thicker fog in bad weather, on top of whatever density was chosen for the view.
             float density = RenderSettings.fogDensity;
             if (_fogSet < 0f || Mathf.Abs(density - _fogSet) > 1e-7f) _fogBase = density;
-            _fogSet = _fogBase * (1f + Mathf.Clamp01(FogBoost) * 2.2f);
+            // Full fog: about a quarter of the light gone at 15 m, half at 26 m, nearly all by 60 m.
+            float boost = Mathf.Clamp01(FogBoost);
+            _fogSet = _fogBase * (1f + boost * boost * 1.5f + boost * 4.5f);
             RenderSettings.fogDensity = _fogSet;
 
-            var top = Color.Lerp(Color.Lerp(NightSkyTop, WorldBuilder.SkyTop, twilight), fog, overcast * 0.8f) + flashLight * 0.6f;
+            var top = Color.Lerp(Color.Lerp(NightSkyTop, WorldBuilder.SkyTop, twilight), fog, Mathf.Max(overcast * 0.8f, Mathf.Clamp01(FogBoost) * 0.95f)) + flashLight * 0.6f;
             Shader.SetGlobalVector(SkyTopGlobal, top.linear);
             Shader.SetGlobalVector(SkyHorizonGlobal, fog.linear);
             if (_sky != null)

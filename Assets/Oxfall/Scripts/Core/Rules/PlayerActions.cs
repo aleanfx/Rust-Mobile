@@ -73,6 +73,12 @@ namespace Oxfall.Core.Rules
         NotUpkeep,
         /// <summary>A shotgun trap takes only shells.</summary>
         NotShells,
+        /// <summary>Not enough Oxcoins in the locker for that skin.</summary>
+        NotEnoughCoins,
+        /// <summary>That skin is not in the player's locker.</summary>
+        NotOwned,
+        /// <summary>The skin is in the locker already.</summary>
+        AlreadyOwned,
     }
 
     /// <summary>

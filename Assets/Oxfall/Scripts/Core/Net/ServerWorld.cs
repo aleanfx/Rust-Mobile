@@ -372,6 +372,7 @@ namespace Oxfall.Core.Net
                 case ActKind.MoveInBox: return PlayerActions.MoveInBox(Settlement, s, a, b);
                 case ActKind.DevGive:
                     if (!DevMode) return ActionResult.Invalid;
+                    if (a == DevCoinsKit) { Lockers.For(record.Token).AddCoins(1000); Lockers.Dirty = true; LockerNews.Add(playerId); return ActionResult.Ok; }
                     GiveTestKit(s.Inventory, a);
                     return ActionResult.Ok;
                 case ActKind.DevSpawnAnimal:
