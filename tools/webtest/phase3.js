@@ -132,7 +132,10 @@ const stamp = () => ((Date.now() - t0) / 1000).toFixed(1).padStart(6);
   // Crossbow: arrows leave the quiver, a deer goes down.
   await cmd('crossbow', 1500);
   const arrowsA = await stat('arrows');
-  await cmd('spawn-deer', 1500);
+  // A boar a few metres off (arrows at a few frames a second can pass through a far target between frames).
+  await cmd('spawn-boar', 1500);
+  await cmd('approach-animal', 300);
+  await cmd('back-5', 800);
   await cmd('face-animal', 600);
   await shot('08-crossbow-aim');
   const killedBefore = log.filter(l => l.includes('Killed')).length;
@@ -145,7 +148,7 @@ const stamp = () => ((Date.now() - t0) / 1000).toFixed(1).padStart(6);
   }
   const arrowsB = await stat('arrows');
   check('crossbow: shoots arrows', arrowsB < arrowsA, `${arrowsA} -> ${arrowsB}`);
-  check('crossbow: kills a deer', log.filter(l => l.includes('Killed')).length > killedBefore);
+  check('crossbow: kills a boar', log.filter(l => l.includes('Killed')).length > killedBefore);
   await cmd('clear-animals', 600);
 
   // Large box: 24 slots in two pages.
@@ -168,18 +171,22 @@ const stamp = () => ((Date.now() - t0) / 1000).toFixed(1).padStart(6);
   await cmd('go-shore', 2500);
   await cmd('fishing-rod', 1500);
   await shot('13-rod-at-shore');
-  await cmd('cast', 2000);
-  await shot('14-cast');
-  const casting = await fish('casting');
-  check('fishing: cast', casting === 'True', `casting=${casting} aim=${lastOf('[Oxfall] Fish', 'aim')}`);
-  // Fish-state lines show up a frame or two late on this slow machine: reel the moment one says biting.
-  const bitesBefore = log.filter(l => l.includes('biting=True')).length;
-  let bit = false;
-  for (let i = 0; i < 80 && !bit; i++) {
-    await page.evaluate(() => window.unityInstance.SendMessage('Oxfall', 'DebugCommand', 'fish-state'));
-    await wait(400);
-    bit = log.filter(l => l.includes('biting=True')).length > bitesBefore;
+  // This machine runs at a few frames a second: a screenshot takes long enough for a fish to bite
+  // and get away, so watch the float with no screenshots between casting and reeling (up to 3 casts).
+  let bit = false, casted = false;
+  for (let attempt = 0; attempt < 3 && !bit; attempt++) {
+    const linesBefore = log.length;
+    await cmd('cast', 300);
+    for (let i = 0; i < 90 && !bit; i++) {
+      await page.evaluate(() => window.unityInstance.SendMessage('Oxfall', 'DebugCommand', 'fish-state'));
+      await wait(300);
+      const fresh = log.slice(linesBefore);
+      casted = casted || fresh.some(l => l.includes('casting=True'));
+      bit = fresh.some(l => l.includes('biting=True'));
+      if (!bit && i > 5 && fresh.length && fresh[fresh.length - 1].includes('casting=False') && fresh.some(l => l.includes('casting=True'))) break;
+    }
   }
+  check('fishing: cast', casted);
   check('fishing: a fish bites', bit);
   await cmd('reel', 2000);
   await shot('15-reeled');
