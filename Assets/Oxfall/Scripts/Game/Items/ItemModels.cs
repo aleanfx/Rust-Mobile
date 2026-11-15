@@ -98,8 +98,8 @@ namespace Oxfall.Game.Items
                     IconRotation = Tilt(-30f, 45f),
                     IconZoom = 1.05f,
                 },
-                [ItemIds.Machete] = Tool(MeshFactory.Machete(), new[] { m.Steel, m.Leather, m.Metal }),
-                [ItemIds.Sword] = Tool(MeshFactory.SalvagedSword(), new[] { m.Steel, m.Leather, m.BarrelRust }),
+                [ItemIds.Machete] = Tool(MeshFactory.Machete(), new[] { m.Blade, m.Leather, m.Metal }),
+                [ItemIds.Sword] = Tool(MeshFactory.SalvagedSword(), new[] { m.Blade, m.Leather, m.BarrelRust }),
                 [ItemIds.WoodenSpear] = new ItemModel
                 {
                     Mesh = MeshFactory.WoodenSpear(),

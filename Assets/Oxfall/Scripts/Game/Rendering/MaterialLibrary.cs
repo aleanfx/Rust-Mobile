@@ -73,6 +73,9 @@ namespace Oxfall.Game.Rendering
         public Material SheetMetal { get; }
         /// <summary>Bright worn steel: the heads of metal tools.</summary>
         public Material Steel { get; }
+
+        /// <summary>A blade's ground steel: lighter and less mirror-like than <see cref="Steel"/>, so it reads in hand without reflections to show.</summary>
+        public Material Blade { get; }
         /// <summary>Old oil drums: blue, rust red and olive paint, and their bare, rusting rims and lids.</summary>
         public Material[] BarrelPaint { get; }
         /// <summary>The ruins: weathered concrete, and the olive paint of their supply crates.</summary>
@@ -238,6 +241,8 @@ namespace Oxfall.Game.Rendering
             // Forged steel: darker and more metallic than paint, so it takes the sky's light along its edges.
             Steel = Make("Steel", new Color(0.50f, 0.51f, 0.53f), 0.58f);
             Steel.SetFloat(Metallic, 0.6f);
+            Blade = Make("Blade", new Color(0.66f, 0.67f, 0.68f), 0.55f);
+            Blade.SetFloat(Metallic, 0.25f);
             BarrelPaint = new[]
             {
                 Make("Barrel blue", new Color(0.13f, 0.27f, 0.42f), 0.38f),
