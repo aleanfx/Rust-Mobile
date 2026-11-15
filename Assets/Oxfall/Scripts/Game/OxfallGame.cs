@@ -131,6 +131,8 @@ namespace Oxfall.Game
         // The island's animals: alone the game runs them, online the server does and says where they are.
         private Fauna _fauna;
         private AnimalViews _animalViews;
+        private BoatFleet _boats;
+        private float _rowSend;
         private SleeperViews _sleeperViews;
         // Supply drops: alone the game sends the planes, online the server does and says so.
         private Airdrops _airdrops;
@@ -220,6 +222,13 @@ namespace Oxfall.Game
             _animalViews = new AnimalViews(materials, (x, z) => Monuments.SurfaceHeight(ground, x, z),
                 id => models.TryGetValue(id, out var model) ? model : null);
             _sleeperViews = new SleeperViews(materials);
+            // Rowboats off the beaches (alone they are kept here; online the server's are shown).
+            _boats = new BoatFleet(ground, materials, true);
+            _boats.RowingChanged += boat =>
+            {
+                if (boat != null) StartRowing(boat);
+                else StopRowing();
+            };
             gatherer.StrikeAnimal = _actions.StrikeAnimal;
 
             // Arrows in flight, this player's and everyone else's.
@@ -467,6 +476,15 @@ namespace Oxfall.Game
             _interactor = playerObject.AddComponent<Interactor>();
             _interactor.Init(_settlement, player.Head, _hud);
             _interactor.Actions = _actions;
+            _interactor.BoatInSight = () =>
+            {
+                var near = _boats.Boardable(_player.transform.position, _player.Head.forward);
+                return near != null ? near.Id : 0;
+            };
+            _interactor.Rowing = () => _player.IsRowing;
+            _interactor.Board += BoardBoat;
+            _interactor.LeaveBoat += LeaveBoat;
+            _player.LeaveBoat += LeaveBoat;
             _interactor.Busy = () => (_keypad != null && _keypad.IsOpen) || (_cupboard != null && _cupboard.IsOpen) || (_inventoryUi != null && _inventoryUi.IsOpen)
                 || (_team != null && _team.IsOpen) || _hud.CraftPanelOpen;
             _interactor.DoorUsed += () => audio.Play(SoundCue.Wood);
@@ -638,6 +656,7 @@ namespace Oxfall.Game
             };
             _net.AnimalHit += _actions.OnServerAnimalHit;
             _net.AnimalsSeen += animals => _animalViews.Apply(animals);
+            _net.BoatsSeen += boats => _boats.Apply(boats, _net.PlayerId);
             _net.AirdropSeen += drop => _airdropViews.Add(drop);
             _net.WeatherSeen += (rain, fog) => _weather.SetTarget(rain, fog);
             _net.Broke += ToolBroke;
@@ -1314,6 +1333,12 @@ namespace Oxfall.Game
         private void OnDied()
         {
             Debug.Log("[Oxfall] The player died.");
+            if (_player.IsRowing)
+            {
+                if (!_actions.Online) _boats.Leave();
+                else _boats.Drop();
+                StopRowing();
+            }
             _map.Close();
             _diedAt = _player.transform.position;
             _inventoryUi.Close();
@@ -1787,6 +1812,13 @@ namespace Oxfall.Game
                 case "crossbow": HoldItem(ItemIds.Crossbow); break;
                 case "fishing-rod": HoldItem(ItemIds.FishingRod); break;
                 case "go-shore": GoToShore(); break;
+                case "go-boat": GoToBoat(); break;
+                case "board": _interactor.Use(); break;
+                case "leave-boat": LeaveBoat(); break;
+                case "boats":
+                    foreach (var boat in _boats.All)
+                        Debug.Log($"[Oxfall] Boat {boat.Id} at ({boat.X:0.0}, {boat.Z:0.0}) yaw={boat.Yaw:0} speed={boat.Speed:0.0} driver={boat.Driver}");
+                    break;
                 case "cast": _rod.Cast(); break;
                 case "reel": _rod.Reel(); break;
                 case "fish-state":
@@ -1859,7 +1891,7 @@ namespace Oxfall.Game
                               $"meat={_inventory.Count(ItemIds.RawMeat)} cooked={_inventory.Count(ItemIds.CookedMeat)} leather={_inventory.Count(ItemIds.Leather)} " +
                               $"pos={_player.transform.position} climbing={_player.IsClimbing} walls={_settlement.WallCount} ladders={_settlement.LadderCount} quality={GraphicsQuality.Name(_quality.Tier)} " +
                               $"screen={Screen.width}x{Screen.height} grass={_grass.BladeCount} " +
-                              $"warmth={_warmth:0.00} dose={_dose:0.00} rads={_rads:0} " +
+                              $"warmth={_warmth:0.00} dose={_dose:0.00} rads={_rads:0} boat={(_boats?.Rowing != null ? _boats.Rowing.Id : 0)} " +
                               $"net={_net.State} id={_net.PlayerId} online={_net.OnlineCount} " +
                               $"others={string.Join(";", System.Linq.Enumerable.Select(_net.Players.Values, p => p.Name + "@" + p.Root.position + (p.Held.Length > 0 ? "+" + p.Held : "")))}");
                     break;
@@ -2123,6 +2155,89 @@ namespace Oxfall.Game
                     return;
                 }
             Debug.Log("[Oxfall] Shore not found");
+        }
+
+        /// <summary>Gets into a boat: alone at once, online when the server says so (with the boats it sends).</summary>
+        private void BoardBoat(int id)
+        {
+            if (_player.IsRowing || _vitals.IsDead) return;
+            if (_actions.Online)
+            {
+                _net.SendAct(ActKind.Board, id);
+                return;
+            }
+            foreach (var boat in _boats.All)
+                if (boat.Id == id && Boating.CanBoard(boat, _player.transform.position.x, _player.transform.position.y, _player.transform.position.z)
+                    && _boats.BoardAlone(boat))
+                {
+                    StartRowing(boat);
+                    return;
+                }
+        }
+
+        private void StartRowing(Boat boat)
+        {
+            _player.Row = (throttle, steer, dt) =>
+            {
+                var seat = _boats.Row(throttle, steer, dt, out float turned);
+                return (seat, turned);
+            };
+            _hud.ShowToast("Adelante para remar, atrás para frenar, a los lados para girar. BAJAR para salir");
+            Debug.Log($"[Oxfall] Boarded boat {boat.Id}");
+        }
+
+        private void StopRowing()
+        {
+            if (!_player.IsRowing) return;
+            _player.Row = null;
+            Debug.Log("[Oxfall] Left the boat");
+        }
+
+        /// <summary>Gets out: alone onto the nearest land (or into the water); online the server says where.</summary>
+        private void LeaveBoat()
+        {
+            if (!_player.IsRowing) return;
+            if (_actions.Online)
+            {
+                _net.SendAct(ActKind.LeaveBoat);
+                _boats.Drop();
+                StopRowing();
+                return;
+            }
+            var at = _boats.Leave();
+            StopRowing();
+            _player.Teleport(at, _player.Yaw, _player.Pitch);
+        }
+
+        /// <summary>The boats bob and drift; the one this player rows is sent to the server ten times a second.</summary>
+        private void TickBoats(float dt)
+        {
+            if (_boats == null) return;
+            _boats.Tick(dt, !_actions.Online);
+            if (!_actions.Online || _boats.Rowing == null || (_rowSend -= dt) > 0f) return;
+            _rowSend = 0.1f;
+            var b = _boats.Rowing;
+            _net.SendRow(b.X, b.Z, b.Yaw, b.Speed);
+        }
+
+        /// <summary>Test: stands on the land nearest a boat, looking at it.</summary>
+        private void GoToBoat()
+        {
+            var boat = _boats.Nearest(_player.transform.position);
+            if (boat == null) return;
+            Boating.Landing(boat, _world.Shape.Ground, out float x, out float y, out float z);
+            var to = new Vector3(boat.X - x, 0f, boat.Z - z);
+            // Close enough to get in, on the shore side.
+            if (to.magnitude > Boating.BoardReach - 0.6f)
+            {
+                var step = to.normalized * (to.magnitude - (Boating.BoardReach - 0.8f));
+                x += step.x;
+                z += step.z;
+                y = Mathf.Max(_world.Shape.Ground.Height(x, z), IslandGround.WaterLevel - 1.2f) + 0.05f;
+                to = new Vector3(boat.X - x, 0f, boat.Z - z);
+            }
+            _player.Teleport(new Vector3(x, y, z), Mathf.Atan2(to.x, to.z) * Mathf.Rad2Deg, 25f);
+            Debug.Log($"[Oxfall] At boat {boat.Id}: {Mathf.Sqrt((boat.X - x) * (boat.X - x) + (boat.Z - z) * (boat.Z - z)):0.0} m");
         }
 
         private void HoldItem(string id)
@@ -2476,6 +2591,7 @@ namespace Oxfall.Game
             TickNet();
             TickAnimals(Time.deltaTime);
             TickAirdrops(Time.deltaTime);
+            TickBoats(Time.deltaTime);
             // Alone, the weather from the seed and the time (online the server says it).
             if (_weather != null && !_actions.Online && (_weatherCheck -= Time.deltaTime) <= 0f)
             {

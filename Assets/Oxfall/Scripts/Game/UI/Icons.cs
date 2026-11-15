@@ -139,6 +139,12 @@ namespace Oxfall.Game.UI
         public static Sprite Jump => Get("jump", p =>
             Mathf.Min(Chevron(p, 0.5f, 0.48f), Chevron(p, -0.02f, 0.48f)));
 
+        /// <summary>A rowboat seen from the side, an oar across it: getting in or out of a boat.</summary>
+        public static Sprite Boat => Get("boat", p => Min(
+            Polygon(p, new Vector2(-0.78f, 0.02f), new Vector2(-0.5f, -0.4f), new Vector2(0.5f, -0.4f), new Vector2(0.82f, 0.08f)),
+            Segment(p, new Vector2(-0.45f, 0.62f), new Vector2(0.5f, -0.62f), 0.06f),
+            RotatedBox(p, new Vector2(0.52f, -0.66f), new Vector2(0.16f, 0.07f), -53f, 0.03f)));
+
         public static Sprite Gear => Get("gear", p =>
         {
             float ring = Mathf.Max(Circle(p, Vector2.zero, 0.58f), -Circle(p, Vector2.zero, 0.24f));

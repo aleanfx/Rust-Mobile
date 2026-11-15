@@ -12,7 +12,7 @@ namespace Oxfall.Core.Net
     public static class Protocol
     {
         /// <summary>Raised whenever a message changes shape; a client of another version is turned away.</summary>
-        public const ushort Version = 22;
+        public const ushort Version = 23;
 
         /// <summary>Snapshots per second the server sends.</summary>
         public const int TickRate = 20;
@@ -124,6 +124,8 @@ namespace Oxfall.Core.Net
         TeamAct = 47,
         /// <summary>The skin store: buy a skin, or put one on (or take it off) an item.</summary>
         Shop = 48,
+        /// <summary>The rower's boat: where it is now, which way it points and how fast it goes.</summary>
+        Row = 49,
 
         // Server to client
         Welcome = 10,
@@ -187,6 +189,8 @@ namespace Oxfall.Core.Net
         LockerState = 65,
         /// <summary>The player's line: a fish bit, or what reeling in brought up (a <see cref="Rules.FishCatch"/>, a byte).</summary>
         Fish = 66,
+        /// <summary>Every rowboat: where it floats, which way, how fast and who rows it.</summary>
+        Boats = 67,
     }
 
     /// <summary>What a player does to their own belongings (inside an <see cref="MessageType.Act"/> message).</summary>
@@ -225,6 +229,28 @@ namespace Oxfall.Core.Net
         Cast = 20,
         /// <summary>Reels the line in: a fish if one is on the hook.</summary>
         Reel = 21,
+        /// <summary>Gets into a rowboat (a: its id).</summary>
+        Board = 22,
+        /// <summary>Gets out of the rowboat the player is in.</summary>
+        LeaveBoat = 23,
+    }
+
+    /// <summary>A rowboat as everyone is told of it.</summary>
+    public readonly struct BoatSnap
+    {
+        public readonly int Id;
+        public readonly float X, Z, Yaw, Speed;
+        public readonly ushort Driver;
+
+        public BoatSnap(int id, float x, float z, float yaw, float speed, ushort driver)
+        {
+            Id = id;
+            X = x;
+            Z = z;
+            Yaw = yaw;
+            Speed = speed;
+            Driver = driver;
+        }
     }
 
     /// <summary>Where a player stands and which way the body faces (degrees about up).</summary>
@@ -415,6 +441,7 @@ namespace Oxfall.Core.Net
                 case ActKind.Wear:
                 case ActKind.DevSpawnAnimal:
                 case ActKind.DevGive:
+                case ActKind.Board:
                     w.Byte((byte)a);
                     break;
                 case ActKind.Craft:
@@ -474,6 +501,7 @@ namespace Oxfall.Core.Net
                 case ActKind.Wear:
                 case ActKind.DevSpawnAnimal:
                 case ActKind.DevGive:
+                case ActKind.Board:
                     a = r.Byte();
                     break;
                 case ActKind.Craft:
@@ -485,6 +513,7 @@ namespace Oxfall.Core.Net
                 case ActKind.TakeAll:
                 case ActKind.DevAirdrop:
                 case ActKind.Reel:
+                case ActKind.LeaveBoat:
                     break;
                 default:
                     throw new ProtocolException("Unknown action " + (byte)kind + ".");
@@ -731,6 +760,63 @@ namespace Oxfall.Core.Net
         }
 
         public static Rules.FishCatch ReadFish(NetReader r) => (Rules.FishCatch)r.Byte();
+
+        /// <summary>Every rowboat, for everyone (there are only a few).</summary>
+        public static void Boats(NetWriter w, IEnumerable<Rules.Boat> boats)
+        {
+            w.Reset();
+            w.Byte((byte)MessageType.Boats);
+            int countAt = w.Length;
+            w.UShort(0);
+            int count = 0;
+            foreach (var b in boats)
+            {
+                if (count == 255) break;
+                w.Byte((byte)b.Id);
+                w.Float(b.X);
+                w.Float(b.Z);
+                w.UShort((ushort)((int)Math.Round(b.Yaw / 360f * 65536f) & 0xFFFF));
+                w.Byte((byte)Math.Min(255, Math.Max(0, (int)Math.Round((b.Speed + 4f) * 20f))));
+                w.UShort(b.Driver);
+                count++;
+            }
+            w.PatchUShort(countAt, (ushort)count);
+        }
+
+        public static void ReadBoats(NetReader r, List<BoatSnap> into)
+        {
+            into.Clear();
+            int count = r.UShort();
+            if (count > 255) throw new ProtocolException("Too many boats.");
+            for (int i = 0; i < count; i++)
+            {
+                int id = r.Byte();
+                float x = r.Float(), z = r.Float();
+                float yaw = r.UShort() / 65536f * 360f;
+                float speed = r.Byte() / 20f - 4f;
+                ushort driver = r.UShort();
+                into.Add(new BoatSnap(id, x, z, yaw, speed, driver));
+            }
+        }
+
+        /// <summary>The rower's boat as their phone moved it.</summary>
+        public static void Row(NetWriter w, float x, float z, float yaw, float speed)
+        {
+            w.Reset();
+            w.Byte((byte)MessageType.Row);
+            w.Float(x);
+            w.Float(z);
+            w.Float(yaw);
+            w.Float(speed);
+        }
+
+        public static void ReadRow(NetReader r, out float x, out float z, out float yaw, out float speed)
+        {
+            x = r.Float();
+            z = r.Float();
+            yaw = r.Float();
+            speed = r.Float();
+        }
 
         /// <summary>The weather now: how much rain and how much fog.</summary>
         public static void Weather(NetWriter w, float rain, float fog)

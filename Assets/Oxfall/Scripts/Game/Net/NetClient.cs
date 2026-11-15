@@ -114,6 +114,10 @@ namespace Oxfall.Game.Net
         public event Action<int, ushort, int, bool> TrapFired;
 
         private readonly List<AnimalSnap> _animals = new List<AnimalSnap>();
+        private readonly List<BoatSnap> _boats = new List<BoatSnap>();
+
+        /// <summary>Every rowboat, as the server last told.</summary>
+        public event Action<List<BoatSnap>> BoatsSeen;
         private readonly List<SleeperSnap> _sleepers = new List<SleeperSnap>();
 
         private readonly string[] _outfit = new string[Inventory.WearSlots];
@@ -270,6 +274,14 @@ namespace Oxfall.Game.Net
         public string NameOf(ushort id) => id == PlayerId ? "tú" : _players.TryGetValue(id, out var p) ? p.Name : null;
 
         /// <summary>Something done to the player's own belongings; the server answers with the change.</summary>
+        /// <summary>Where the boat this player rows is now.</summary>
+        public void SendRow(float x, float z, float yaw, float speed)
+        {
+            if (State != Status.Online || _socket == null) return;
+            Messages.Row(_writer, x, z, yaw, speed);
+            _socket.Send(_writer.Buffer, _writer.Length);
+        }
+
         public void SendAct(ActKind kind, int a = 0, int b = 0, string recipe = null)
         {
             if (State != Status.Online || _socket == null) return;
@@ -603,6 +615,10 @@ namespace Oxfall.Game.Net
                 }
                 case MessageType.Broke:
                     Broke?.Invoke(Messages.ReadBroke(reader));
+                    break;
+                case MessageType.Boats:
+                    Messages.ReadBoats(reader, _boats);
+                    BoatsSeen?.Invoke(_boats);
                     break;
                 case MessageType.Fish:
                     Fish?.Invoke(Messages.ReadFish(reader));

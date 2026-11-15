@@ -318,6 +318,13 @@ namespace Oxfall.Server
                             Messages.Outfit(writer, session.Id, _worn);
                             Broadcast(writer.ToArray());
                         }
+                    // The boats, ten times a second when one moved (there are only a few), and once a second anyway.
+                    if (ticks % (Protocol.TickRate / 10) == 0 && (_world.BoatsChanged || ticks % Protocol.TickRate == 0))
+                    {
+                        _world.BoatsChanged = false;
+                        Messages.Boats(writer, _world.Boats);
+                        Broadcast(writer.ToArray());
+                    }
                     // The animals near each player, five times a second (their phones walk them on in between).
                     if (ticks % (Protocol.TickRate / 5) == 0)
                         foreach (var session in _sessions.Values)
@@ -426,6 +433,13 @@ namespace Oxfall.Server
                     if (_state.ApplyMove(id, pose, teleport, now, pitch) || now - session.LastCorrection < CorrectionInterval) break;
                     session.LastCorrection = now;
                     SendPose(session, writer);
+                    break;
+                }
+                case MessageType.Row:
+                {
+                    Messages.ReadRow(reader, out float bx, out float bz, out float byaw, out float bspeed);
+                    // Not believed: everyone (the rower too) is sent where the boat really is.
+                    if (!_world.Row(id, bx, bz, byaw, bspeed)) _world.BoatsChanged = true;
                     break;
                 }
                 case MessageType.Hit:
@@ -600,7 +614,7 @@ namespace Oxfall.Server
                     var kind = Messages.ReadAct(reader, out int a, out int b, out string recipe);
                     var result = _world.Act(id, kind, a, b, recipe);
                     if (result != ActionResult.Ok) Fail(session, writer, result);
-                    else if (kind == ActKind.Respawn) SendPose(session, writer);
+                    else if (kind == ActKind.Respawn || kind == ActKind.LeaveBoat) SendPose(session, writer);
                     else if (kind == ActKind.Learn)
                     {
                         // What they know now (the scrap it cost goes with their slots).

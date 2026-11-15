@@ -39,6 +39,20 @@ namespace Oxfall.Game.Player
         /// <summary>The top of the ladder the feet are on, if they are on one (null: none).</summary>
         public System.Func<Vector3, float?> Climbable;
 
+        /// <summary>
+        /// Rowing a boat: given the oars (throttle, steer) and the frame's seconds, moves the boat and
+        /// says where the seat is now and how far the boat turned (null: not in a boat).
+        /// </summary>
+        public System.Func<float, float, float, (Vector3 Seat, float Turned)> Row;
+
+        /// <summary>The jump button while in a boat: get out.</summary>
+        public event System.Action LeaveBoat;
+
+        public bool IsRowing => Row != null;
+
+        /// <summary>Eyes this far over the seat while sitting in a boat.</summary>
+        public const float SeatedEyeHeight = 1.05f;
+
         /// <summary>Seconds left after jumping off a ladder before it catches the player again.</summary>
         private float _offLadder;
 
@@ -96,6 +110,28 @@ namespace Oxfall.Game.Player
             _pitch = Mathf.Clamp(_pitch - _input.Look.y, -85f, 85f);
             transform.rotation = Quaternion.Euler(0f, _yaw, 0f);
             Head.localRotation = Quaternion.Euler(_pitch, 0f, 0f);
+
+            if (Row != null)
+            {
+                IsSwimming = false;
+                IsClimbing = false;
+                if (_input.Jump)
+                {
+                    LeaveBoat?.Invoke();
+                    return;
+                }
+                var (seat, turned) = Row(_input.Move.y, _input.Move.x, dt);
+                // The view turns with the boat, as a rower's would.
+                _yaw += turned;
+                transform.rotation = Quaternion.Euler(0f, _yaw, 0f);
+                _body.enabled = false;
+                transform.position = seat;
+                _body.enabled = true;
+                _verticalSpeed = 0f;
+                Head.localPosition = new Vector3(0f, SeatedEyeHeight, 0f);
+                return;
+            }
+            if (Head.localPosition.y != EyeHeight) Head.localPosition = new Vector3(0f, EyeHeight, 0f);
 
             var move = transform.right * _input.Move.x + transform.forward * _input.Move.y;
             move = Vector3.ClampMagnitude(move, 1f);

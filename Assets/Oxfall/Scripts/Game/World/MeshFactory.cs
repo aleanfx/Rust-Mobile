@@ -1616,6 +1616,70 @@ namespace Oxfall.Game.World
         }
 
         /// <summary>
+        /// A wooden rowboat 4.2 m long, its bow towards +Z and its floor at y = 0: plank sides that
+        /// flare out and rise to the bow, a flat bottom, a transom, two thwarts, gunwale rails and a
+        /// pair of oars resting in iron rowlocks. Submeshes: planks, dark trim, metal.
+        /// </summary>
+        public static Mesh Rowboat()
+        {
+            var b = new FlatMeshBuilder(3) { UvScale = 0.9f };
+            // Stations along the keel: z, half width at the top, side height.
+            float[] zs = { -2.1f, -1.2f, -0.2f, 0.8f, 1.5f, 1.95f, 2.15f };
+            float[] half = { 0.6f, 0.78f, 0.82f, 0.74f, 0.5f, 0.22f, 0.03f };
+            float[] tall = { 0.62f, 0.6f, 0.6f, 0.64f, 0.72f, 0.8f, 0.86f };
+            const float bottomShare = 0.62f, t = 0.05f;
+            Vector3 Side(int i, float side, float level, float inset)
+            {
+                float w = half[i] * (bottomShare + (1f - bottomShare) * level) - inset;
+                return new Vector3(side * Mathf.Max(0.01f, w), tall[i] * level - (level == 0f ? t : 0f), zs[i]);
+            }
+            for (int i = 0; i < zs.Length - 1; i++)
+            {
+                int i0 = i, i1 = i + 1;
+                // Left side: x 0 is outside.
+                b.AddHex(0, (x, y, z) => Side(z == 0 ? i0 : i1, -1f, y, x == 0 ? 0f : t));
+                // Right side: x 1 is outside.
+                b.AddHex(0, (x, y, z) => Side(z == 0 ? i0 : i1, 1f, y, x == 1 ? 0f : t));
+                // The bottom between them.
+                b.AddHex(0, (x, y, z) =>
+                {
+                    int k = z == 0 ? i0 : i1;
+                    float w = Mathf.Max(0.01f, half[k] * bottomShare - t);
+                    return new Vector3(x == 0 ? -w : w, y == 0 ? -t : 0f, zs[k]);
+                });
+                // Gunwale rails along the top of each side.
+                foreach (float sd in new[] { -1f, 1f })
+                {
+                    var a = Side(i0, sd, 1f, 0f);
+                    var c = Side(i1, sd, 1f, 0f);
+                    b.AddTube(1, a + Vector3.up * 0.02f, c + Vector3.up * 0.02f, 0.035f, 0.035f, 5);
+                }
+            }
+            // Transom across the stern, and a keel strip under the bottom.
+            b.AddBox(1, new Vector3(-half[0] + 0.02f, -t, zs[0] - 0.04f), new Vector3(half[0] - 0.02f, tall[0], zs[0] + 0.02f));
+            b.AddBox(1, new Vector3(-0.05f, -t - 0.07f, -2.05f), new Vector3(0.05f, -t, 2.05f));
+            // Thwarts (seats) and the floorboards.
+            b.AddBox(0, new Vector3(-0.74f, 0.36f, -0.45f), new Vector3(0.74f, 0.42f, -0.15f));
+            b.AddBox(0, new Vector3(-0.66f, 0.36f, 0.85f), new Vector3(0.66f, 0.42f, 1.1f));
+            b.AddBox(0, new Vector3(-0.5f, 0.36f, -1.95f), new Vector3(0.5f, 0.42f, -1.45f));
+            for (int k = -2; k <= 2; k++)
+                b.AddBox(1, new Vector3(k * 0.18f - 0.06f, 0f, -1.6f), new Vector3(k * 0.18f + 0.06f, 0.02f, 1.3f));
+            // Rowlocks and the oars, blades trailing in the water.
+            foreach (float sd in new[] { -1f, 1f })
+            {
+                var lockAt = new Vector3(sd * 0.82f, 0.64f, 0.1f);
+                b.AddBox(2, lockAt + new Vector3(-0.03f, 0f, -0.03f), lockAt + new Vector3(0.03f, 0.1f, 0.03f));
+                var grip = new Vector3(sd * 0.25f, 0.62f, -0.15f);
+                var blade = new Vector3(sd * 2.2f, -0.18f, -0.75f);
+                b.AddTube(0, grip, blade, 0.03f, 0.028f, 6);
+                var dir = (blade - grip).normalized;
+                var bladeStart = blade - dir * 0.55f;
+                b.AddTube(0, bladeStart, blade + dir * 0.05f, 0.09f, 0.11f, 4);
+            }
+            return b.Build("Rowboat");
+        }
+
+        /// <summary>
         /// A large wooden box, 1.5 m long and waist high, its front towards +Z: planks banded with
         /// metal at the corners and across, a heavy lid, a hasp and handles at the ends. Submeshes: planks, bark trim, metal.
         /// </summary>

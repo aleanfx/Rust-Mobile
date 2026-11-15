@@ -30,6 +30,7 @@ namespace Oxfall.Game.Construction
             Crate,
             Workbench,
             Player,
+            Boat,
         }
 
         private BuildingGrid _grid;
@@ -41,6 +42,19 @@ namespace Oxfall.Game.Construction
         private int _deployable;
         private ResourceNodeView _crate;
         private ushort _player;
+        private int _boat;
+
+        /// <summary>The empty boat in reach the player looks towards (0: none).</summary>
+        public Func<int> BoatInSight { get; set; }
+
+        /// <summary>Whether the player sits in a boat (the use button gets them out).</summary>
+        public Func<bool> Rowing { get; set; }
+
+        /// <summary>The player gets into a boat (its id).</summary>
+        public event Action<int> Board;
+
+        /// <summary>The player gets out of their boat.</summary>
+        public event Action LeaveBoat;
 
         /// <summary>Whether this player could be asked into a team (online, not already a teammate, awake).</summary>
         public Func<ushort, bool> CanInvite { get; set; }
@@ -120,6 +134,12 @@ namespace Oxfall.Game.Construction
                 _hud.SetUseButton(null);
                 return;
             }
+            if (Rowing != null && Rowing())
+            {
+                _hud.SetLockButton(false, false);
+                _hud.SetUseButton("BAJAR", Icons.Boat);
+                return;
+            }
             Look();
             CodeLockState state = null;
             bool manage = _target != Target.None && _hasLock && _settlement.TryGetLock(_lock, out state) && state.CanManage(Me);
@@ -156,6 +176,9 @@ namespace Oxfall.Game.Construction
                 case Target.Player:
                     _hud.SetUseButton("INVITAR", Icons.Team);
                     break;
+                case Target.Boat:
+                    _hud.SetUseButton("SUBIR", Icons.Boat);
+                    break;
                 default:
                     _hud.SetUseButton(null);
                     break;
@@ -163,6 +186,15 @@ namespace Oxfall.Game.Construction
         }
 
         private void Look()
+        {
+            LookAtThings();
+            if (_target != Target.None) return;
+            // Boats float on the water, with nothing to hit: one close by and looked towards will do.
+            _boat = BoatInSight != null ? BoatInSight() : 0;
+            if (_boat != 0) _target = Target.Boat;
+        }
+
+        private void LookAtThings()
         {
             _target = Target.None;
             _hasLock = false;
@@ -219,6 +251,12 @@ namespace Oxfall.Game.Construction
         /// <summary>Uses what is in sight, if anything.</summary>
         public void Use()
         {
+            if (Rowing != null && Rowing())
+            {
+                LeaveBoat?.Invoke();
+                _timer = 0f;
+                return;
+            }
             Look();
             if (Barred)
             {
@@ -247,6 +285,10 @@ namespace Oxfall.Game.Construction
                     break;
                 case Target.Player:
                     Invite?.Invoke(_player);
+                    _timer = 0f;
+                    break;
+                case Target.Boat:
+                    Board?.Invoke(_boat);
                     _timer = 0f;
                     break;
             }

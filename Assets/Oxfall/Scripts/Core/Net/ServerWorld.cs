@@ -97,6 +97,7 @@ namespace Oxfall.Core.Net
             Fauna.Populate();
             Fauna.Guard(Fauna.Posts(Ground));
             CreateAirdrops(seed, obstacles);
+            CreateBoats();
             // A fallen bandit drops what he had (everyone sees the bag through LootDropped).
             Fauna.Died += a =>
             {
@@ -398,6 +399,8 @@ namespace Oxfall.Core.Net
                     var cast = record.Angler.Cast(Ground, player.Pose.X, player.Pose.Y, player.Pose.Z, a / 10f, b / 10f, Time, _random.Next());
                     return cast;
                 }
+                case ActKind.Board: return Board(playerId, a);
+                case ActKind.LeaveBoat: return LeaveBoat(playerId);
                 case ActKind.Reel:
                 {
                     if (!record.Angler.Casting) return ActionResult.Ok;
@@ -580,6 +583,7 @@ namespace Oxfall.Core.Net
             foreach (int id in _wentOut) Announcements.Add(BuildOp.Light(id, false));
             foreach (int id in _rotted) Announcements.Add(BuildOp.Pickup(id));
             TickFauna(deltaSeconds);
+            TickBoats(deltaSeconds);
             TickTraps();
             TickAirdrops();
             Environment.Weather.At(Seed, Time, out float rain, out _);
