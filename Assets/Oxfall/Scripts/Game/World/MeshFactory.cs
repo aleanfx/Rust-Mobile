@@ -74,7 +74,7 @@ namespace Oxfall.Game.World
         {
             if (cards) return CardPine(random);
 
-            var b = new FlatMeshBuilder(2) { UvScale = 1.3f };
+            var b = new FlatMeshBuilder(2) { KeepShell = true, UvScale = 1.3f };
             float trunkHeight = 7.5f;
             b.AddCylinder(BarkSubmesh, Vector3.zero, 0.34f, 0.12f, trunkHeight, 7, Rand(random, 0f, 60f));
 
@@ -97,7 +97,7 @@ namespace Oxfall.Game.World
 
         private static Mesh CardPine(System.Random random)
         {
-            var b = new FlatMeshBuilder(3) { UvScale = 1.3f };
+            var b = new FlatMeshBuilder(3) { KeepShell = true, UvScale = 1.3f };
             float height = Rand(random, 9f, 10.5f);
             b.AddCylinder(BarkSubmesh, Vector3.zero, 0.32f, 0.05f, height, 7, Rand(random, 0f, 60f));
 
@@ -191,7 +191,7 @@ namespace Oxfall.Game.World
         {
             if (cards) return CardBroadleaf(random);
 
-            var b = new FlatMeshBuilder(2) { UvScale = 1.3f };
+            var b = new FlatMeshBuilder(2) { KeepShell = true, UvScale = 1.3f };
             float trunkHeight = 4.2f;
             b.AddCylinder(BarkSubmesh, Vector3.zero, 0.3f, 0.2f, trunkHeight, 6, Rand(random, 0f, 60f));
             // A crown of several overlapping clumps reads as foliage rather than one ball on a stick.
@@ -216,7 +216,7 @@ namespace Oxfall.Game.World
 
         private static Mesh CardBroadleaf(System.Random random)
         {
-            var b = new FlatMeshBuilder(3) { UvScale = 1.3f };
+            var b = new FlatMeshBuilder(3) { KeepShell = true, UvScale = 1.3f };
             // A trunk that forks into a few limbs, under a tall, rounded crown of leafy clumps.
             float fork = Rand(random, 2.6f, 3.4f);
             b.AddCylinder(BarkSubmesh, Vector3.zero, 0.3f, 0.2f, fork + 0.3f, 6, Rand(random, 0f, 60f));
@@ -291,7 +291,7 @@ namespace Oxfall.Game.World
         /// </summary>
         public static Mesh Rock(System.Random random)
         {
-            var b = new FlatMeshBuilder(1) { UvScale = 1.1f };
+            var b = new FlatMeshBuilder(1) { KeepShell = true, UvScale = 1.1f };
             b.AddRock(0, new Vector3(0f, 0.25f, 0f), new Vector3(1f, 0.7f, 1f), random);
             return b.Build("Rock", 50f);
         }
@@ -302,7 +302,7 @@ namespace Oxfall.Game.World
         /// </summary>
         public static Mesh SulfurRock(System.Random random)
         {
-            var b = new FlatMeshBuilder(2) { UvScale = 1.1f };
+            var b = new FlatMeshBuilder(2) { KeepShell = true, UvScale = 1.1f };
             var centre = new Vector3(0f, 0.25f, 0f);
             b.AddRock(0, centre, new Vector3(1f, 0.7f, 1f), random);
             int lumps = 9 + random.Next(4);
@@ -2874,6 +2874,12 @@ namespace Oxfall.Game.World
             /// <summary>Keep the mesh's data on the CPU too (a mesh a MeshCollider is made from must).</summary>
             public bool KeepReadable;
 
+            /// <summary>
+            /// Keep the first submesh's triangles on the CPU (not the whole mesh): the bark of a tree or
+            /// the face of a rock, which the weak spot is cast against.
+            /// </summary>
+            public bool KeepShell;
+
             public FlatMeshBuilder(int submeshes)
             {
                 _triangles = new List<int>[submeshes];
@@ -3144,6 +3150,7 @@ namespace Oxfall.Game.World
                 for (int i = 0; i < _triangles.Length; i++) mesh.SetTriangles(_triangles[i], i);
                 mesh.RecalculateBounds();
                 if (UvScale > 0f) mesh.RecalculateTangents();
+                if (KeepShell) Player.MeshRay.Remember(mesh, 0, _vertices.ToArray(), _triangles[0].ToArray());
                 mesh.UploadMeshData(!KeepReadable);
                 return mesh;
             }

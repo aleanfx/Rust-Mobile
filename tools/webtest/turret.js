@@ -65,6 +65,18 @@ const stamp = () => ((Date.now() - t0) / 1000).toFixed(1).padStart(6);
   await cmd('load-turret', 1500);
   await shot('02-loaded');
   await cmd('close-box', 800);
+  // It needs power: a fuelled generator beside it, wired in.
+  await cmd('give-electric', 800);
+  await cmd('turn-70', 600);
+  await cmd('generator', 1000);
+  for (let i = 0; i < 6 && !has('Placed Generator'); i++) { await cmd('deploy', 1500); if (!has('Placed Generator')) await cmd('turn-25', 600); }
+  check('a generator goes down beside it', has('Placed Generator'), '');
+  await cmd('fuel-generator', 1500);
+  await cmd('close-box', 800);
+  await cmd('wire:Generator-AutoTurret', 1500);
+  await cmd('power', 1500);
+  check('the turret has power', log.some(l => l.includes('Power AutoTurret') && l.includes('running=True')), (log.filter(l => l.includes('[Oxfall] Power') || l.includes('[Oxfall] Wire')).slice(-3).join(' | ')));
+  await cmd('turn--70', 600);
   await cmd('turrets', 700);
   const loaded = [...log].reverse().find(l => l.includes('[Oxfall] Turret ') && l.includes('rifle=')) || '';
   check('loaded with bullets', /rifle=[1-9]/.test(loaded), loaded.replace(/.*Turret/, 'Turret'));

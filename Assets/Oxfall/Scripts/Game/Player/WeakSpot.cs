@@ -168,12 +168,18 @@ namespace Oxfall.Game.Player
         private static readonly Dictionary<(Mesh, int), (Vector3[] Vertices, int[] Triangles)> Cache =
             new Dictionary<(Mesh, int), (Vector3[], int[])>();
 
+        /// <summary>Keeps one submesh's triangles for casting at, before the mesh drops its own copy.</summary>
+        public static void Remember(Mesh mesh, int submesh, Vector3[] vertices, int[] triangles) =>
+            Cache[(mesh, submesh)] = (vertices, triangles);
+
         public static bool Cast(Mesh mesh, int submesh, Transform t, Ray ray, float maxDistance, out Vector3 point, out Vector3 normal)
         {
             point = normal = default;
-            if (!mesh.isReadable || submesh >= mesh.subMeshCount) return false;
             if (!Cache.TryGetValue((mesh, submesh), out var data))
             {
+                // Meshes are sent to the GPU and dropped from memory once built; those cast against
+                // keep what is needed (see Remember).
+                if (!mesh.isReadable || submesh >= mesh.subMeshCount) return false;
                 data = (mesh.vertices, mesh.GetTriangles(submesh));
                 Cache[(mesh, submesh)] = data;
             }
