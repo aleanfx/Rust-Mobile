@@ -20,6 +20,8 @@ namespace Oxfall.Core.Items
                 case ItemIds.MetalHatchet: return 400;
                 case ItemIds.MetalPickaxe: return 400;
                 case ItemIds.WoodenSpear: return 120;
+                case ItemIds.Machete: return 300;
+                case ItemIds.Sword: return 350;
                 case ItemIds.WoodenBow: return 150;
                 case ItemIds.Blunderbuss: return 80;
                 case ItemIds.Revolver: return 250;

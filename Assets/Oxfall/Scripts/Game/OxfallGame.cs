@@ -1771,6 +1771,14 @@ namespace Oxfall.Game
                 case "metal-hatchet": HoldItem(ItemIds.MetalHatchet); break;
                 case "metal-pickaxe": HoldItem(ItemIds.MetalPickaxe); break;
                 case "spear": HoldItem(ItemIds.WoodenSpear); break;
+                case "machete": HoldItem(ItemIds.Machete); break;
+                case "sword": HoldItem(ItemIds.Sword); break;
+                case "give-blades" when _actions.Online:
+                    _net.SendAct(ActKind.DevGive, 7);
+                    break;
+                case "give-blades":
+                    ServerWorld.GiveTestKit(_inventory, 7);
+                    break;
                 case "code-lock": HoldItem(ItemIds.CodeLock); break;
                 case "place-lock": _lockPlacer.Place(); break;
                 case "lock-button": _interactor.UseLock(); break;

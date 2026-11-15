@@ -75,5 +75,7 @@ namespace Oxfall.Core.Items
         public const string HighWoodWall = "high_wood_wall";
         public const string HighStoneWall = "high_stone_wall";
         public const string Ladder = "ladder";
+        public const string Machete = "machete";
+        public const string Sword = "salvaged_sword";
     }
 }

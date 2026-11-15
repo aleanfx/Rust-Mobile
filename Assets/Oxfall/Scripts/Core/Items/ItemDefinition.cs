@@ -47,6 +47,10 @@ namespace Oxfall.Core.Items
         Revolver,
         /// <summary>A rifle that fires as fast as the trigger is pulled, sixteen before it is reloaded.</summary>
         Rifle,
+        /// <summary>A long blade: quick cuts, good on hides, a little wood.</summary>
+        Machete,
+        /// <summary>A sword hammered from scrap: slow, heavy blows, the best close weapon.</summary>
+        Sword,
     }
 
     /// <summary>

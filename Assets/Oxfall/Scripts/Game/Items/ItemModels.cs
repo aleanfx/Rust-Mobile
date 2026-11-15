@@ -75,6 +75,8 @@ namespace Oxfall.Game.Items
                 [ItemIds.Hammer] = Tool(MeshFactory.Hammer(), new[] { m.Bark, m.Stone, m.Rope }),
                 [ItemIds.MetalHatchet] = Tool(MeshFactory.MetalHatchet(), new[] { m.Bark, m.Steel, m.Rope }),
                 [ItemIds.MetalPickaxe] = Tool(MeshFactory.MetalPickaxe(), new[] { m.Bark, m.Steel, m.Rope }),
+                [ItemIds.Machete] = Tool(MeshFactory.Machete(), new[] { m.Steel, m.Leather, m.Metal }),
+                [ItemIds.Sword] = Tool(MeshFactory.SalvagedSword(), new[] { m.Steel, m.Leather, m.BarrelRust }),
                 [ItemIds.WoodenSpear] = new ItemModel
                 {
                     Mesh = MeshFactory.WoodenSpear(),

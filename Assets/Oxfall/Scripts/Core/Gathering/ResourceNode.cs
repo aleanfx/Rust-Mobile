@@ -78,6 +78,7 @@ namespace Oxfall.Core.Gathering
                         case ToolKind.MetalPickaxe: return 15;
                         case ToolKind.Rock: return 15;
                         case ToolKind.Pickaxe: return 10;
+                        case ToolKind.Machete: return 20;
                         default: return 0;
                     }
                 case ResourceNodeType.Stone:
@@ -117,6 +118,8 @@ namespace Oxfall.Core.Gathering
                         case ToolKind.Pickaxe:
                         case ToolKind.Spear:
                         case ToolKind.Hammer:
+                        case ToolKind.Machete:
+                        case ToolKind.Sword:
                             return 1;
                         default: return 0;
                     }

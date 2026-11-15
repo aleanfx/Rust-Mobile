@@ -1047,6 +1047,40 @@ namespace Oxfall.Game.World
         }
 
         /// <summary>
+        /// A machete: a long, slightly curved blade along +Y from a wrapped grip at the origin, its
+        /// edge towards +X, widening to the tip. Submeshes: steel, grip wrap, rivets.
+        /// </summary>
+        public static Mesh Machete()
+        {
+            var b = new FlatMeshBuilder(3) { UvScale = 0.25f };
+            b.AddTube(1, new Vector3(0f, -0.05f, 0f), new Vector3(0f, 0.11f, 0f), 0.019f, 0.017f, 8, 1);
+            b.AddBox(2, new Vector3(-0.022f, 0.11f, -0.014f), new Vector3(0.03f, 0.125f, 0.014f));
+            b.AddPrism(0, -0.004f, 0.004f, new Vector2(-0.012f, 0.125f), new Vector2(0.026f, 0.125f), new Vector2(0.05f, 0.36f),
+                new Vector2(0.062f, 0.55f), new Vector2(0.04f, 0.6f), new Vector2(-0.006f, 0.58f), new Vector2(-0.014f, 0.36f));
+            foreach (float y in new[] { 0.0f, 0.07f })
+                b.AddTube(2, new Vector3(0f, y, -0.021f), new Vector3(0f, y, 0.021f), 0.006f, 0.006f, 6, 2);
+            return b.Build("Machete", 40f);
+        }
+
+        /// <summary>
+        /// A sword hammered from scrap: a long straight blade (a sawn leaf spring) along +Y, a crossguard
+        /// of pipe, a leather-wrapped grip at the origin and a nut for a pommel. Submeshes: steel, wrap, rust.
+        /// </summary>
+        public static Mesh SalvagedSword()
+        {
+            var b = new FlatMeshBuilder(3) { UvScale = 0.25f };
+            b.AddTube(1, new Vector3(0f, -0.07f, 0f), new Vector3(0f, 0.13f, 0f), 0.019f, 0.019f, 8, 1);
+            b.AddCylinder(2, new Vector3(0f, -0.11f, 0f), 0.03f, 0.03f, 0.04f, 6, 30f);
+            b.AddTube(2, new Vector3(-0.1f, 0.14f, 0f), new Vector3(0.1f, 0.14f, 0f), 0.016f, 0.016f, 7, 2);
+            b.AddPrism(0, -0.005f, 0.005f, new Vector2(-0.024f, 0.15f), new Vector2(0.024f, 0.15f), new Vector2(0.022f, 0.8f),
+                new Vector2(0f, 0.88f), new Vector2(-0.022f, 0.8f));
+            // Hammer marks of rust along it.
+            b.AddBox(2, new Vector3(-0.012f, 0.3f, -0.006f), new Vector3(0.01f, 0.36f, 0.006f));
+            b.AddBox(2, new Vector3(-0.016f, 0.55f, -0.006f), new Vector3(0.006f, 0.6f, 0.006f));
+            return b.Build("SalvagedSword", 40f);
+        }
+
+        /// <summary>
         /// A metal hatchet: a forged head with a flared blade and a squared poll on a wooden haft, the
         /// grip wrapped. Submeshes: wood, steel, wrap.
         /// </summary>

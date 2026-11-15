@@ -104,7 +104,9 @@ namespace Oxfall.Core.Wildlife
             float cut;
             switch (tool)
             {
-                case ToolKind.MetalHatchet: cut = 2f; break;
+                case ToolKind.MetalHatchet:
+                case ToolKind.Machete: cut = 2f; break;
+                case ToolKind.Sword: cut = 1.5f; break;
                 case ToolKind.Hatchet: cut = 1.5f; break;
                 case ToolKind.Rock:
                 case ToolKind.Spear:

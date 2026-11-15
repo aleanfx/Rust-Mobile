@@ -33,16 +33,21 @@ namespace Oxfall.Core.Rules
                 case ToolKind.MetalHatchet: return 22f;
                 case ToolKind.MetalPickaxe: return 24f;
                 case ToolKind.Spear: return 34f;
+                case ToolKind.Machete: return 30f;
+                case ToolKind.Sword: return 48f;
                 // The hammer builds; it does not fight.
                 default: return 0f;
             }
         }
 
         /// <summary>How far a blow reaches, from the eyes, in metres.</summary>
-        public static float MeleeReach(ToolKind tool) => tool == ToolKind.Spear ? 3.3f : 2.7f;
+        public static float MeleeReach(ToolKind tool) => tool == ToolKind.Spear ? 3.3f : tool == ToolKind.Sword ? 3.0f : tool == ToolKind.Machete ? 2.9f : 2.7f;
 
         /// <summary>Seconds between blows.</summary>
-        public static float SwingSeconds(ToolKind tool) => tool == ToolKind.Spear ? 1.0f : 0.7f;
+        public static float SwingSeconds(ToolKind tool) => tool == ToolKind.Spear ? 1.0f : tool == ToolKind.Sword ? 1.15f : tool == ToolKind.Machete ? 0.75f : 0.7f;
+
+        /// <summary>Whether it is a blade made for fighting (and it cuts up a carcass well).</summary>
+        public static bool IsBlade(ToolKind tool) => tool == ToolKind.Machete || tool == ToolKind.Sword;
 
         /// <summary>
         /// Leeway the server allows on reach, for lag: the two players are seen where they were a

@@ -404,6 +404,13 @@ namespace Oxfall.Core.Net
         /// </summary>
         public static void GiveTestKit(Inventory inventory, int kit = 0)
         {
+            if (kit == 7)
+            {
+                // Blades.
+                inventory.Add(ItemIds.Machete, 1);
+                inventory.Add(ItemIds.Sword, 1);
+                return;
+            }
             if (kit == 6)
             {
                 // A compound: high walls of both kinds, a ladder to get over, wood to mend them.
