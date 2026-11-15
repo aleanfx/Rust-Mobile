@@ -259,9 +259,9 @@ namespace Oxfall.Game.Items
                     Materials = new[] { m.BarrelPaint[0], m.Metal, m.Char },
                     ShowInHand = true,
                     // Held low on the right, the fuse up, ready to throw.
-                    HandPosition = new Vector3(0.3f, -0.34f, 0.5f),
+                    HandPosition = new Vector3(0.34f, -0.33f, 0.56f),
                     HandRotation = Quaternion.Euler(6f, 200f, -8f),
-                    HandScale = 1.3f,
+                    HandScale = 0.8f,
                     IconRotation = Tilt(-14f, 20f),
                     IconZoom = 1.2f,
                 },
