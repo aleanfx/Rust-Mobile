@@ -42,7 +42,7 @@ const stamp = () => ((Date.now() - t0) / 1000).toFixed(1).padStart(6);
     }
     return null;
   };
-  const stats = async () => { await cmd('stats', 700); const pos = lastOf('[Oxfall] Stats', 'pos'); return { boat: parseInt(lastOf('[Oxfall] Stats', 'boat'), 10), pos }; };
+  const stats = async () => { await cmd('stats', 700); const line = [...log].reverse().find(l => l.includes('[Oxfall] Stats')) || ''; const pm = line.match(/pos=(\([^)]*\))/); const pos = pm ? pm[1] : null; return { boat: parseInt(lastOf('[Oxfall] Stats', 'boat'), 10), pos }; };
   const xz = pos => { const m = pos && pos.match(/\(([-\d.]+), ([-\d.]+), ([-\d.]+)\)/); return m ? [parseFloat(m[1]), parseFloat(m[3])] : [NaN, NaN]; };
 
   await page.goto('http://localhost:8080/index.html?solo');

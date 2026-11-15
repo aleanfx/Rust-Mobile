@@ -51,7 +51,7 @@ namespace Oxfall.Game.Player
         public bool IsRowing => Row != null;
 
         /// <summary>Eyes this far over the seat while sitting in a boat.</summary>
-        public const float SeatedEyeHeight = 1.05f;
+        public const float SeatedEyeHeight = 0.95f;
 
         /// <summary>Seconds left after jumping off a ladder before it catches the player again.</summary>
         private float _offLadder;

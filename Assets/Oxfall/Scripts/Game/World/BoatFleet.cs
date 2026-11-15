@@ -36,15 +36,18 @@ namespace Oxfall.Game.World
         /// <summary>Online: the server says this player now rows this boat, or no longer does (null).</summary>
         public event Action<Boat> RowingChanged;
 
-        /// <summary>The boats' depth under the water line: the floor inside sits this far down.</summary>
-        public const float FloorDepth = 0.28f;
+        /// <summary>
+        /// The boats' floor relative to the water line (negative: above it). Kept a little above, or
+        /// the sea's surface would show through inside the hull.
+        /// </summary>
+        public const float FloorDepth = -0.08f;
 
         public BoatFleet(IslandGround ground, MaterialLibrary materials, bool alone)
         {
             _ground = ground;
             _parent = new GameObject("Boats").transform;
             _mesh = MeshFactory.Rowboat();
-            _materials = new[] { materials.WoodWall, materials.Bark, materials.Metal };
+            _materials = new[] { materials.WoodWall, materials.Planks, materials.Metal };
             if (alone)
                 foreach (var b in Boating.Spawn(ground)) Add(b);
         }
