@@ -61,6 +61,9 @@ namespace Oxfall.Game.Construction
 
         public int Count => _views.Count;
 
+        /// <summary>The player's body, which passes through ladders.</summary>
+        public static Collider Walker { get; set; }
+
         public DeployableViews(Settlement settlement, IReadOnlyDictionary<string, ItemModel> models, MaterialLibrary materials)
         {
             _settlement = settlement;
@@ -118,6 +121,15 @@ namespace Oxfall.Game.Construction
             collider.center = bounds.center;
             // At least knee high, so it is easy to aim at (a sleeping bag lies flat).
             collider.size = new Vector3(bounds.size.x, Mathf.Max(bounds.size.y, 0.35f), bounds.size.z);
+            if (HighWalls.IsWall(d.Kind))
+            {
+                // Just the wall itself (not the braces behind a wooden one): a slab no one walks or shoots through.
+                float low = -HighWalls.Sunk, high = HighWalls.Height;
+                collider.center = new Vector3(0f, (low + high) * 0.5f, 0f);
+                collider.size = new Vector3(HighWalls.Length, high - low, HighWalls.Thickness);
+            }
+            // A ladder is climbed, not walked into: the player passes through it (aiming still finds it).
+            else if (d.Kind == DeployableKind.Ladder && Walker != null) Physics.IgnoreCollision(collider, Walker);
             var tag = go.AddComponent<DeployableTag>();
             tag.Id = d.Id;
             tag.Kind = d.Kind;

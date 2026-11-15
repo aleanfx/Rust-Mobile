@@ -84,8 +84,9 @@ namespace Oxfall.Game.Construction
             _ghostBad = Fill(_materials.GhostBad, model.Materials.Length);
             _ghost.SetActive(true);
             _hud.SetBuildMode(true, null);
-            _hud.ShowToast(Kind == DeployableKind.ToolCupboard
-                ? "Ponlo en el centro de tu casa y toca COLOCAR"
+            _hud.ShowToast(Kind == DeployableKind.ToolCupboard ? "Ponlo en el centro de tu casa y toca COLOCAR"
+                : HighWalls.IsWall(Kind) ? "Apunta donde va el muro: se une solo al muro de al lado"
+                : Kind == DeployableKind.Ladder ? "Apunta a un muro y toca COLOCAR"
                 : "Apunta al suelo y toca COLOCAR");
         }
 
@@ -120,6 +121,9 @@ namespace Oxfall.Game.Construction
                 case DeployableKind.Workbench: return "Mesa colocada: cerca de ella fabricas armas y herramientas de metal";
                 case DeployableKind.ToolCupboard: return "Armario colocado: solo los autorizados construyen cerca";
                 case DeployableKind.ShotgunTrap: return "Trampa colocada: cárgala con cartuchos; dispara a quien no tenga permiso en tu armario";
+                case DeployableKind.WoodWall:
+                case DeployableKind.StoneWall: return "Muro levantado: rodea tu casa para que nadie entre sin explosivos o escalera";
+                case DeployableKind.Ladder: return "Escalera puesta: avanza para subir, retrocede para bajar, salta para soltarte";
                 default: return "Colocado";
             }
         }
@@ -137,6 +141,16 @@ namespace Oxfall.Game.Construction
         /// <summary>Finds the ground (or a floor) ahead and checks that it fits there, by the same rules the server uses.</summary>
         private void Aim()
         {
+            if (HighWalls.IsWall(Kind))
+            {
+                AimWall();
+                return;
+            }
+            if (Kind == DeployableKind.Ladder)
+            {
+                AimLadder();
+                return;
+            }
             var forward = _player.Head.forward;
             forward.y = 0f;
             if (forward.sqrMagnitude < 1e-4f) forward = _player.transform.forward;
@@ -169,6 +183,93 @@ namespace Oxfall.Game.Construction
                 _point = new Vector3(ahead.x, _player.transform.position.y, ahead.z);
                 Fail("Apunta al suelo");
             }
+            _ghost.transform.SetPositionAndRotation(_point, Quaternion.Euler(0f, _yaw, 0f));
+        }
+
+        /// <summary>
+        /// A high wall goes across the way the player looks, a few metres ahead, standing on the
+        /// ground; near the end of another it snaps on, straight on or at a right angle.
+        /// </summary>
+        private void AimWall()
+        {
+            var forward = _player.Head.forward;
+            forward.y = 0f;
+            if (forward.sqrMagnitude < 1e-4f) forward = _player.transform.forward;
+            forward.Normalize();
+            var free = _player.transform.position + forward * 3.4f;
+            float yaw = _player.transform.eulerAngles.y;
+            float x = free.x, z = free.z;
+
+            // The nearest end of a wall close by that one of this wall's ends could join.
+            float best = 1.8f;
+            foreach (var other in _settlement.Deployables)
+            {
+                if (!HighWalls.IsWall(other.Kind)) continue;
+                float dx = other.X - free.x, dz = other.Z - free.z;
+                if (dx * dx + dz * dz > 49f) continue;
+                // Straight on, or square to it, when it is about that way.
+                float turned = yaw;
+                foreach (float offset in new[] { 0f, 90f, 180f, 270f })
+                    if (Mathf.Abs(Mathf.DeltaAngle(yaw, other.Yaw + offset)) < 25f) turned = other.Yaw + offset;
+                HighWalls.Ends(other.Kind, other.X, other.Z, other.Yaw, out float ax, out float az, out float bx, out float bz);
+                HighWalls.Right(turned, out float rx, out float rz);
+                foreach (var (ex, ez) in new[] { (ax, az), (bx, bz) })
+                foreach (float side in new[] { -1f, 1f })
+                {
+                    float cx = ex - side * rx * HighWalls.HalfLength, cz = ez - side * rz * HighWalls.HalfLength;
+                    float d = Mathf.Sqrt((cx - free.x) * (cx - free.x) + (cz - free.z) * (cz - free.z));
+                    if (d >= best) continue;
+                    best = d;
+                    x = cx;
+                    z = cz;
+                    yaw = turned;
+                }
+            }
+
+            _yaw = yaw;
+            _point = new Vector3(x, _settlement.Ground.Height(x, z), z);
+            _valid = true;
+            _whyNot = "";
+            var rules = PlayerActions.CanDeploy(_settlement, Actions.Owner, Kind, _point.x, _point.y, _point.z, _yaw);
+            if (rules != ActionResult.Ok) Fail(GameActions.Explain(rules));
+            _ghost.transform.SetPositionAndRotation(_point, Quaternion.Euler(0f, _yaw, 0f));
+        }
+
+        /// <summary>A ladder goes against the wall in the crosshair (a high wall or a building's), its foot on the ground or floor below.</summary>
+        private void AimLadder()
+        {
+            _valid = true;
+            _whyNot = "";
+            var ray = new Ray(_player.Head.position, _player.Head.forward);
+            bool onWall = false;
+            if (Physics.Raycast(ray, out var hit, 4.5f, Physics.DefaultRaycastLayers, QueryTriggerInteraction.Ignore)
+                && Mathf.Abs(hit.normal.y) < 0.35f)
+            {
+                var tag = hit.collider.GetComponent<DeployableTag>();
+                var piece = hit.collider.GetComponent<PieceTag>();
+                onWall = (tag != null && HighWalls.IsWall(tag.Kind)) || (piece != null && piece.Piece.IsEdge);
+            }
+            if (!onWall)
+            {
+                var ahead = _player.transform.position + _player.transform.forward * 1.5f;
+                _point = new Vector3(ahead.x, _player.transform.position.y, ahead.z);
+                _yaw = _player.transform.eulerAngles.y + 180f;
+                Fail("Apunta a un muro");
+                _ghost.transform.SetPositionAndRotation(_point, Quaternion.Euler(0f, _yaw, 0f));
+                return;
+            }
+            var normal = new Vector3(hit.normal.x, 0f, hit.normal.z).normalized;
+            _yaw = Mathf.Atan2(normal.x, normal.z) * Mathf.Rad2Deg;
+            var foot = hit.point + normal * HighWalls.LadderGap;
+            // Down to the floor or the ground under it.
+            float y = _settlement.Ground.Height(foot.x, foot.z);
+            if (Physics.Raycast(new Vector3(foot.x, hit.point.y + 0.2f, foot.z), Vector3.down, out var below, 12f,
+                    Physics.DefaultRaycastLayers, QueryTriggerInteraction.Ignore)
+                && below.collider.GetComponent<CharacterController>() == null && below.normal.y > 0.7f)
+                y = Mathf.Max(y, below.point.y);
+            _point = new Vector3(foot.x, y, foot.z);
+            var rules = PlayerActions.CanDeploy(_settlement, Actions.Owner, Kind, _point.x, _point.y, _point.z, _yaw);
+            if (rules != ActionResult.Ok) Fail(GameActions.Explain(rules));
             _ghost.transform.SetPositionAndRotation(_point, Quaternion.Euler(0f, _yaw, 0f));
         }
 

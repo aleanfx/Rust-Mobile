@@ -88,8 +88,8 @@ namespace Oxfall.Core.Net
             Settlement.Obstacles = obstacles;
             Fauna = new Fauna(Ground, seed)
             {
-                Blocked = Fauna.Barriers(Settlement.Grid, obstacles, Ground),
-                WallBetween = Fauna.Walls(Settlement.Grid),
+                Blocked = Fauna.Barriers(Settlement, obstacles, Ground),
+                WallBetween = Fauna.Walls(Settlement),
             };
             Fauna.Populate();
             Fauna.Guard(Fauna.Posts(Ground));
@@ -403,6 +403,16 @@ namespace Oxfall.Core.Net
         /// </summary>
         public static void GiveTestKit(Inventory inventory, int kit = 0)
         {
+            if (kit == 6)
+            {
+                // A compound: high walls of both kinds, a ladder to get over, wood to mend them.
+                inventory.Add(ItemIds.HighWoodWall, 4);
+                inventory.Add(ItemIds.HighStoneWall, 2);
+                inventory.Add(ItemIds.Ladder, 2);
+                inventory.Add(ItemIds.Hammer, 1);
+                inventory.Add(ItemIds.Wood, 600);
+                return;
+            }
             if (kit == 5)
             {
                 // A shotgun trap and shells for it.

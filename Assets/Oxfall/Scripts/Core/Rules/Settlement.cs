@@ -45,6 +45,7 @@ namespace Oxfall.Core.Rules
         private readonly Dictionary<PieceRef, float> _hurtAt = new Dictionary<PieceRef, float>();
         private readonly Dictionary<Edge, float> _doorHurtAt = new Dictionary<Edge, float>();
         private readonly Dictionary<int, float> _deployableHealth = new Dictionary<int, float>();
+        private readonly Dictionary<int, float> _deployableHurtAt = new Dictionary<int, float>();
         private readonly List<Deployable> _falling = new List<Deployable>();
         private bool _clearing;
         private Recycling _recycling;
@@ -129,8 +130,17 @@ namespace Oxfall.Core.Rules
                 return true;
             }
             float max = Rules.Deployables.MaxHealth(d.Kind);
-            if (health >= max) _deployableHealth.Remove(id);
-            else _deployableHealth[id] = health;
+            if (health >= max)
+            {
+                _deployableHealth.Remove(id);
+                _deployableHurtAt.Remove(id);
+            }
+            else
+            {
+                // Only a loss counts as being hurt (a mend partway does not restart the wait).
+                if (!_deployableHealth.TryGetValue(id, out float before) || health < before) _deployableHurtAt[id] = Clock;
+                _deployableHealth[id] = health;
+            }
             DeployableHealthChanged?.Invoke(id, Math.Min(health, max));
             return true;
         }
@@ -188,6 +198,9 @@ namespace Oxfall.Core.Rules
         /// <summary>Whether a blast hit this piece too recently for it to be mended.</summary>
         public bool RecentlyHurt(PieceRef piece) => _hurtAt.TryGetValue(piece, out float t) && Clock - t < Repairs.Delay;
 
+        /// <summary>Whether a blast hit this deployable too recently for it to be mended.</summary>
+        public bool RecentlyHurt(int deployable) => _deployableHurtAt.TryGetValue(deployable, out float t) && Clock - t < Repairs.Delay;
+
         public bool RecentlyHurtDoor(Edge edge) => _doorHurtAt.TryGetValue(edge, out float t) && Clock - t < Repairs.Delay;
 
         public IslandGround Ground { get; }
@@ -201,6 +214,12 @@ namespace Oxfall.Core.Rules
         public Upkeep Upkeep { get; } = new Upkeep();
 
         public IEnumerable<Deployable> Deployables => _deployables.Values;
+
+        /// <summary>How many high walls stand (none: nothing to check them for).</summary>
+        public int WallCount { get; private set; }
+
+        /// <summary>How many ladders stand.</summary>
+        public int LadderCount { get; private set; }
 
         /// <summary>How many things players have set down (the ruins' machines are not counted).</summary>
         public int DeployableCount
@@ -277,6 +296,8 @@ namespace Oxfall.Core.Rules
             if (_deployables.TryGetValue(deployable.Id, out var existing)) return existing;
             _nextId = Math.Max(_nextId, deployable.Id + 1);
             _deployables.Add(deployable.Id, deployable);
+            if (HighWalls.IsWall(deployable.Kind)) WallCount++;
+            if (deployable.Kind == DeployableKind.Ladder) LadderCount++;
             int slots = Rules.Deployables.Slots(deployable.Kind);
             int output = deployable.Kind == DeployableKind.Recycler ? Rules.Deployables.RecyclerInputSlots : 0;
             if (slots > 0) _containers.Add(deployable.Id, new Inventory(Catalog, slots, hasHotbar: false, outputSlots: output));
@@ -289,7 +310,11 @@ namespace Oxfall.Core.Rules
 
         public bool Remove(int id)
         {
-            if (!_deployables.Remove(id)) return false;
+            if (!_deployables.TryGetValue(id, out var gone)) return false;
+            _deployables.Remove(id);
+            if (HighWalls.IsWall(gone.Kind)) WallCount--;
+            if (gone.Kind == DeployableKind.Ladder) LadderCount--;
+            _deployableHurtAt.Remove(id);
             _containers.Remove(id);
             _lit.Remove(id);
             _authorized.Remove(id);

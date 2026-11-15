@@ -1697,6 +1697,102 @@ namespace Oxfall.Game.World
         }
 
         /// <summary>
+        /// A high wall of logs: eleven sharpened trunks side by side along X (4 m), standing from 1.5 m
+        /// under its feet to 5 m over them, bound by two plank rails on its inner (-Z) face with
+        /// braces down to stakes. Its origin is at its feet, in the middle. Submeshes: 0 bark, 1 planks, 2 rope.
+        /// </summary>
+        public static Mesh HighWoodWall()
+        {
+            var b = new FlatMeshBuilder(3) { UvScale = 0.9f };
+            var random = new System.Random(4111);
+            const int logs = 11;
+            const float half = Oxfall.Core.Rules.HighWalls.HalfLength, sunk = Oxfall.Core.Rules.HighWalls.Sunk;
+            float step = half * 2f / logs;
+            for (int i = 0; i < logs; i++)
+            {
+                float x = -half + step * (i + 0.5f);
+                float r = step * 0.5f * Rand(random, 0.9f, 1.02f);
+                float top = Oxfall.Core.Rules.HighWalls.Height - 0.45f + Rand(random, -0.18f, 0.12f);
+                float lean = Rand(random, -0.02f, 0.02f);
+                b.AddTube(0, new Vector3(x, -sunk, 0f), new Vector3(x + lean, top, 0f), r, r * 0.94f, 7);
+                b.AddCone(0, new Vector3(x + lean, top, 0f), r * 0.94f, Rand(random, 0.38f, 0.55f), 7, Rand(random, 0f, 50f));
+            }
+            // Rails on the inside, low and high, lashed to the logs.
+            foreach (float y in new[] { 0.9f, 3.6f })
+            {
+                b.AddBox(1, new Vector3(-half + 0.05f, y - 0.11f, -0.36f), new Vector3(half - 0.05f, y + 0.11f, -0.2f));
+                for (int i = 1; i < logs; i += 3)
+                {
+                    float x = -half + step * (i + 0.5f);
+                    b.AddBox(2, new Vector3(x - 0.05f, y - 0.14f, -0.38f), new Vector3(x + 0.05f, y + 0.14f, -0.17f));
+                }
+            }
+            // Braces from the high rail down to stakes in the ground behind.
+            foreach (float x in new[] { -1.3f, 1.3f })
+            {
+                b.AddTube(1, new Vector3(x, 3.4f, -0.32f), new Vector3(x, -0.2f, -1.55f), 0.07f, 0.07f, 6);
+                b.AddTube(0, new Vector3(x, -0.5f, -1.6f), new Vector3(x, 0.25f, -1.6f), 0.08f, 0.06f, 6);
+            }
+            return b.Build("HighWoodWall", 50f);
+        }
+
+        /// <summary>
+        /// A high wall of stone: courses of dressed blocks laid in a bond along X (4 m), 0.4 m thick,
+        /// from 1.5 m under its feet to 5 m over them, with a coping on top and mortar showing in the
+        /// joints. Origin at its feet, in the middle. Submeshes: 0 stone, 1 mortar.
+        /// </summary>
+        public static Mesh HighStoneWall()
+        {
+            var b = new FlatMeshBuilder(2) { UvScale = 1.2f };
+            var random = new System.Random(5122);
+            const float half = Oxfall.Core.Rules.HighWalls.HalfLength, sunk = Oxfall.Core.Rules.HighWalls.Sunk;
+            const float t = Oxfall.Core.Rules.HighWalls.Thickness * 0.5f, height = Oxfall.Core.Rules.HighWalls.Height;
+            // The mortar core, set back a little from the faces.
+            b.AddBox(1, new Vector3(-half, -sunk, -t + 0.025f), new Vector3(half, height - 0.25f, t - 0.025f));
+            const float course = 0.5f, gap = 0.025f;
+            int row = 0;
+            for (float y = -sunk; y < height - 0.3f; y += course, row++)
+            {
+                float y1 = Mathf.Min(y + course, height - 0.25f);
+                float x = -half;
+                bool first = true;
+                while (x < half - 0.01f)
+                {
+                    float length = first && row % 2 == 1 ? 0.45f : Rand(random, 0.8f, 1.05f);
+                    first = false;
+                    float x1 = Mathf.Min(half, x + length);
+                    if (half - x1 < 0.3f) x1 = half;
+                    float bulge = Rand(random, 0f, 0.02f);
+                    b.AddBox(0, new Vector3(x + gap, y + gap, -t - bulge), new Vector3(x1 - gap, y1 - gap, t + bulge));
+                    x = x1;
+                }
+            }
+            // A coping along the top, a little wider than the wall.
+            b.AddBox(0, new Vector3(-half, height - 0.25f, -t - 0.05f), new Vector3(half, height, t + 0.05f));
+            return b.Build("HighStoneWall");
+        }
+
+        /// <summary>
+        /// A ladder of two poles and lashed rungs, its foot on the origin and its top leaning back
+        /// (towards -Z) onto what it stands against, 5.6 m up. Submeshes: 0 bark, 1 planks, 2 rope.
+        /// </summary>
+        public static Mesh Ladder()
+        {
+            var b = new FlatMeshBuilder(3) { UvScale = 0.7f };
+            float h = Oxfall.Core.Rules.HighWalls.LadderHeight, back = Oxfall.Core.Rules.HighWalls.LadderGap - 0.06f;
+            foreach (float x in new[] { -0.26f, 0.26f })
+                b.AddTube(0, new Vector3(x, 0f, 0f), new Vector3(x, h, -back), 0.045f, 0.04f, 6, 0);
+            for (float y = 0.3f; y < h - 0.1f; y += 0.36f)
+            {
+                float z = -back * y / h;
+                b.AddTube(1, new Vector3(-0.29f, y, z), new Vector3(0.29f, y, z), 0.028f, 0.028f, 6, 1);
+                foreach (float x in new[] { -0.26f, 0.26f })
+                    b.AddTube(2, new Vector3(x, y - 0.05f, z), new Vector3(x, y + 0.05f, z), 0.055f, 0.055f, 6, 2);
+            }
+            return b.Build("Ladder");
+        }
+
+        /// <summary>
         /// A supply crate: a long olive box with dark corner bands, two latches and handles at the
         /// ends, 1.1 x 0.62 x 0.66 m on the origin. Submeshes: 0 paint, 1 bands and latches.
         /// </summary>

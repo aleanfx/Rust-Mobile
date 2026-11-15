@@ -179,6 +179,25 @@ namespace Oxfall.Game.Items
                     Materials = new[] { m.Planks, m.GunMetal, m.Metal },
                     IconRotation = Tilt(-16f, 215f),
                 },
+                [ItemIds.HighWoodWall] = new ItemModel
+                {
+                    Mesh = MeshFactory.HighWoodWall(),
+                    Materials = new[] { m.Bark, m.Planks, m.Rope },
+                    IconRotation = Tilt(-12f, 200f),
+                },
+                [ItemIds.HighStoneWall] = new ItemModel
+                {
+                    Mesh = MeshFactory.HighStoneWall(),
+                    Materials = new[] { m.StoneWall, m.Concrete },
+                    IconRotation = Tilt(-12f, 200f),
+                },
+                [ItemIds.Ladder] = new ItemModel
+                {
+                    Mesh = MeshFactory.Ladder(),
+                    Materials = new[] { m.Bark, m.Planks, m.Rope },
+                    IconRotation = Tilt(-10f, 160f),
+                    IconZoom = 1.15f,
+                },
                 [ItemIds.Workbench] = new ItemModel
                 {
                     Mesh = MeshFactory.Workbench(),

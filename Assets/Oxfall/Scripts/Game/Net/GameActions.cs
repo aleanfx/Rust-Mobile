@@ -477,6 +477,9 @@ namespace Oxfall.Game.Net
                 case ActionResult.NotEnoughCoins: return "No te alcanzan los Oxcoins";
                 case ActionResult.NotOwned: return "Esa skin no es tuya";
                 case ActionResult.AlreadyOwned: return "Ya tienes esa skin";
+                case ActionResult.NoSupport: return "Apóyala en un muro";
+                case ActionResult.Hurt: return "Está dañado: repáralo con el martillo antes de recogerlo";
+                case ActionResult.OnBuilding: return "Choca con un edificio";
                 case ActionResult.NeedsDoorway: return "Apunta a un marco de puerta vacío";
                 case ActionResult.NoPiece: return "Ya no está ahí";
                 case ActionResult.MaxTier: return "Ya está al nivel máximo";

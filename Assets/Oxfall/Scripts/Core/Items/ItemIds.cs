@@ -72,5 +72,8 @@ namespace Oxfall.Core.Items
         public const string MetalSpring = "metal_spring";
         public const string MetalPipe = "metal_pipe";
         public const string Workbench = "workbench";
+        public const string HighWoodWall = "high_wood_wall";
+        public const string HighStoneWall = "high_stone_wall";
+        public const string Ladder = "ladder";
     }
 }

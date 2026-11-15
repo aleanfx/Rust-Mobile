@@ -90,6 +90,11 @@ namespace Oxfall.Game.Construction
             Aim();
             if (_deployable != 0)
             {
+                if (DeployableDamaged(out var d, out float health, out float max))
+                {
+                    RepairDeployable(d, health, max);
+                    return;
+                }
                 _hud.ShowToast("Esto no se mejora: RECOGER lo devuelve al inventario");
                 return;
             }
@@ -128,6 +133,37 @@ namespace Oxfall.Game.Construction
             }
             _hud.ShowToast($"{BuildSystem.Name(_aimed.Type)} de {BuildingTiers.Name(next).ToLowerInvariant()}");
             Debug.Log($"[Oxfall] Upgraded {_aimed} to {next}");
+            Upgraded?.Invoke();
+        }
+
+        /// <summary>Whether the high wall or ladder aimed at has lost health, and how much it has and can have.</summary>
+        private bool DeployableDamaged(out Deployable d, out float health, out float max)
+        {
+            health = max = 0f;
+            if (Settlement == null || !Settlement.TryGet(_deployable, out d) || !Deployables.Mendable(d.Kind)) { d = default; return false; }
+            health = Settlement.DeployableHealth(d.Id);
+            max = Deployables.MaxHealth(d.Kind);
+            return health < max - 0.01f;
+        }
+
+        /// <summary>Mends the high wall or ladder aimed at to full health.</summary>
+        private void RepairDeployable(Deployable d, float health, float max)
+        {
+            var cost = Deployables.RepairCost(d.Kind, 1f - health / max);
+            if (!BuildCosts.CanAfford(_inventory, cost))
+            {
+                _hud.ShowToast("Faltan materiales: " + BuildCosts.Describe(cost, _catalog));
+                return;
+            }
+            var result = Actions.Build(BuildOp.RepairDeployable(d.Id));
+            if (result != ActionResult.Ok)
+            {
+                _hud.ShowToast(GameActions.Explain(result));
+                return;
+            }
+            _info = null;
+            _hud.ShowToast("Reparado");
+            Debug.Log($"[Oxfall] Repaired {d}");
             Upgraded?.Invoke();
         }
 
@@ -259,10 +295,26 @@ namespace Oxfall.Game.Construction
             if (deployable != 0)
             {
                 _hasAim = false;
+                float shown = Settlement.DeployableHealth(deployable);
+                if (shown != _shownHealth) _info = null;
+                _shownHealth = shown;
                 if (_info != null) return;
                 Settlement.TryGet(deployable, out var d);
-                _info = Deployables.Name(d.Kind) + "  ·  RECOGER lo devuelve al inventario";
+                if (DeployableDamaged(out _, out float hp, out float full))
+                {
+                    var repair = Deployables.RepairCost(d.Kind, 1f - hp / full);
+                    _info = $"{Deployables.Name(d.Kind)}  ·  {Mathf.CeilToInt(hp)}/{Mathf.RoundToInt(full)}  ·  reparar: {BuildCosts.Describe(repair, _catalog)}";
+                    _hud.SetAimInfo(_info);
+                    _hud.SetAttackLabel("REPARAR");
+                    _hud.SetPieceButton("RECOGER");
+                    _hud.SetPlaceValid(BuildCosts.CanAfford(_inventory, repair));
+                    return;
+                }
+                _info = Deployables.Mendable(d.Kind)
+                    ? $"{Deployables.Name(d.Kind)}  ·  {Mathf.RoundToInt(hp)} de vida  ·  RECOGER lo devuelve al inventario"
+                    : Deployables.Name(d.Kind) + "  ·  RECOGER lo devuelve al inventario";
                 _hud.SetAimInfo(_info);
+                _hud.SetAttackLabel("MEJORAR");
                 _hud.SetPieceButton("RECOGER");
                 _hud.SetPlaceValid(false);
                 return;

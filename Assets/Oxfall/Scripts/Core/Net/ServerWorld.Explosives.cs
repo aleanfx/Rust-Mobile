@@ -91,7 +91,7 @@ namespace Oxfall.Core.Net
             {
                 if (record.Survivor.Vitals.IsDead || !Players.TryGet(record.PlayerId, out var p) || !p.Placed) continue;
                 float amount = Explosives.DamageToPlayer(Distance3(c, p.Pose.X, p.Pose.Y + 0.9f, p.Pose.Z), c.Kind);
-                if (amount <= 0f || Explosives.Shielded(Settlement.Grid, c.X, c.Y, c.Z, p.Pose.X, p.Pose.Y + 0.9f, p.Pose.Z)) continue;
+                if (amount <= 0f || Explosives.Shielded(Settlement, c.X, c.Y, c.Z, p.Pose.X, p.Pose.Y + 0.9f, p.Pose.Z)) continue;
                 float done = record.Survivor.TakeHit(amount);
                 BlastHurts.Add((record.PlayerId, c.Thrower, done, record.Survivor.Vitals.IsDead));
             }
@@ -99,7 +99,7 @@ namespace Oxfall.Core.Net
             _near.Clear();
             foreach (var sleeper in Sleepers)
                 if (Explosives.DamageToPlayer(Distance3(c, sleeper.Pose.X, sleeper.Pose.Y + 0.3f, sleeper.Pose.Z), c.Kind) > 0f
-                    && !Explosives.Shielded(Settlement.Grid, c.X, c.Y, c.Z, sleeper.Pose.X, sleeper.Pose.Y + 0.3f, sleeper.Pose.Z)) _near.Add(sleeper);
+                    && !Explosives.Shielded(Settlement, c.X, c.Y, c.Z, sleeper.Pose.X, sleeper.Pose.Y + 0.3f, sleeper.Pose.Z)) _near.Add(sleeper);
             foreach (var sleeper in _near)
             {
                 float amount = Explosives.DamageToPlayer(Distance3(c, sleeper.Pose.X, sleeper.Pose.Y + 0.3f, sleeper.Pose.Z), c.Kind);

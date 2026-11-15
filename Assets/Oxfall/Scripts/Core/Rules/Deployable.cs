@@ -32,6 +32,15 @@ namespace Oxfall.Core.Rules
 
         /// <summary>A blunderbuss on a box that fires shells at strangers in front of it (see <see cref="GunTraps"/>).</summary>
         ShotgunTrap = 10,
+
+        /// <summary>A high external wall of sharpened logs (see <see cref="HighWalls"/>).</summary>
+        WoodWall = 11,
+
+        /// <summary>A high external wall of stone blocks.</summary>
+        StoneWall = 12,
+
+        /// <summary>A ladder leaned on a wall, to climb over it.</summary>
+        Ladder = 13,
     }
 
     /// <summary>One thing set down: what it is, where it stands, which way it faces, and who put it there.</summary>
@@ -87,6 +96,25 @@ namespace Oxfall.Core.Rules
 
         public static bool IsKnown(DeployableKind kind) => Enum.IsDefined(typeof(DeployableKind), kind);
 
+        /// <summary>What mending all of a deployable's health costs (half of what it was made of), for the share it lost.</summary>
+        public static System.Collections.Generic.IReadOnlyList<Crafting.Ingredient> RepairCost(DeployableKind kind, float missing)
+        {
+            missing = Math.Max(0f, Math.Min(1f, missing));
+            string item;
+            int full;
+            switch (kind)
+            {
+                case DeployableKind.WoodWall: item = ItemIds.Wood; full = 300; break;
+                case DeployableKind.StoneWall: item = ItemIds.Stone; full = 300; break;
+                case DeployableKind.Ladder: item = ItemIds.Wood; full = 150; break;
+                default: return Array.Empty<Crafting.Ingredient>();
+            }
+            return new[] { new Crafting.Ingredient(item, Math.Max(1, (int)Math.Ceiling(full * Repairs.CostShare * missing - 1e-4))) };
+        }
+
+        /// <summary>Whether the hammer mends it (a high wall or a ladder).</summary>
+        public static bool Mendable(DeployableKind kind) => HighWalls.IsWall(kind) || kind == DeployableKind.Ladder;
+
         /// <summary>The item that becomes this deployable when set down (and comes back when it is picked up).</summary>
         public static string ItemOf(DeployableKind kind)
         {
@@ -99,6 +127,9 @@ namespace Oxfall.Core.Rules
                 case DeployableKind.ToolCupboard: return ItemIds.ToolCupboard;
                 case DeployableKind.Workbench: return ItemIds.Workbench;
                 case DeployableKind.ShotgunTrap: return ItemIds.ShotgunTrap;
+                case DeployableKind.WoodWall: return ItemIds.HighWoodWall;
+                case DeployableKind.StoneWall: return ItemIds.HighStoneWall;
+                case DeployableKind.Ladder: return ItemIds.Ladder;
                 // Nothing is made into a bag, a recycler or a supply crate, and none is picked up.
                 case DeployableKind.Bag:
                 case DeployableKind.Recycler:
@@ -120,6 +151,9 @@ namespace Oxfall.Core.Rules
                 case ItemIds.ToolCupboard: kind = DeployableKind.ToolCupboard; return true;
                 case ItemIds.Workbench: kind = DeployableKind.Workbench; return true;
                 case ItemIds.ShotgunTrap: kind = DeployableKind.ShotgunTrap; return true;
+                case ItemIds.HighWoodWall: kind = DeployableKind.WoodWall; return true;
+                case ItemIds.HighStoneWall: kind = DeployableKind.StoneWall; return true;
+                case ItemIds.Ladder: kind = DeployableKind.Ladder; return true;
                 default: kind = default; return false;
             }
         }
@@ -160,6 +194,11 @@ namespace Oxfall.Core.Rules
                 case DeployableKind.Recycler: return 1.1f;
                 case DeployableKind.SupplyDrop: return 0.8f;
                 case DeployableKind.ShotgunTrap: return 0.45f;
+                // Round a line (see HighWalls.FootprintHalfLength).
+                case DeployableKind.WoodWall:
+                case DeployableKind.StoneWall:
+                    return HighWalls.Thickness * 0.5f;
+                case DeployableKind.Ladder: return 0.12f;
                 default: return 0.5f;
             }
         }
@@ -180,6 +219,10 @@ namespace Oxfall.Core.Rules
                 case DeployableKind.ToolCupboard: return 150f;
                 case DeployableKind.Workbench: return 300f;
                 case DeployableKind.ShotgunTrap: return 200f;
+                // As much as a wall of a building of the same stuff: two charges for logs, four for stone.
+                case DeployableKind.WoodWall: return 250f;
+                case DeployableKind.StoneWall: return 500f;
+                case DeployableKind.Ladder: return 60f;
                 default: return 0f;
             }
         }
@@ -197,6 +240,9 @@ namespace Oxfall.Core.Rules
                 case DeployableKind.Recycler: return "Recicladora";
                 case DeployableKind.SupplyDrop: return "Suministros";
                 case DeployableKind.ShotgunTrap: return "Trampa de escopeta";
+                case DeployableKind.WoodWall: return "Muro alto de madera";
+                case DeployableKind.StoneWall: return "Muro alto de piedra";
+                case DeployableKind.Ladder: return "Escalera";
                 default: return "Objeto";
             }
         }

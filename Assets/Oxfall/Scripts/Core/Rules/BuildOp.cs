@@ -34,6 +34,8 @@ namespace Oxfall.Core.Rules
         DeployableHealth = 21,
         /// <summary>A flight of stairs in a square, up to the storey above.</summary>
         Stairs = 22,
+        /// <summary>Mend a high wall or a ladder with the hammer (the server answers with <see cref="DeployableHealth"/>).</summary>
+        RepairDeployable = 23,
     }
 
     /// <summary>
@@ -136,6 +138,9 @@ namespace Oxfall.Core.Rules
         /// <summary>Picks a deployable back up (it goes back in the inventory).</summary>
         public static BuildOp Pickup(int id) => OnDeployable(BuildOpKind.Pickup, id);
 
+        /// <summary>Mends a high wall or a ladder to full health, for half of what its lost share cost.</summary>
+        public static BuildOp RepairDeployable(int id) => OnDeployable(BuildOpKind.RepairDeployable, id);
+
         /// <summary>Lights a furnace, or puts it out.</summary>
         public static BuildOp Light(int id, bool on) =>
             new BuildOp(BuildOpKind.Light, PieceType.Foundation, 0, 0, default, open: on, deployed: Target(id));
@@ -206,6 +211,7 @@ namespace Oxfall.Core.Rules
             {
                 case BuildOpKind.Deploy: return "Deploy " + Deployed;
                 case BuildOpKind.Pickup: return "Pickup " + Id;
+                case BuildOpKind.RepairDeployable: return "RepairDeployable " + Id;
                 case BuildOpKind.Light: return $"Light {Id} {(Open ? "on" : "off")}";
                 case BuildOpKind.Authorize: return $"Authorize {Deployed.Owner} on {Id}";
                 case BuildOpKind.ClearAuthorized: return "ClearAuthorized " + Id;
@@ -282,6 +288,7 @@ namespace Oxfall.Core.Rules
                     break;
                 case BuildOpKind.Pickup:
                 case BuildOpKind.ClearAuthorized:
+                case BuildOpKind.RepairDeployable:
                     w.Int(Id);
                     break;
                 case BuildOpKind.Light:
@@ -392,6 +399,8 @@ namespace Oxfall.Core.Rules
                 }
                 case BuildOpKind.Pickup:
                     return Pickup(r.Int());
+                case BuildOpKind.RepairDeployable:
+                    return RepairDeployable(r.Int());
                 case BuildOpKind.ClearAuthorized:
                     return ClearAuthorized(r.Int());
                 case BuildOpKind.Light:

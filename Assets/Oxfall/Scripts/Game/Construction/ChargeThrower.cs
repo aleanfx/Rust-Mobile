@@ -148,7 +148,8 @@ namespace Oxfall.Game.Construction
                 }
                 else if (_aimedAt != null && Settlement != null && Deployables.MaxHealth(_aimedAt.Kind) > 0f && Settlement.TryGet(_aimedAt.Id, out _))
                 {
-                    int n = Mathf.CeilToInt(Settlement.DeployableHealth(_aimedAt.Id) / Explosives.DeployableDamage - 1e-4f);
+                    float bite = HighWalls.IsWall(_aimedAt.Kind) ? Explosives.BlastDamage : Explosives.DeployableDamage;
+                    int n = Mathf.CeilToInt(Settlement.DeployableHealth(_aimedAt.Id) / bite - 1e-4f);
                     info = $"{Deployables.Name(_aimedAt.Kind)}  ·  {(n == 1 ? "cae con 1 carga" : $"cae con {n} cargas")}";
                 }
             }

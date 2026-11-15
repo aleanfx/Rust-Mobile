@@ -96,6 +96,9 @@ namespace Oxfall.Game.UI
                 case ItemIds.ToolCupboard:
                 case ItemIds.Workbench:
                 case ItemIds.ShotgunTrap:
+                case ItemIds.HighWoodWall:
+                case ItemIds.HighStoneWall:
+                case ItemIds.Ladder:
                     return 3;
                 default:
                     return 4;

@@ -148,6 +148,12 @@ namespace Oxfall.Core.Items
 
             new ItemDefinition(ItemIds.BuildingPlan, "Plano de construcción", ItemCategory.Placeable, 1,
                 description: "Llévalo en la mano para construir."),
+            new ItemDefinition(ItemIds.HighWoodWall, "Muro alto de madera", ItemCategory.Placeable, 10,
+                description: "Troncos afilados de 5 m de alto y 4 de largo: rodea tu casa y nadie entra sin explosivos o una escalera."),
+            new ItemDefinition(ItemIds.HighStoneWall, "Muro alto de piedra", ItemCategory.Placeable, 10,
+                description: "Como el de madera, pero de piedra: aguanta el doble de explosivos."),
+            new ItemDefinition(ItemIds.Ladder, "Escalera", ItemCategory.Placeable, 5,
+                description: "Apóyala en un muro y sube: avanza para trepar, retrocede para bajar. Se puede poner aunque el armario sea de otro."),
             new ItemDefinition(ItemIds.ShotgunTrap, "Trampa de escopeta", ItemCategory.Placeable, 1,
                 description: "Un trabuco sobre una caja: cárgala con cartuchos y dispara a quien pase por delante sin permiso en tu armario."),
             new ItemDefinition(ItemIds.Campfire, "Fogata", ItemCategory.Placeable, 5,

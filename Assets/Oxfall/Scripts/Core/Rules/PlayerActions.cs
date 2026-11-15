@@ -79,6 +79,12 @@ namespace Oxfall.Core.Rules
         NotOwned,
         /// <summary>The skin is in the locker already.</summary>
         AlreadyOwned,
+        /// <summary>A ladder with no wall at its back to lean on.</summary>
+        NoSupport,
+        /// <summary>Hurt by a blast: mend it before picking it up.</summary>
+        Hurt,
+        /// <summary>A high wall would run into a building.</summary>
+        OnBuilding,
     }
 
     /// <summary>
@@ -550,7 +556,7 @@ namespace Oxfall.Core.Rules
                 {
                     var d = op.Deployed;
                     if (!Deployables.IsKnown(d.Kind) || Deployables.ItemOf(d.Kind) == null) return ActionResult.Invalid;
-                    var r = CanDeploy(settlement, owner, d.Kind, d.X, d.Y, d.Z);
+                    var r = CanDeploy(settlement, owner, d.Kind, d.X, d.Y, d.Z, d.Yaw);
                     if (r != ActionResult.Ok) return r;
                     if (!Near(x, y, z, d.X, d.Y, d.Z, UseReach)) return ActionResult.TooFar;
                     if (!s.Inventory.Remove(Deployables.ItemOf(d.Kind), 1)) return ActionResult.NotEnoughResources;
@@ -564,6 +570,8 @@ namespace Oxfall.Core.Rules
                     if (Deployables.ItemOf(d.Kind) == null) return ActionResult.Invalid;
                     if (d.Owner != 0 && d.Owner != owner) return ActionResult.NotYours;
                     if (!Near(x, y, z, d.X, d.Y, d.Z, UseReach)) return ActionResult.TooFar;
+                    // (Else a wall half blown down would come back whole for nothing.)
+                    if (Deployables.Mendable(d.Kind) && settlement.DeployableHealth(d.Id) < Deployables.MaxHealth(d.Kind)) return ActionResult.Hurt;
                     var target = LockTarget.On(d.Id);
                     if (!settlement.CanPass(target, owner)) return ActionResult.Locked;
                     var box = settlement.Container(d.Id);
@@ -576,6 +584,22 @@ namespace Oxfall.Core.Rules
                     // Its lock comes off with it.
                     if (locked) s.Inventory.Add(ItemIds.CodeLock, 1);
                     done = BuildOp.Pickup(d.Id);
+                    return ActionResult.Ok;
+                }
+                case BuildOpKind.RepairDeployable:
+                {
+                    if (!settlement.TryGet(op.Id, out var d)) return ActionResult.NoPiece;
+                    if (!Deployables.Mendable(d.Kind)) return ActionResult.Invalid;
+                    if (!Near(x, y, z, d.X, d.Y, d.Z, BuildReach)) return ActionResult.TooFar;
+                    if (d.Kind != DeployableKind.Ladder && !settlement.HasPrivilege(owner, d.X, d.Z)) return ActionResult.BuildingBlocked;
+                    float max = Deployables.MaxHealth(d.Kind), health = settlement.DeployableHealth(d.Id);
+                    if (health >= max) return ActionResult.NotDamaged;
+                    if (settlement.RecentlyHurt(d.Id)) return ActionResult.RecentlyDamaged;
+                    var cost = Deployables.RepairCost(d.Kind, 1f - health / max);
+                    if (!BuildCosts.CanAfford(s.Inventory, cost)) return ActionResult.NotEnoughResources;
+                    BuildCosts.TryPay(s.Inventory, cost);
+                    settlement.SetDeployableHealth(d.Id, max);
+                    done = BuildOp.DeployableHealth(d.Id, max);
                     return ActionResult.Ok;
                 }
                 case BuildOpKind.Light:
@@ -705,20 +729,39 @@ namespace Oxfall.Core.Rules
         /// Whether a deployable of this kind can stand at (x, y, z) for this player: on the ground or
         /// a floor, out of the water, clear of other deployables, and where they may build.
         /// </summary>
-        public static ActionResult CanDeploy(Settlement settlement, int owner, DeployableKind kind, float x, float y, float z)
+        public static ActionResult CanDeploy(Settlement settlement, int owner, DeployableKind kind, float x, float y, float z, float yaw = 0f)
         {
             float ground = settlement.Ground.Height(x, z);
             if (ground < IslandGround.WaterLevel + 0.3f) return ActionResult.InWater;
             if (Monuments.NoBuilding(settlement.Ground, x, z)) return ActionResult.Monument;
-            if (settlement.Obstacles != null && settlement.Obstacles.Blocks(x, z, Deployables.Radius(kind))) return ActionResult.Obstructed;
-            float floor = settlement.Grid.TryGetFloorBelow(x, y, z, out float top) ? top : ground;
-            if (Math.Abs(y - floor) > 0.7f && Math.Abs(y - ground) > 0.7f) return ActionResult.Invalid;
-            if (!settlement.HasPrivilege(owner, x, z)) return ActionResult.BuildingBlocked;
-            float radius = Deployables.Radius(kind);
+            bool wall = HighWalls.IsWall(kind);
+            if (wall)
+            {
+                var stands = HighWalls.CanStandWall(settlement, x, y, z, yaw);
+                if (stands != ActionResult.Ok) return stands;
+            }
+            else
+            {
+                if (settlement.Obstacles != null && settlement.Obstacles.Blocks(x, z, Deployables.Radius(kind))) return ActionResult.Obstructed;
+                float floor = settlement.Grid.TryGetFloorBelow(x, y, z, out float top) ? top : ground;
+                if (Math.Abs(y - floor) > 0.7f && Math.Abs(y - ground) > 0.7f) return ActionResult.Invalid;
+            }
+            if (kind == DeployableKind.Ladder)
+            {
+                // A ladder is how a raider gets in: it goes up anywhere it has a wall to lean on.
+                if (!HighWalls.LadderSupported(settlement, x, y, z, yaw)) return ActionResult.NoSupport;
+            }
+            else if (!settlement.HasPrivilege(owner, x, z)) return ActionResult.BuildingBlocked;
+            if (wall)
+            {
+                HighWalls.Ends(kind, x, z, yaw, out float ax, out float az, out float bx, out float bz);
+                if (!settlement.HasPrivilege(owner, ax, az) || !settlement.HasPrivilege(owner, bx, bz)) return ActionResult.BuildingBlocked;
+            }
             foreach (var other in settlement.Deployables)
             {
-                float dx = x - other.X, dz = z - other.Z, room = radius + Deployables.Radius(other.Kind);
-                if (dx * dx + dz * dz < room * room && Math.Abs(y - other.Y) < 1.5f) return ActionResult.TooClose;
+                float reach = wall || HighWalls.IsWall(other.Kind) ? HighWalls.Height : 1.5f;
+                if (Math.Abs(y - other.Y) >= reach) continue;
+                if (HighWalls.Overlap(kind, x, z, yaw, other.Kind, other.X, other.Z, other.Yaw)) return ActionResult.TooClose;
             }
             return ActionResult.Ok;
         }

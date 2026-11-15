@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using Oxfall.Core.Building;
+using Oxfall.Core.Rules;
 using Oxfall.Core.Items;
 using Oxfall.Core.World;
 
@@ -104,6 +105,20 @@ namespace Oxfall.Core.Wildlife
                 || grid.HasFoundation(BuildingGrid.CellAt(x + m, z)) || grid.HasFoundation(BuildingGrid.CellAt(x - m, z))
                 || grid.HasFoundation(BuildingGrid.CellAt(x, z + m)) || grid.HasFoundation(BuildingGrid.CellAt(x, z - m));
         };
+
+        /// <summary>What blocks a walk: <see cref="Barriers(BuildingGrid, Obstacles, IslandGround)"/>, and high walls.</summary>
+        public static Func<float, float, bool> Barriers(Settlement settlement, Obstacles obstacles, IslandGround ground = null)
+        {
+            var built = Barriers(settlement.Grid, obstacles, ground);
+            return (x, z) => built(x, z) || HighWalls.Near(settlement, x, z, 0.4f);
+        }
+
+        /// <summary>What blocks a line of sight: <see cref="Walls(BuildingGrid)"/>, and high walls.</summary>
+        public static Func<float, float, float, float, float, float, bool> Walls(Settlement settlement)
+        {
+            var built = Walls(settlement.Grid);
+            return (x0, y0, z0, x1, y1, z1) => built(x0, y0, z0, x1, y1, z1) || HighWalls.LineBlocked(settlement, x0, y0, z0, x1, y1, z1);
+        }
 
         /// <summary>
         /// What a building puts in the way of a line of sight: its foundations, and its walls storey by

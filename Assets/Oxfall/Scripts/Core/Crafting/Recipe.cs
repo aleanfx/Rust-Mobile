@@ -155,6 +155,13 @@ namespace Oxfall.Core.Crafting
                 new Ingredient(ItemIds.Stone, 200), new Ingredient(ItemIds.Wood, 100)),
             new Recipe("tool_cupboard", ItemIds.ToolCupboard, 1, 20f,
                 new Ingredient(ItemIds.Wood, 500)),
+            // A compound: high walls round the base, and the ladder that gets raiders over them.
+            new Recipe("high_wood_wall", ItemIds.HighWoodWall, 1, 15f,
+                new Ingredient(ItemIds.Wood, 300)),
+            new Recipe("high_stone_wall", ItemIds.HighStoneWall, 1, 20f,
+                new Ingredient(ItemIds.Stone, 300)),
+            new Recipe("ladder", ItemIds.Ladder, 1, 10f,
+                new Ingredient(ItemIds.Wood, 150), new Ingredient(ItemIds.Cloth, 10)),
             // The workbench: scrap from barrels and the ruins' crates is what unlocks the metal age.
             new Recipe("workbench", ItemIds.Workbench, 1, 30f,
                 new Ingredient(ItemIds.Wood, 500), new Ingredient(ItemIds.MetalFragments, 100), new Ingredient(ItemIds.Scrap, 50)),

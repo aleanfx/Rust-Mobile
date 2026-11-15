@@ -1,3 +1,4 @@
+using Oxfall.Core.Rules;
 using Oxfall.Game.Controls;
 using Oxfall.Game.World;
 using UnityEngine;
@@ -31,6 +32,15 @@ namespace Oxfall.Game.Player
 
         public Transform Head { get; private set; }
         public bool IsSwimming { get; private set; }
+
+        /// <summary>On a ladder, going up or down it.</summary>
+        public bool IsClimbing { get; private set; }
+
+        /// <summary>The top of the ladder the feet are on, if they are on one (null: none).</summary>
+        public System.Func<Vector3, float?> Climbable;
+
+        /// <summary>Seconds left after jumping off a ladder before it catches the player again.</summary>
+        private float _offLadder;
 
         public void Init(PlayerInput input, float yaw)
         {
@@ -94,6 +104,30 @@ namespace Oxfall.Game.Player
             IsSwimming = feetBelowWater > SwimDepth;
 
             float speed = _input.Sprint ? SprintSpeed : WalkSpeed;
+            _offLadder = Mathf.Max(0f, _offLadder - dt);
+            float? ladderTop = _offLadder > 0f || IsSwimming || Climbable == null ? null : Climbable(transform.position);
+            // At its foot, stepping back walks away from it rather than down into the ground.
+            IsClimbing = ladderTop.HasValue && !(_body.isGrounded && _input.Move.y <= 0.05f);
+            if (IsClimbing)
+            {
+                if (_input.Jump)
+                {
+                    // Let go, and drop off backwards.
+                    _offLadder = 0.6f;
+                    _verticalSpeed = 1.5f;
+                    _body.Move((-transform.forward * 2.5f + Vector3.up * _verticalSpeed) * dt);
+                    KeepInsideWorld();
+                    return;
+                }
+                // Forward climbs, back goes down; sideways steps along; pressing on carries over the top.
+                float up = _input.Move.y * HighWalls.ClimbSpeed;
+                if (up > 0f && transform.position.y + up * dt > ladderTop.Value - 0.25f) up = 0f;
+                _verticalSpeed = 0f;
+                var along = transform.right * _input.Move.x * 1.2f + transform.forward * Mathf.Max(0f, _input.Move.y) * 1.4f;
+                _body.Move((along + Vector3.up * up) * dt);
+                KeepInsideWorld();
+                return;
+            }
             if (IsSwimming)
             {
                 speed = SwimSpeed;

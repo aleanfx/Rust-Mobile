@@ -167,6 +167,9 @@ namespace Oxfall.Game
             playerObject.AddComponent<CharacterController>();
             var player = playerObject.AddComponent<PlayerController>();
             player.Init(input, _world.SpawnYaw);
+            DeployableViews.Walker = playerObject.GetComponent<CharacterController>();
+            // Ladders: forward climbs, back goes down.
+            player.Climbable = feet => HighWalls.TryLadderAt(_settlement, feet.x, feet.y, feet.z, out float top) ? top : (float?)null;
             _player = player;
 
             var camera = CreateCamera(player.Head);
@@ -188,8 +191,8 @@ namespace Oxfall.Game
             _settlement.Obstacles = obstacles;
             _fauna = new Fauna(ground, s_seed)
             {
-                Blocked = Fauna.Barriers(_settlement.Grid, obstacles, ground),
-                WallBetween = Fauna.Walls(_settlement.Grid),
+                Blocked = Fauna.Barriers(_settlement, obstacles, ground),
+                WallBetween = Fauna.Walls(_settlement),
             };
             _fauna.Populate();
             // Bandits keep the ruins; a fallen one drops what he had.
@@ -1023,7 +1026,7 @@ namespace Oxfall.Game
             if (_vitals.IsDead) return;
             var middle = _player.transform.position + Vector3.up * 0.9f;
             float amount = Explosives.DamageToPlayer(Vector3.Distance(at, middle), charge.Kind);
-            if (amount <= 0f || Explosives.Shielded(_settlement.Grid, at.x, at.y, at.z, middle.x, middle.y, middle.z)) return;
+            if (amount <= 0f || Explosives.Shielded(_settlement, at.x, at.y, at.z, middle.x, middle.y, middle.z)) return;
             // Named before the blow lands, in case it is the last.
             _killer = charge.Kind == ChargeKind.Beancan ? "tu propia granada" : "tu propia carga explosiva";
             int damage = Mathf.RoundToInt(_survivor.TakeHit(amount));
@@ -1586,6 +1589,18 @@ namespace Oxfall.Game
                     ServerWorld.GiveTestKit(_inventory, 5);
                     break;
                 case "trap": HoldItem(ItemIds.ShotgunTrap); break;
+                case "give-walls" when _actions.Online:
+                    _net.SendAct(ActKind.DevGive, 6);
+                    break;
+                case "give-walls":
+                    ServerWorld.GiveTestKit(_inventory, 6);
+                    break;
+                case "hold-wall": HoldItem(ItemIds.HighWoodWall); break;
+                case "hold-stone-wall": HoldItem(ItemIds.HighStoneWall); break;
+                case "hold-ladder": HoldItem(ItemIds.Ladder); break;
+                case "build-compound": BuildTestCompound(); break;
+                case "face-compound": FaceCompound(); break;
+                case "over-compound": OverCompound(); break;
                 case "open-trap": OpenBox(Nearest(DeployableKind.ShotgunTrap)); break;
                 case "load-trap":
                     // Test: puts every shell carried into the open trap.
@@ -1803,7 +1818,7 @@ namespace Oxfall.Game
                               $"satchels={_inventory.Count(ItemIds.SatchelCharge)} charges={_explosions.Live} sulfur={_inventory.Count(ItemIds.Sulfur)} " +
                               $"shells={_inventory.Count(ItemIds.Shell)} bullets={_inventory.Count(ItemIds.PistolBullet)} " +
                               $"meat={_inventory.Count(ItemIds.RawMeat)} cooked={_inventory.Count(ItemIds.CookedMeat)} leather={_inventory.Count(ItemIds.Leather)} " +
-                              $"pos={_player.transform.position} quality={GraphicsQuality.Name(_quality.Tier)} " +
+                              $"pos={_player.transform.position} climbing={_player.IsClimbing} walls={_settlement.WallCount} ladders={_settlement.LadderCount} quality={GraphicsQuality.Name(_quality.Tier)} " +
                               $"screen={Screen.width}x{Screen.height} grass={_grass.BladeCount} " +
                               $"net={_net.State} id={_net.PlayerId} online={_net.OnlineCount} " +
                               $"others={string.Join(";", System.Linq.Enumerable.Select(_net.Players.Values, p => p.Name + "@" + p.Root.position + (p.Held.Length > 0 ? "+" + p.Held : "")))}");
@@ -1901,6 +1916,65 @@ namespace Oxfall.Game
         }
 
         private Cell _towerStairs, _towerRoom;
+        private Vector3 _compound;
+
+        /// <summary>
+        /// For tests: on the nearest flat ground, a line of three high walls (wood, wood, stone) and a
+        /// ladder on the near side of the first, placed by the same rules as by hand; the player
+        /// stands back from it, facing it.
+        /// </summary>
+        private void BuildTestCompound()
+        {
+            var ground = _world.Shape.Ground;
+            var p = _player.transform.position;
+            float bestScore = float.MaxValue, cx = p.x, cz = p.z;
+            for (float x = p.x - 120f; x <= p.x + 120f; x += 4f)
+            for (float z = p.z - 120f; z <= p.z + 120f; z += 4f)
+            {
+                float h = ground.Height(x, z), lo = h, hi = h;
+                bool ok = h > IslandGround.WaterLevel + 1f;
+                for (float dx = -9f; dx <= 9f && ok; dx += 1.5f)
+                for (float dz = -6f; dz <= 6f && ok; dz += 1.5f)
+                {
+                    float g = ground.Height(x + dx, z + dz);
+                    lo = Mathf.Min(lo, g);
+                    hi = Mathf.Max(hi, g);
+                    if (Monuments.NoBuilding(ground, x + dx, z + dz) || (_settlement.Obstacles != null && _settlement.Obstacles.Blocks(x + dx, z + dz, 0.4f))) ok = false;
+                }
+                float score = (hi - lo) * 40f + Vector2.Distance(new Vector2(x, z), new Vector2(p.x, p.z)) * 0.05f;
+                if (ok && hi - lo < 1.2f && score < bestScore) { bestScore = score; cx = x; cz = z; }
+            }
+            ServerWorld.GiveTestKit(_inventory, 6);
+            _compound = new Vector3(cx, ground.Height(cx, cz), cz);
+            // Near enough to set it all down.
+            _player.Teleport(new Vector3(cx, ground.Height(cx, cz - 3f) + 0.05f, cz - 3f), 0f, 0f);
+            var kinds = new[] { DeployableKind.WoodWall, DeployableKind.WoodWall, DeployableKind.StoneWall };
+            for (int i = 0; i < 3; i++)
+            {
+                float x = cx + (i - 1) * HighWalls.Length;
+                var r = _actions.Build(BuildOp.Deploy(new Deployable(0, kinds[i], x, ground.Height(x, cz), cz, 0f)));
+                Debug.Log($"[Oxfall] Compound wall {i}: {r}");
+            }
+            // The ladder on the near (south) side of the first wall, facing away from it.
+            float lx = cx - HighWalls.Length, lz = cz - HighWalls.Thickness * 0.5f - HighWalls.LadderGap;
+            var lr = _actions.Build(BuildOp.Deploy(new Deployable(0, DeployableKind.Ladder, lx, ground.Height(lx, lz), lz, 180f)));
+            Debug.Log($"[Oxfall] Compound at ({cx:0.0}, {cz:0.0}): ladder {lr}, walls={_settlement.WallCount}");
+            FaceCompound();
+        }
+
+        /// <summary>For tests: back from the compound, looking at it and its ladder.</summary>
+        private void FaceCompound()
+        {
+            float x = _compound.x - 2f, z = _compound.z - 9f;
+            _player.Teleport(new Vector3(x, _world.Shape.Height(x, z) + 0.05f, z), 0f, -12f);
+        }
+
+        /// <summary>For tests: at the foot of the compound's ladder, facing it.</summary>
+        private void OverCompound()
+        {
+            float x = _compound.x - HighWalls.Length, z = _compound.z - 0.9f;
+            _player.Teleport(new Vector3(x, _world.Shape.Height(x, z) + 0.05f, z), 0f, -20f);
+        }
 
         /// <summary>
         /// For tests: a two-storey twig house ahead of the player, free: two squares side by side, the

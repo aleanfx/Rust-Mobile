@@ -250,9 +250,17 @@ namespace Oxfall.Core.Rules
             foreach (var d in settlement.Deployables)
             {
                 if (Deployables.MaxHealth(d.Kind) <= 0f) continue;
-                float dy = d.Y + 0.4f;
+                if (HighWalls.IsWall(d.Kind))
+                {
+                    // A wall takes the blast where it is nearest, as a building's wall takes a charge on it.
+                    float reach = HighWalls.DistanceTo(d, x, y, z, out float px, out float py, out float pz);
+                    float hit = DamageToWall(reach) * share;
+                    if (hit > 0f && !Shielded(settlement, x, y, z, px, py, pz, d.Id)) near.Add((d.Id, hit));
+                    continue;
+                }
+                float dy = d.Y + (d.Kind == DeployableKind.Ladder ? 1.5f : 0.4f);
                 float amount = DamageToDeployable(Distance(x, y, z, d.X, dy, d.Z)) * share;
-                if (amount > 0f && !Shielded(settlement.Grid, x, y, z, d.X, dy, d.Z)) near.Add((d.Id, amount));
+                if (amount > 0f && !Shielded(settlement, x, y, z, d.X, dy, d.Z)) near.Add((d.Id, amount));
             }
             foreach (var (id, amount) in near)
             {
@@ -261,6 +269,24 @@ namespace Oxfall.Core.Rules
                 changes?.Add(BuildOp.DeployableHealth(id, Math.Max(0f, left)));
             }
         }
+
+        /// <summary>How far from a high wall a blast still bites it, and how much at full strength (a charge stuck to it).</summary>
+        public const float WallReach = 2.5f;
+
+        /// <summary>Health taken from a high wall this far from a blast (its nearest point): a charge on it takes as much as one on a building's wall.</summary>
+        public static float DamageToWall(float distance)
+        {
+            if (distance >= WallReach) return 0f;
+            float t = Math.Max(0f, distance - 0.8f) / (WallReach - 0.8f);
+            return BlastDamage * (1f - t);
+        }
+
+        /// <summary>
+        /// Whether anything built stands between a blast and a point: a building's wall, doorway or
+        /// shut door, or a high wall (<paramref name="exceptWall"/> aside, when that is what is hit).
+        /// </summary>
+        public static bool Shielded(Settlement settlement, float x0, float y0, float z0, float x1, float y1, float z1, int exceptWall = 0) =>
+            Shielded(settlement.Grid, x0, y0, z0, x1, y1, z1) || HighWalls.LineBlocked(settlement, x0, y0, z0, x1, y1, z1, exceptWall);
 
         /// <summary>
         /// Whether a wall, a doorway's frame or a shut door stands between a blast at (x0, y0, z0) and
