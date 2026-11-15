@@ -53,8 +53,9 @@ const stamp = () => ((Date.now() - t0) / 1000).toFixed(1).padStart(6);
   await cmd('quality-high', 2500);
   await cmd('time-12', 1000);
   await cmd('clear-animals', 500);
-  await cmd('give-all', 1200);
+  // The blades kit first: give-all alone nearly fills the bag.
   await cmd('give-blades', 1200);
+  await cmd('give-all', 1200);
   await cmd('nearest-hemp', 2000);
 
   // Temperature: warm at noon, cold on a rainy night, warmer in hide clothes, warm by a campfire.
@@ -99,6 +100,7 @@ const stamp = () => ((Date.now() - t0) / 1000).toFixed(1).padStart(6);
   // Machete: kills a boar and cuts the carcass for meat. Sword: hits harder.
   await cmd('clear-animals', 600);
   await cmd('machete', 1500);
+  check('machete: in hand', /machete/i.test(lastOf('[Oxfall] Stats', 'held') || '') || (await stat('held'), /machete/i.test(lastOf('[Oxfall] Stats', 'held') || '')), lastOf('[Oxfall] Stats', 'held'));
   await shot('04-machete-held');
   await cmd('spawn-boar', 1500);
   for (let i = 0; i < 12 && !has('Killed'); i++) {
@@ -138,7 +140,8 @@ const stamp = () => ((Date.now() - t0) / 1000).toFixed(1).padStart(6);
     await cmd('face-animal', 200);
     await cmd('use', 200);
     if (i === 0) await shot('09-crossbow-bolt');
-    await wait(2500);
+    // Loads again in a few seconds.
+    await wait(4000);
   }
   const arrowsB = await stat('arrows');
   check('crossbow: shoots arrows', arrowsB < arrowsA, `${arrowsA} -> ${arrowsB}`);
@@ -154,11 +157,11 @@ const stamp = () => ((Date.now() - t0) / 1000).toFixed(1).padStart(6);
   check('large box: placed', depB > depA, `${depA} -> ${depB}`);
   await cmd('open-large-box', 2000);
   await shot('11-large-box-page1');
-  const looting = lastOf('[Oxfall] Stats', 'looting');
+  const looting = parseInt(await stat('looting'), 10);
   await cmd('box-page', 1200);
   await shot('12-large-box-page2');
   await cmd('close-box', 800);
-  check('large box: opens', looting !== null, `looting=${looting}`);
+  check('large box: opens', looting > 0, `looting=${looting}`);
 
   // Fishing: to the shore, cast, wait for a bite, reel in a fish.
   await cmd('go-shore', 2500);
@@ -168,11 +171,17 @@ const stamp = () => ((Date.now() - t0) / 1000).toFixed(1).padStart(6);
   await shot('14-cast');
   const casting = await fish('casting');
   check('fishing: cast', casting === 'True', `casting=${casting} aim=${lastOf('[Oxfall] Fish', 'aim')}`);
-  let biting = 'False';
-  for (let i = 0; i < 40 && biting !== 'True'; i++) { await wait(1000); biting = await fish('biting'); }
-  await shot('15-bite');
-  check('fishing: a fish bites', biting === 'True');
+  // Fish-state lines show up a frame or two late on this slow machine: reel the moment one says biting.
+  const bitesBefore = log.filter(l => l.includes('biting=True')).length;
+  let bit = false;
+  for (let i = 0; i < 80 && !bit; i++) {
+    await page.evaluate(() => window.unityInstance.SendMessage('Oxfall', 'DebugCommand', 'fish-state'));
+    await wait(400);
+    bit = log.filter(l => l.includes('biting=True')).length > bitesBefore;
+  }
+  check('fishing: a fish bites', bit);
   await cmd('reel', 2000);
+  await shot('15-reeled');
   const caught = parseInt(await fish('raw-fish'), 10);
   await shot('16-caught');
   check('fishing: fish in the bag', caught > 0, `raw-fish=${caught}`);

@@ -210,9 +210,10 @@ namespace Oxfall.Game.Player
         /// <summary>One swing (or one bite) with what is in hand, as one press of attack. For tests.</summary>
         public void UseOnce()
         {
-            if (_held != null && _held.Shoots)
+            if (_held != null && (_held.Shoots || _hotbar.HeldTool == ToolKind.Crossbow))
             {
-                Loose();
+                // The crossbow still loading after a shot does not loose another.
+                if (_hotbar.HeldTool != ToolKind.Crossbow || _cooldown <= 0f) Loose();
                 return;
             }
             if (_held != null && _held.Fires)
