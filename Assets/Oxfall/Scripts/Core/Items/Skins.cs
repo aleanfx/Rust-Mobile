@@ -64,8 +64,9 @@ namespace Oxfall.Core.Items
         private static SkinTint T(int slot, float r, float g, float b, float smooth = 0.3f, float metal = 0f) => new SkinTint(slot, r, g, b, smooth, metal);
 
         // Gold, silver, carbon, arctic, crimson, forest, sand and midnight: the house palette.
-        private static SkinTint Gold(int slot) => T(slot, 0.93f, 0.70f, 0.24f, 0.78f, 1f);
-        private static SkinTint Silver(int slot) => T(slot, 0.82f, 0.84f, 0.86f, 0.8f, 1f);
+        // Half metallic: fully metallic reads brown on phones, with no reflections to show the shine.
+        private static SkinTint Gold(int slot) => T(slot, 1f, 0.76f, 0.26f, 0.68f, 0.45f);
+        private static SkinTint Silver(int slot) => T(slot, 0.9f, 0.92f, 0.94f, 0.72f, 0.45f);
         private static SkinTint Carbon(int slot) => T(slot, 0.07f, 0.075f, 0.08f, 0.62f, 0.2f);
         private static SkinTint Arctic(int slot) => T(slot, 0.88f, 0.9f, 0.92f, 0.35f);
         private static SkinTint Crimson(int slot) => T(slot, 0.55f, 0.07f, 0.06f, 0.4f);
