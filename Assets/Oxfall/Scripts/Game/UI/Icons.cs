@@ -197,6 +197,18 @@ namespace Oxfall.Game.UI
             return d;
         });
 
+        /// <summary>A thermometer: a bulb at the foot of a tube, with marks up its side.</summary>
+        public static Sprite Thermometer => Get("thermometer", p =>
+        {
+            float tube = Mathf.Abs(Segment(p, new Vector2(-0.1f, -0.38f), new Vector2(-0.1f, 0.62f), 0.2f)) - Stroke * 0.7f;
+            float bulb = Circle(p, new Vector2(-0.1f, -0.52f), 0.3f);
+            float column = Segment(p, new Vector2(-0.1f, -0.4f), new Vector2(-0.1f, 0.25f), 0.07f);
+            float marks = Min(Segment(p, new Vector2(0.22f, 0.5f), new Vector2(0.42f, 0.5f), 0.05f),
+                Segment(p, new Vector2(0.22f, 0.25f), new Vector2(0.36f, 0.25f), 0.05f),
+                Segment(p, new Vector2(0.22f, 0f), new Vector2(0.42f, 0f), 0.05f));
+            return Min(Mathf.Max(tube, -bulb), bulb, column, marks);
+        });
+
         public static Sprite Moon => Get("moon", p =>
             Mathf.Max(Circle(p, Vector2.zero, 0.66f), -Circle(p, new Vector2(0.34f, 0.22f), 0.56f)));
 

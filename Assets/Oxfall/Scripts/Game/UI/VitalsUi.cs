@@ -23,6 +23,11 @@ namespace Oxfall.Game.UI
         private readonly Row _food;
         private readonly Row _water;
         private readonly RectTransform _death;
+        private readonly RectTransform _cold;
+        private readonly Image _coldBack, _coldIcon;
+        private readonly Text _coldText;
+        private int _shownWarmth = int.MinValue;
+        private bool _freezing;
         private int _shownHealth = -1, _shownFood = -1, _shownWater = -1;
 
         /// <summary>Raised when the player taps DESPERTAR (on the beach) on the death screen.</summary>
@@ -68,6 +73,17 @@ namespace Oxfall.Game.UI
             _food = MakeRow(hud.SafeArea, 1, Icons.Food, UiTheme.Food);
             _water = MakeRow(hud.SafeArea, 2, Icons.Drop, UiTheme.Water);
 
+            // The cold, under the vitals: shown only when it matters (as the PC game lists it).
+            var topLeft = new Vector2(0f, 1f);
+            _cold = UiFactory.NewRect("Cold", hud.SafeArea, topLeft, topLeft, new Vector2(24f, -80f - 3 * (RowHeight + 6f)),
+                new Vector2(RowWidth, RowHeight));
+            _coldBack = UiFactory.AddImage(_cold, UiFactory.Soft, ColdBack);
+            _cold.gameObject.AddComponent<Canvas>();
+            _coldIcon = UiFactory.AddIcon(_cold, Icons.Thermometer, new Vector2(24f, 0f), 28f, Cold, new Vector2(0f, 0.5f));
+            var coldText = UiFactory.NewRect("Text", _cold, new Vector2(0f, 0.5f), new Vector2(0f, 0.5f), new Vector2(48f, 0f), new Vector2(RowWidth - 60f, RowHeight));
+            _coldText = UiFactory.AddText(coldText, "", 24, TextAnchor.MiddleLeft, UiTheme.Text, true);
+            _cold.gameObject.SetActive(false);
+
             // Death: a dark veil over everything, a title, a line and one button.
             var half = new Vector2(0.5f, 0.5f);
             _death = UiFactory.NewRect("Death", hud.transform, half, half, Vector2.zero, Vector2.zero);
@@ -108,6 +124,31 @@ namespace Oxfall.Game.UI
             SetBags(null);
             _death.gameObject.SetActive(false);
             Refresh();
+        }
+
+        private static readonly Color Cold = new Color(0.55f, 0.8f, 1f);
+        private static readonly Color ColdBack = new Color(0.12f, 0.26f, 0.42f, 0.82f);
+        private static readonly Color FreezingBack = new Color(0.5f, 0.14f, 0.16f, 0.86f);
+        private static readonly Color FireBack = new Color(0.45f, 0.22f, 0.08f, 0.82f);
+
+        /// <summary>
+        /// How warm the player feels: nothing shown while comfortable; FRÍO (no healing) below
+        /// <see cref="Temperature.Chilly"/>, CONGELÁNDOTE (hurting, pulsing) below freezing; AL CALOR when a fire is what keeps them warm.
+        /// </summary>
+        public void SetWarmth(float degrees, bool byFire, bool coldOut)
+        {
+            int shown = Mathf.RoundToInt(degrees) * 4 + (byFire ? 1 : 0) + (coldOut ? 2 : 0);
+            if (shown == _shownWarmth) return;
+            _shownWarmth = shown;
+            bool chilly = degrees < Temperature.Chilly;
+            _freezing = degrees < Temperature.Freezing;
+            bool warmed = !chilly && byFire && coldOut;
+            _cold.gameObject.SetActive(chilly || warmed);
+            if (!chilly && !warmed) return;
+            string value = $"{Mathf.RoundToInt(degrees)}°";
+            _coldText.text = _freezing ? $"CONGELÁNDOTE  {value}" : chilly ? $"FRÍO  {value}  ·  sin curarte" : $"AL CALOR  {value}";
+            _coldBack.color = _freezing ? FreezingBack : chilly ? ColdBack : FireBack;
+            _coldIcon.color = warmed ? UiTheme.Food : Cold;
         }
 
         public void ShowDeath(bool dead) => _death.gameObject.SetActive(dead);
@@ -184,6 +225,7 @@ namespace Oxfall.Game.UI
             Pulse(_health, pulse);
             Pulse(_food, pulse);
             Pulse(_water, pulse);
+            if (_freezing && _cold.gameObject.activeSelf) _coldBack.color = FreezingBack.WithAlpha(0.55f + 0.4f * pulse);
         }
 
         private static void Pulse(Row row, float pulse)

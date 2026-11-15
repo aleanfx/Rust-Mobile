@@ -119,6 +119,10 @@ namespace Oxfall.Game
         // Who dealt the last blow that killed this player (online), for the death screen.
         private string _killer;
 
+        /// <summary>How warm the player feels (see <see cref="Temperature"/>), and whether they were told they are freezing.</summary>
+        private float _warmth = Temperature.DayAir;
+        private bool _warnedCold;
+
         // The island's animals: alone the game runs them, online the server does and says where they are.
         private Fauna _fauna;
         private AnimalViews _animalViews;
@@ -1309,6 +1313,7 @@ namespace Oxfall.Game
             _hud.CloseCraftPanel();
             _player.enabled = false;
             _gatherer.enabled = false;
+            if (_killer == null && _warmth < Temperature.Freezing) _killer = "el frío";
             _vitalsUi.SetCause(_killer != null ? $"Te mató {_killer}." : null);
             _killer = null;
             _vitalsUi.SetBags(MyBags());
@@ -2368,10 +2373,21 @@ namespace Oxfall.Game
             if (_vitals == null || _vitals.IsDead) return;
             // Online, hunger and thirst run on the server; the copy here is updated from it.
             bool running = _input.Sprint && _input.Move.sqrMagnitude > 0.01f;
-            if (!_actions.Online) _vitals.Tick(dt, running ? 1.8f : 1f);
+            if (!_actions.Online) _vitals.Tick(dt, running ? 1.8f : 1f, _warmth);
             _vitalsTimer -= dt;
             if (_vitalsTimer > 0f) return;
             _vitalsTimer = 0.5f;
+            // The cold, by the same rules the server hurts with (online it only shows here).
+            var feet = _player.transform.position;
+            float daylight = _dayNight.Cycle.Daylight, rain = _weather != null ? _weather.Rain : 0f;
+            bool inWater = _player.IsSwimming || feet.y < IslandShape.WaterLevel - Temperature.WadeDepth;
+            float fire = Temperature.FireWarmth(_settlement, feet.x, feet.y, feet.z);
+            _warmth = Temperature.Felt(daylight, rain, Temperature.Insulation(_inventory), fire,
+                Temperature.Sheltered(_settlement.Grid, feet.x, feet.y, feet.z), inWater);
+            _vitalsUi.SetWarmth(_warmth, fire > 0f, _warmth - fire < Temperature.Chilly);
+            if (_warmth < Temperature.Freezing && !_warnedCold)
+                _hud.ShowToast(fire <= 0f ? "Te congelas: abrígate, enciende una fogata o métete bajo techo" : "Te congelas");
+            _warnedCold = _warmth < Temperature.Chilly;
             _vitalsUi.Refresh();
             if (_vitals.Food01 < 0.12f && !_warnedHungry) _hud.ShowToast("Tienes hambre: busca moras");
             if (_vitals.Water01 < 0.12f && !_warnedThirsty) _hud.ShowToast("Tienes sed: bebe en una charca");

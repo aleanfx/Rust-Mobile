@@ -5,6 +5,7 @@ using Oxfall.Core.Environment;
 using Oxfall.Core.Gathering;
 using Oxfall.Core.Items;
 using Oxfall.Core.Rules;
+using Oxfall.Core.Survival;
 using Oxfall.Core.Wildlife;
 using Oxfall.Core.World;
 
@@ -520,6 +521,8 @@ namespace Oxfall.Core.Net
             TickFauna(deltaSeconds);
             TickTraps();
             TickAirdrops();
+            Environment.Weather.At(Seed, Time, out float rain, out _);
+            float daylight = Day.Daylight;
             foreach (var record in _online.Values)
             {
                 var s = record.Survivor;
@@ -527,7 +530,9 @@ namespace Oxfall.Core.Net
                 s.Crafting.Tick(deltaSeconds);
                 bool found = Players.TryGet(record.PlayerId, out var player);
                 float exertion = found && player.Speed > RunningSpeed ? 1.8f : 1f;
-                s.Vitals.Tick(deltaSeconds, exertion);
+                // The cold, where they stand (not before they are placed on the island).
+                float warmth = found && player.Placed ? WarmthOf(s, player.Pose, daylight, rain) : Temperature.DayAir;
+                s.Vitals.Tick(deltaSeconds, exertion, warmth);
                 if (s.Looting != 0 && found && Settlement.TryGet(s.Looting, out var box))
                 {
                     float dx = player.Pose.X - box.X, dz = player.Pose.Z - box.Z, reach = PlayerActions.UseReach + 2f;
@@ -536,6 +541,13 @@ namespace Oxfall.Core.Net
                     else if (!Settlement.CanPass(LockTarget.On(box.Id), record.Owner)) s.Looting = 0;
                 }
             }
+        }
+
+        /// <summary>How warm a player standing here feels now (see <see cref="Temperature"/>).</summary>
+        public float WarmthOf(Survivor s, Pose pose, float daylight, float rain)
+        {
+            bool inWater = pose.Y < IslandGround.WaterLevel - Temperature.WadeDepth;
+            return Temperature.At(Settlement, s.Inventory, daylight, rain, pose.X, pose.Y, pose.Z, inWater);
         }
 
         private readonly List<int> _wentOut = new List<int>();

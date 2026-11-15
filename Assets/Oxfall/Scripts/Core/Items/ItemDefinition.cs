@@ -78,7 +78,7 @@ namespace Oxfall.Core.Items
 
         public ItemDefinition(string id, string displayName, ItemCategory category, int maxStack,
             ToolKind tool = ToolKind.None, bool skinnable = false, string description = "",
-            Nourishment nourishment = default, WearSlot wear = WearSlot.None, float protection = 0f)
+            Nourishment nourishment = default, WearSlot wear = WearSlot.None, float protection = 0f, float warmth = 0f)
         {
             if (string.IsNullOrWhiteSpace(id)) throw new ArgumentException("Item id is required.", nameof(id));
             if (maxStack < 1) throw new ArgumentOutOfRangeException(nameof(maxStack), "Max stack must be at least 1.");
@@ -92,7 +92,11 @@ namespace Oxfall.Core.Items
             Nourishment = nourishment;
             Wear = wear;
             Protection = protection;
+            Warmth = warmth;
         }
+
+        /// <summary>Clothing: how many degrees it keeps in against the cold (see <see cref="Survival.Temperature"/>).</summary>
+        public float Warmth { get; }
 
         public override string ToString() => Id;
     }

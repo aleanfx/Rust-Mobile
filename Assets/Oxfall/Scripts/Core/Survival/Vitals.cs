@@ -71,10 +71,18 @@ namespace Oxfall.Core.Survival
         public float Food01 => Food / MaxFood;
         public float Water01 => Water / MaxWater;
 
+        /// <summary>How warm the player felt at the last tick, in degrees (see <see cref="Temperature"/>).</summary>
+        public float Warmth { get; private set; } = Temperature.DayAir;
+
+        /// <summary>Whether the cold is hurting now.</summary>
+        public bool Freezing => Warmth < Temperature.Freezing;
+
         /// <param name="seconds">Real time passed.</param>
         /// <param name="exertion">1 at rest or walking; more while sprinting (food and water go faster).</param>
-        public void Tick(float seconds, float exertion = 1f)
+        /// <param name="warmth">How warm the player feels: below <see cref="Temperature.Chilly"/> no healing, below freezing it hurts.</param>
+        public void Tick(float seconds, float exertion = 1f, float warmth = Temperature.DayAir)
         {
+            Warmth = warmth;
             if (seconds < 0f) throw new ArgumentOutOfRangeException(nameof(seconds));
             if (IsDead || seconds == 0f) return;
             exertion = Math.Max(1f, exertion);
@@ -84,8 +92,9 @@ namespace Oxfall.Core.Survival
             float change = 0f;
             if (Food <= 0f) change -= StarvePerSecond;
             if (Water <= 0f) change -= StarvePerSecond;
-            if (change == 0f && Food > MaxFood * 0.25f && Water > MaxWater * 0.25f && Health < MaxHealth)
+            if (change == 0f && warmth >= Temperature.Chilly && Food > MaxFood * 0.25f && Water > MaxWater * 0.25f && Health < MaxHealth)
                 change = HealPerSecond;
+            change -= Temperature.Hurt(warmth);
             if (Regen > 0f)
             {
                 float back = Math.Min(Regen, RegenPerSecond * seconds);
