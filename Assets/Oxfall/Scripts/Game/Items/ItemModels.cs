@@ -210,6 +210,12 @@ namespace Oxfall.Game.Items
                     Materials = new[] { m.BarrelPaint[2], m.GunMetal, m.WarnYellow, m.LedRed },
                     IconRotation = Tilt(-14f, 215f),
                 },
+                [ItemIds.VendingMachine] = new ItemModel
+                {
+                    Mesh = MeshFactory.VendingMachine(),
+                    Materials = new[] { m.DropPaint, m.Steel, m.Glass, m.WarnYellow, m.MedRed, m.LedGreen, m.WhitePaint },
+                    IconRotation = Tilt(-10f, 200f),
+                },
                 [ItemIds.LargeBox] = new ItemModel
                 {
                     Mesh = MeshFactory.LargeBox(),

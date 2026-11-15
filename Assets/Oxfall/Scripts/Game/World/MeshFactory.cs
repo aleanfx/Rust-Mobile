@@ -2085,6 +2085,60 @@ namespace Oxfall.Game.World
             return b.Build("Shotgun trap");
         }
 
+        /// <summary>
+        /// A vending machine, its front to +Z: a tall painted cabinet with a window of goods on shelves,
+        /// a lit screen and keypad, a coin slot, a pick-up tray, a sign band along the top. Submeshes:
+        /// paint, steel, dark glass, yellow goods, red goods, screen, sign.
+        /// </summary>
+        public static Mesh VendingMachine()
+        {
+            var b = new FlatMeshBuilder(7) { UvScale = 0.6f };
+            const float front = 0.3f;
+            // The cabinet, on four steel feet.
+            b.AddBox(0, new Vector3(-0.48f, 0.06f, -0.34f), new Vector3(0.48f, 1.96f, front));
+            for (int i = 0; i < 4; i++)
+            {
+                float x = i % 2 == 0 ? -0.4f : 0.4f, z = i < 2 ? -0.26f : 0.22f;
+                b.AddBox(1, new Vector3(x - 0.05f, 0f, z - 0.05f), new Vector3(x + 0.05f, 0.06f, z + 0.05f));
+            }
+            // The window: a frame standing out round a dark back, steel shelves, goods on them.
+            float wl = -0.42f, wr = 0.16f, wb = 0.6f, wt = 1.78f;
+            b.AddBox(0, new Vector3(wl - 0.03f, wb - 0.03f, front), new Vector3(wl, wt + 0.03f, front + 0.12f));
+            b.AddBox(0, new Vector3(wr, wb - 0.03f, front), new Vector3(wr + 0.03f, wt + 0.03f, front + 0.12f));
+            b.AddBox(0, new Vector3(wl, wt, front), new Vector3(wr, wt + 0.03f, front + 0.12f));
+            b.AddBox(0, new Vector3(wl, wb - 0.03f, front), new Vector3(wr, wb, front + 0.12f));
+            b.AddBox(2, new Vector3(wl, wb, front), new Vector3(wr, wt, front + 0.005f));
+            for (int shelf = 0; shelf < 3; shelf++)
+            {
+                float y = wb + 0.04f + shelf * 0.39f;
+                b.AddBox(1, new Vector3(wl, y - 0.015f, front), new Vector3(wr, y, front + 0.1f));
+                for (int k = 0; k < 4; k++)
+                {
+                    float x = wl + 0.035f + k * 0.14f;
+                    int sub = (shelf + k) % 3 == 0 ? 4 : 3;
+                    float h = 0.16f + ((shelf * 3 + k) % 3) * 0.05f;
+                    b.AddBox(sub, new Vector3(x, y, front + 0.02f), new Vector3(x + 0.1f, y + h, front + 0.08f));
+                }
+            }
+            // The side panel: screen, a keypad of steel keys, the coin slot.
+            b.AddBox(5, new Vector3(0.22f, 1.5f, front), new Vector3(0.42f, 1.64f, front + 0.02f));
+            for (int r = 0; r < 3; r++)
+            for (int c = 0; c < 3; c++)
+            {
+                float x = 0.23f + c * 0.065f, y = 1.2f + r * 0.08f;
+                b.AddBox(1, new Vector3(x, y, front), new Vector3(x + 0.05f, y + 0.055f, front + 0.025f));
+            }
+            b.AddBox(1, new Vector3(0.27f, 0.98f, front), new Vector3(0.37f, 1.1f, front + 0.03f));
+            b.AddBox(2, new Vector3(0.305f, 1.0f, front + 0.03f), new Vector3(0.335f, 1.08f, front + 0.032f));
+            // The tray at the bottom, set in.
+            b.AddBox(1, new Vector3(-0.4f, 0.2f, front), new Vector3(0.14f, 0.24f, front + 0.08f));
+            b.AddBox(2, new Vector3(-0.38f, 0.24f, front), new Vector3(0.12f, 0.44f, front + 0.005f));
+            b.AddBox(1, new Vector3(-0.4f, 0.44f, front), new Vector3(0.14f, 0.47f, front + 0.06f));
+            // The sign band along the top.
+            b.AddBox(6, new Vector3(-0.46f, 1.82f, front), new Vector3(0.46f, 1.93f, front + 0.02f));
+            return b.Build("Vending machine");
+        }
+
         /// <summary>Where a turret's head turns, over its feet.</summary>
         public static readonly Vector3 TurretPivot = new Vector3(0f, 0.82f, 0f);
 

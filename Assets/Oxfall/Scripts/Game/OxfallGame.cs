@@ -54,6 +54,7 @@ namespace Oxfall.Game
         private DeployablePlacer _placer;
         private DeployableViews _deployables;
         private CupboardUi _cupboard;
+        private VendingUi _vending;
         private LockViews _lockViews;
         private LockPlacer _lockPlacer;
         private ChargeThrower _thrower;
@@ -332,7 +333,7 @@ namespace Oxfall.Game
                 Me = () => _actions.Owner,
                 Covered = () => (_inventoryUi != null && _inventoryUi.IsOpen) || _hud.CraftPanelOpen || _hud.SettingsOpen
                     || (_cupboard != null && _cupboard.IsOpen) || (_keypad != null && _keypad.IsOpen)
-                    || (_team != null && _team.IsOpen)
+                    || (_vending != null && _vending.IsOpen) || (_team != null && _team.IsOpen)
                     || (_hud.Modal != null && _hud.Modal.gameObject.activeInHierarchy),
                 HasLearned = () => _survivor.Learned.Count > 0,
             };
@@ -441,6 +442,11 @@ namespace Oxfall.Game
             // The cupboard's materials open beside the inventory, like a box; from there PERMISOS goes back.
             _cupboard.MaterialsRequested += OpenBox;
             _inventoryUi.CupboardRequested += OpenCupboard;
+            // The vending machine's shop window; its owner stocks it beside the inventory, and OFERTAS goes back.
+            _vending = new VendingUi(_hud, _settlement, _actions);
+            _vending.StockRequested += StockVending;
+            _vending.Bought += _ => audio.Play(SoundCue.Accepted);
+            _inventoryUi.ShopRequested += OpenVending;
 
             // Code locks: drawn on doors, boxes and cupboards; one in hand goes on with attack, and
             // then its keypad opens to choose the code.
@@ -511,7 +517,7 @@ namespace Oxfall.Game
             _interactor.Board += BoardBoat;
             _interactor.LeaveBoat += LeaveBoat;
             _player.LeaveBoat += LeaveBoat;
-            _interactor.Busy = () => (_keypad != null && _keypad.IsOpen) || (_cupboard != null && _cupboard.IsOpen) || (_inventoryUi != null && _inventoryUi.IsOpen)
+            _interactor.Busy = () => (_keypad != null && _keypad.IsOpen) || (_cupboard != null && _cupboard.IsOpen) || (_vending != null && _vending.IsOpen) || (_inventoryUi != null && _inventoryUi.IsOpen)
                 || (_team != null && _team.IsOpen) || _hud.CraftPanelOpen;
             _interactor.DoorUsed += () => audio.Play(SoundCue.Wood);
             _interactor.OpenBox += OpenBox;
@@ -585,6 +591,7 @@ namespace Oxfall.Game
                 _quietPickups = true;
                 _inventoryUi.CloseBox(false);
                 _cupboard.Close();
+                _vending.Close();
                 _keypad.Close();
                 _survivor.Looting = 0;
                 _inventory.Clear();
@@ -1467,6 +1474,7 @@ namespace Oxfall.Game
             _diedAt = _player.transform.position;
             _inventoryUi.Close();
             _cupboard.Close();
+            _vending.Close();
             _keypad.Close();
             // What they carried stays where they fell, in a bag anyone can empty.
             _actions.DropBag();
@@ -1531,9 +1539,37 @@ namespace Oxfall.Game
             _hud.ShowToast(message);
         }
 
-        /// <summary>Opens a box or furnace beside the inventory.</summary>
+        /// <summary>Opens a box or furnace beside the inventory (a vending machine: its shop window).</summary>
         private void OpenBox(int id)
         {
+            if (_settlement.TryGet(id, out var d) && d.Kind == DeployableKind.VendingMachine)
+            {
+                OpenVending(id);
+                return;
+            }
+            OpenSlots(id);
+        }
+
+        private void OpenVending(int id)
+        {
+            _inventoryUi.Close();
+            _cupboard.Close();
+            _keypad.Close();
+            _vending.Open(id);
+            Debug.Log("[Oxfall] Opened vending machine " + id);
+        }
+
+        /// <summary>The owner's LLENAR: the machine's slots beside the inventory.</summary>
+        private void StockVending(int id)
+        {
+            _vending.Close();
+            OpenSlots(id);
+        }
+
+        /// <summary>Opens a container's slots beside the inventory.</summary>
+        private void OpenSlots(int id)
+        {
+            _vending.Close();
             _cupboard.Close();
             _keypad.Close();
             var result = _actions.Open(id);
@@ -1561,6 +1597,7 @@ namespace Oxfall.Game
         private void OpenCupboard(int id)
         {
             _inventoryUi.Close();
+            _vending.Close();
             _keypad.Close();
             _cupboard.Open(id);
             Debug.Log("[Oxfall] Opened cupboard " + id);
@@ -1571,6 +1608,7 @@ namespace Oxfall.Game
         {
             _inventoryUi.Close();
             _cupboard.Close();
+            _vending.Close();
             _keypad.Open(target);
         }
 
@@ -1582,6 +1620,7 @@ namespace Oxfall.Game
             bool Far(int id) => !_settlement.TryGet(id, out var d) || (new Vector3(d.X, d.Y, d.Z) - here).sqrMagnitude > reach * reach;
             if (_inventoryUi.OpenBoxId != 0 && Far(_inventoryUi.OpenBoxId)) _inventoryUi.CloseBox(true);
             if (_cupboard.IsOpen && Far(_cupboard.OpenId)) _cupboard.Close();
+            if (_vending.IsOpen && Far(_vending.OpenId)) _vending.Close();
             if (_keypad.IsOpen)
             {
                 var at = PlayerActions.LockPoint(_settlement, _keypad.Target);
@@ -1775,6 +1814,16 @@ namespace Oxfall.Game
                     for (int i = 0; i < _inventory.CarrySlots; i++)
                         if (Turrets.Takes(_inventory[i].ItemId)) _actions.Put(i, -1);
                     break;
+                case "stock-vending":
+                {
+                    // Test: the owner's LLENAR, then all but 100 of the wood carried into the machine.
+                    int machine = Nearest(DeployableKind.VendingMachine);
+                    if (machine == 0) break;
+                    StockVending(machine);
+                    for (int i = 0; i < _inventory.CarrySlots && _inventory.Count(ItemIds.Wood) > 100; i++)
+                        if (_inventory[i].ItemId == ItemIds.Wood) _actions.Put(i, -1);
+                    break;
+                }
                 case "load-trap":
                     // Test: puts every shell carried into the open trap.
                     for (int i = 0; i < _inventory.CarrySlots; i++)
@@ -1952,6 +2001,27 @@ namespace Oxfall.Game
                     ServerWorld.GiveTestKit(_inventory, 10);
                     break;
                 case "turret": HoldItem(ItemIds.AutoTurret); break;
+                case "give-vending" when _actions.Online:
+                    _net.SendAct(ActKind.DevGive, 11);
+                    break;
+                case "give-vending":
+                    ServerWorld.GiveTestKit(_inventory, 11);
+                    break;
+                case "vending-machine": HoldItem(ItemIds.VendingMachine); break;
+                case "open-vending": OpenVending(Nearest(DeployableKind.VendingMachine)); break;
+                case "close-vending": _vending.Close(); break;
+                case "vending":
+                    foreach (var d in _settlement.Deployables)
+                        if (d.Kind == DeployableKind.VendingMachine)
+                        {
+                            var shelf = _settlement.Container(d.Id);
+                            var offers = _settlement.Orders(d.Id);
+                            var text = new System.Text.StringBuilder();
+                            for (int i = 0; i < offers.Count; i++) text.Append($" offer{i}=[{offers[i]}]");
+                            Debug.Log($"[Oxfall] Vending {d.Id} at ({d.X:0.0}, {d.Y:0.0}, {d.Z:0.0}) wood={shelf.Count(ItemIds.Wood)} scrap={shelf.Count(ItemIds.Scrap)}" +
+                                      $" my-wood={_inventory.Count(ItemIds.Wood)} my-scrap={_inventory.Count(ItemIds.Scrap)}{text}");
+                        }
+                    break;
                 case "open-turret": OpenBox(Nearest(DeployableKind.AutoTurret)); break;
                 case "turrets":
                     foreach (var d in _settlement.Deployables)
@@ -2120,6 +2190,8 @@ namespace Oxfall.Game
                                  System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out float turn))
                         _player.Teleport(_player.transform.position, _player.Yaw + turn, _player.Pitch);
                     // box-tap-N taps slot N of the open box.
+                    else if (command.StartsWith("vend-act-") && int.TryParse(command.Substring(9), out int vendRow)) _vending.Act(vendRow);
+                    else if (command.StartsWith("vend-buy-") && int.TryParse(command.Substring(9), out int buyRow)) _vending.Buy(buyRow);
                     else if (command.StartsWith("box-tap-") && int.TryParse(command.Substring(8), out int boxTap))
                         _inventoryUi.TapBoxSlot(boxTap);
                     // time-H jumps to hour H (0 to 23).
@@ -2702,10 +2774,19 @@ namespace Oxfall.Game
                 if (dist < best) { best = dist; target = mid; }
             }
             if (best == float.MaxValue) return;
+            // Within reach: a step from it, on the side the player stands.
+            var feet = _player.transform.position;
+            var flat = new Vector3(feet.x - target.x, 0f, feet.z - target.z);
+            if (flat.magnitude > 2.2f)
+            {
+                var at = new Vector3(target.x, 0f, target.z) + flat.normalized * 1.8f;
+                feet = new Vector3(at.x, _world.Shape.Height(at.x, at.z) + 0.05f, at.z);
+                eye = feet + (eye - _player.transform.position);
+            }
             var to = target - eye;
             float yaw = Mathf.Atan2(to.x, to.z) * Mathf.Rad2Deg;
             float pitch = -Mathf.Atan2(to.y, new Vector2(to.x, to.z).magnitude) * Mathf.Rad2Deg;
-            _player.Teleport(_player.transform.position, yaw, pitch);
+            _player.Teleport(feet, yaw, pitch);
         }
 
         /// <summary>For tests: raises every piece to a tier, free.</summary>

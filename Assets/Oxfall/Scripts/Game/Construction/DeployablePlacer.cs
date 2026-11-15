@@ -126,6 +126,7 @@ namespace Oxfall.Game.Construction
                 case DeployableKind.WoodWall:
                 case DeployableKind.StoneWall: return "Muro levantado: rodea tu casa para que nadie entre sin explosivos o escalera";
                 case DeployableKind.AutoTurret: return "Torreta colocada: cárgala con balas. Vigila lo que tiene delante, hasta 30 m";
+                case DeployableKind.VendingMachine: return "Máquina colocada: llénala y pon tus ofertas. Cualquiera podrá comprarte";
                 case DeployableKind.HempPlant: return "Cáñamo sembrado: crece solo en unos minutos (más rápido con lluvia)";
                 case DeployableKind.BerryPlant: return "Moras sembradas: vuelve cuando estén maduras y cosecha";
                 case DeployableKind.Ladder: return "Escalera puesta: avanza para subir, retrocede para bajar, salta para soltarte";

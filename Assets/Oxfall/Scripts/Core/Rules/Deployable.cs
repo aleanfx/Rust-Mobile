@@ -53,6 +53,9 @@ namespace Oxfall.Core.Rules
 
         /// <summary>An automatic turret: a rifle on a turning head (see <see cref="Turrets"/>).</summary>
         AutoTurret = 17,
+
+        /// <summary>A vending machine: a shop that sells what its owner stocks (see <see cref="Vending"/>).</summary>
+        VendingMachine = 18,
     }
 
     /// <summary>One thing set down: what it is, where it stands, which way it faces, and who put it there.</summary>
@@ -146,6 +149,7 @@ namespace Oxfall.Core.Rules
                 case DeployableKind.HempPlant: return ItemIds.HempSeed;
                 case DeployableKind.BerryPlant: return ItemIds.BerrySeed;
                 case DeployableKind.AutoTurret: return ItemIds.AutoTurret;
+                case DeployableKind.VendingMachine: return ItemIds.VendingMachine;
                 // Nothing is made into a bag, a recycler or a supply crate, and none is picked up.
                 case DeployableKind.Bag:
                 case DeployableKind.Recycler:
@@ -174,6 +178,7 @@ namespace Oxfall.Core.Rules
                 case ItemIds.HempSeed: kind = DeployableKind.HempPlant; return true;
                 case ItemIds.BerrySeed: kind = DeployableKind.BerryPlant; return true;
                 case ItemIds.AutoTurret: kind = DeployableKind.AutoTurret; return true;
+                case ItemIds.VendingMachine: kind = DeployableKind.VendingMachine; return true;
                 default: kind = default; return false;
             }
         }
@@ -198,6 +203,7 @@ namespace Oxfall.Core.Rules
                 case DeployableKind.ShotgunTrap: return GunTraps.Slots;
                 // Bullets to fire.
                 case DeployableKind.AutoTurret: return Turrets.Slots;
+                case DeployableKind.VendingMachine: return Vending.Slots;
                 default: return 0;
             }
         }
@@ -224,6 +230,7 @@ namespace Oxfall.Core.Rules
                 case DeployableKind.Ladder: return 0.12f;
                 case DeployableKind.LargeBox: return 0.75f;
                 case DeployableKind.AutoTurret: return 0.45f;
+                case DeployableKind.VendingMachine: return 0.6f;
                 case DeployableKind.HempPlant:
                 case DeployableKind.BerryPlant:
                     return Crops.Spacing * 0.5f;
@@ -254,6 +261,7 @@ namespace Oxfall.Core.Rules
                 case DeployableKind.LargeBox: return 225f;
                 // Three charges.
                 case DeployableKind.AutoTurret: return 400f;
+                case DeployableKind.VendingMachine: return 500f;
                 case DeployableKind.HempPlant:
                 case DeployableKind.BerryPlant:
                     return 20f;
@@ -281,6 +289,7 @@ namespace Oxfall.Core.Rules
                 case DeployableKind.HempPlant: return "Cáñamo sembrado";
                 case DeployableKind.BerryPlant: return "Moras sembradas";
                 case DeployableKind.AutoTurret: return "Torreta automática";
+                case DeployableKind.VendingMachine: return "Máquina expendedora";
                 default: return "Objeto";
             }
         }

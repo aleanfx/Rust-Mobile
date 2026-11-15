@@ -51,6 +51,9 @@ namespace Oxfall.Core.Rules
         /// <summary>The box or furnace they have open (0: none).</summary>
         public int Looting { get; set; }
 
+        /// <summary>The open container is someone else's vending machine: it can be bought from, not reached into.</summary>
+        public bool Shopping { get; set; }
+
         /// <summary>What a fresh player wakes up with in the genre: a rock to gather with and a torch.</summary>
         public void GiveStarterKit()
         {

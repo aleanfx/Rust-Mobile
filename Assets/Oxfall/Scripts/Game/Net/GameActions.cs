@@ -111,7 +111,7 @@ namespace Oxfall.Game.Net
         /// <summary>What marks this player's things: the server's number online, 0 alone.</summary>
         public int Owner => Online ? _net.Owner : 0;
 
-        private Inventory Inventory => _survivor.Inventory;
+        public Inventory Inventory => _survivor.Inventory;
 
         /// <summary>The island's animals when playing alone (online the server keeps them).</summary>
         public Fauna Fauna { get; set; }
@@ -460,6 +460,7 @@ namespace Oxfall.Game.Net
             if (_settlement.Container(id) == null) return ActionResult.NoPiece;
             // The copy opens at once; what is inside arrives from the server a moment later.
             _survivor.Looting = id;
+            _survivor.Shopping = _settlement.TryGet(id, out var d) && d.Kind == DeployableKind.VendingMachine && d.Owner != Owner;
             _net.SendAct(ActKind.Open, id);
             return ActionResult.Ok;
         }
@@ -561,6 +562,8 @@ namespace Oxfall.Game.Net
                 case ActionResult.NeedsSoil: return "Las semillas van en tierra, no sobre un piso";
                 case ActionResult.NotRipe: return "Aún no está lista para cosechar";
                 case ActionResult.NotBullets: return "La torreta solo carga balas de rifle o de pistola";
+                case ActionResult.OutOfStock: return "Agotado: la máquina no tiene más de eso";
+                case ActionResult.ShopFull: return "La máquina está llena: no cabe lo que pagas";
                 case ActionResult.NeedsDoorway: return "Apunta a un marco de puerta vacío";
                 case ActionResult.NoPiece: return "Ya no está ahí";
                 case ActionResult.MaxTier: return "Ya está al nivel máximo";

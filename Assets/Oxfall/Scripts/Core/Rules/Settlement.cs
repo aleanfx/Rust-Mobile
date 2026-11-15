@@ -39,6 +39,7 @@ namespace Oxfall.Core.Rules
         private readonly Dictionary<int, float> _rotting = new Dictionary<int, float>();
         private readonly Dictionary<int, float> _cooking = new Dictionary<int, float>();
         private readonly Dictionary<int, float> _crops = new Dictionary<int, float>();
+        private readonly Dictionary<int, VendOrder[]> _orders = new Dictionary<int, VendOrder[]>();
         private readonly Dictionary<PieceRef, int> _owners = new Dictionary<PieceRef, int>();
         private readonly Dictionary<LockTarget, CodeLockState> _locks = new Dictionary<LockTarget, CodeLockState>();
         private readonly List<int> _scratch = new List<int>();
@@ -306,6 +307,7 @@ namespace Oxfall.Core.Rules
             if (deployable.Kind == DeployableKind.Bag) _rotting[deployable.Id] = Rules.Deployables.DeathBagSeconds;
             if (deployable.Kind == DeployableKind.SupplyDrop) _rotting[deployable.Id] = Rules.Deployables.SupplyDropSeconds;
             if (Crops.IsCrop(deployable.Kind)) _crops[deployable.Id] = 0f;
+            if (deployable.Kind == DeployableKind.VendingMachine) _orders[deployable.Id] = new VendOrder[Vending.Orders];
             DeployableAdded?.Invoke(deployable);
             return deployable;
         }
@@ -324,6 +326,7 @@ namespace Oxfall.Core.Rules
             _rotting.Remove(id);
             _cooking.Remove(id);
             _crops.Remove(id);
+            _orders.Remove(id);
             _deployableHealth.Remove(id);
             RemoveLock(LockTarget.On(id));
             DeployableRemoved?.Invoke(id);
@@ -341,6 +344,24 @@ namespace Oxfall.Core.Rules
             if (on) _lit.Add(id, new Furnace());
             else _lit.Remove(id);
             DeployableChanged?.Invoke(id);
+        }
+
+        // ---- Vending machines
+
+        /// <summary>A vending machine's offers (empty ones included); null for anything else.</summary>
+        public IReadOnlyList<VendOrder> Orders(int id) => _orders.TryGetValue(id, out var o) ? o : null;
+
+        /// <summary>The vending machines that have offers set, for describing them.</summary>
+        public IEnumerable<KeyValuePair<int, VendOrder[]>> AllOrders => _orders;
+
+        /// <summary>Sets (or, with <see cref="VendOrder.None"/>, clears) one of a machine's offers. False if it is no machine.</summary>
+        public bool SetOrder(int id, int slot, VendOrder order)
+        {
+            if (!_orders.TryGetValue(id, out var orders) || slot < 0 || slot >= orders.Length) return false;
+            if (orders[slot].Equals(order)) return true;
+            orders[slot] = order;
+            DeployableChanged?.Invoke(id);
+            return true;
         }
 
         // ---- Crops
@@ -707,6 +728,7 @@ namespace Oxfall.Core.Rules
             _owners.Clear();
             _deployableHealth.Clear();
             _crops.Clear();
+            _orders.Clear();
             Upkeep.Clear();
             _nextId = 1;
             _clearing = false;

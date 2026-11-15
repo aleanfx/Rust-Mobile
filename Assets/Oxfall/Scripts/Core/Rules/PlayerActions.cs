@@ -91,6 +91,10 @@ namespace Oxfall.Core.Rules
         NotRipe,
         /// <summary>A turret takes only rifle and pistol bullets.</summary>
         NotBullets,
+        /// <summary>The vending machine has run out of what that offer sells.</summary>
+        OutOfStock,
+        /// <summary>The vending machine has no room left for the price.</summary>
+        ShopFull,
     }
 
     /// <summary>
@@ -260,6 +264,7 @@ namespace Oxfall.Core.Rules
             s.GiveStarterKit();
             s.Vitals.Respawn();
             s.Looting = 0;
+            s.Shopping = false;
             return ActionResult.Ok;
         }
 
@@ -296,6 +301,8 @@ namespace Oxfall.Core.Rules
             if (!Near(x, y, z, d.X, d.Y, d.Z, UseReach)) return ActionResult.TooFar;
             if (!settlement.CanPass(LockTarget.On(id), owner)) return ActionResult.Locked;
             s.Looting = id;
+            // Anyone may look into a vending machine to buy; only its owner reaches its slots.
+            s.Shopping = d.Kind == DeployableKind.VendingMachine && d.Owner != owner;
             return ActionResult.Ok;
         }
 
@@ -400,6 +407,7 @@ namespace Oxfall.Core.Rules
             box = null;
             if (s.Vitals.IsDead) return ActionResult.Dead;
             if (s.Looting == 0) return ActionResult.NotOpen;
+            if (s.Shopping) return ActionResult.NotYours;
             box = settlement.Container(s.Looting);
             if (box == null)
             {
@@ -607,6 +615,25 @@ namespace Oxfall.Core.Rules
                     foreach (var item in crop) s.Inventory.Add(item.ItemId, item.Amount);
                     done = BuildOp.Pickup(d.Id);
                     return ActionResult.Ok;
+                }
+                case BuildOpKind.SetOrder:
+                {
+                    if (!settlement.TryGet(op.Id, out var d)) return ActionResult.NoPiece;
+                    if (d.Kind != DeployableKind.VendingMachine || op.Code < 0 || op.Code >= Vending.Orders) return ActionResult.Invalid;
+                    if (!Near(x, y, z, d.X, d.Y, d.Z, UseReach)) return ActionResult.TooFar;
+                    if (d.Owner != owner) return ActionResult.NotYours;
+                    if (!op.Order.IsEmpty && !Vending.Valid(op.Order, settlement.Catalog)) return ActionResult.Invalid;
+                    settlement.SetOrder(d.Id, op.Code, op.Order);
+                    return ActionResult.Ok;
+                }
+                case BuildOpKind.Vend:
+                {
+                    if (!settlement.TryGet(op.Id, out var d)) return ActionResult.NoPiece;
+                    if (d.Kind != DeployableKind.VendingMachine || op.Code < 0 || op.Code >= Vending.Orders) return ActionResult.Invalid;
+                    if (!Near(x, y, z, d.X, d.Y, d.Z, UseReach)) return ActionResult.TooFar;
+                    var order = settlement.Orders(d.Id)[op.Code];
+                    if (order.IsEmpty) return ActionResult.Invalid;
+                    return Vending.Buy(settlement.Container(d.Id), s.Inventory, order);
                 }
                 case BuildOpKind.RepairDeployable:
                 {

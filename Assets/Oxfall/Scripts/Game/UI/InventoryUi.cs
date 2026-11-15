@@ -71,6 +71,9 @@ namespace Oxfall.Game.UI
 
         /// <summary>The player taps PERMISOS on an open tool cupboard.</summary>
         public event System.Action<int> CupboardRequested;
+
+        /// <summary>The player taps OFERTAS on their open vending machine.</summary>
+        public event System.Action<int> ShopRequested;
         private float _lootX;
         private Image _lightFill;
         private Text _lightLabel;
@@ -163,8 +166,9 @@ namespace Oxfall.Game.UI
             bool recycler = d.Kind == DeployableKind.Recycler;
             bool cupboard = d.Kind == DeployableKind.ToolCupboard;
             bool trap = d.Kind == DeployableKind.ShotgunTrap, turret = d.Kind == DeployableKind.AutoTurret;
+            bool shop = d.Kind == DeployableKind.VendingMachine;
             _lootTitle.text = furnace ? "HORNO" : d.Kind == DeployableKind.SupplyDrop ? "SUMINISTROS" : bag ? "BOLSA" : fire ? "FOGATA"
-                : recycler ? "RECICLADORA" : cupboard ? "ARMARIO" : trap ? "TRAMPA" : turret ? "TORRETA" : "CAJA";
+                : recycler ? "RECICLADORA" : cupboard ? "ARMARIO" : trap ? "TRAMPA" : turret ? "TORRETA" : shop ? "MÁQUINA" : "CAJA";
             _lootRows = 0;
             _boxPage = 0;
             for (int i = 0; i < _boxSlots.Length; i++) _boxSlots[i].Rect.gameObject.SetActive(i < box.SlotCount);
@@ -177,9 +181,9 @@ namespace Oxfall.Game.UI
             _lightButton.anchoredPosition = new Vector2(_lootX, under - 78f);
             // A furnace's or a recycler's switch; on a dead player's bag the same button takes everything.
             // A cupboard's goes back to who may build round it.
-            _lightButton.gameObject.SetActive(furnace || bag || recycler || cupboard || paged);
+            _lightButton.gameObject.SetActive(furnace || bag || recycler || cupboard || shop || paged);
             // The large box's pages turn with the same button, in the bottom spot (its four rows fill the space above).
-            if (paged) _lightButton.anchoredPosition = new Vector2(_lootX, _barTop - 14f);
+            if (paged || shop) _lightButton.anchoredPosition = new Vector2(_lootX, _barTop - 14f);
             _lootStatus.gameObject.SetActive(furnace || bag || fire || recycler || cupboard || trap);
             _details.gameObject.SetActive(false);
             _loot.gameObject.SetActive(true);
@@ -277,6 +281,11 @@ namespace Oxfall.Game.UI
                 CupboardRequested?.Invoke(_box);
                 return;
             }
+            if (_boxKind == DeployableKind.VendingMachine)
+            {
+                ShopRequested?.Invoke(_box);
+                return;
+            }
             if (Deployables.IsLoot(_boxKind))
             {
                 Report(_actions.TakeAll());
@@ -372,6 +381,11 @@ namespace Oxfall.Game.UI
                 _lootStatus.text = perDay.Length == 0 ? "Madera, piedra o metal: pagan lo que construyas aquí" : head + "\nAl día: " + perDay;
                 _lootStatus.color = colour;
             }
+            if (_boxKind == DeployableKind.VendingMachine)
+            {
+                _lightLabel.text = "OFERTAS";
+                _lightFill.color = UiTheme.Accent;
+            }
             if (_boxKind == DeployableKind.ShotgunTrap)
             {
                 int shells = _boxInventory.Count(ItemIds.Shell);
@@ -400,11 +414,12 @@ namespace Oxfall.Game.UI
             bool any = _picked >= 0 && (_pickedInBox || !Deployables.IsLoot(_boxKind));
             _lootQuick.gameObject.SetActive(any);
             // A full crate's TOMAR TODO shares the bottom spot with the button that moves one stack.
-            if ((Deployables.IsLoot(_boxKind) && _lootRows > 3) || Paged) _lightButton.gameObject.SetActive(!any);
+            if ((Deployables.IsLoot(_boxKind) && _lootRows > 3) || Paged || _boxKind == DeployableKind.VendingMachine) _lightButton.gameObject.SetActive(!any);
             if (any)
                 _lootQuickLabel.text = _pickedInBox ? "AL INVENTARIO" : furnace ? "AL HORNO" : _boxKind == DeployableKind.Campfire ? "AL FUEGO"
                     : _boxKind == DeployableKind.Recycler ? "A RECICLAR" : _boxKind == DeployableKind.ToolCupboard ? "AL ARMARIO"
-                    : _boxKind == DeployableKind.ShotgunTrap ? "A LA TRAMPA" : _boxKind == DeployableKind.AutoTurret ? "A LA TORRETA" : "A LA CAJA";
+                    : _boxKind == DeployableKind.ShotgunTrap ? "A LA TRAMPA" : _boxKind == DeployableKind.AutoTurret ? "A LA TORRETA"
+                    : _boxKind == DeployableKind.VendingMachine ? "A LA MÁQUINA" : "A LA CAJA";
             if (any && Paged && !_pickedInBox) _lootQuickLabel.text = "A LA CAJA GRANDE";
         }
 

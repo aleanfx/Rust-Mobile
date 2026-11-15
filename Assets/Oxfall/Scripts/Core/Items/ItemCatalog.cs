@@ -176,6 +176,8 @@ namespace Oxfall.Core.Items
                 description: "Un trabuco sobre una caja: cárgala con cartuchos y dispara a quien pase por delante sin permiso en tu armario."),
             new ItemDefinition(ItemIds.AutoTurret, "Torreta automática", ItemCategory.Placeable, 1,
                 description: "Un rifle que gira solo: cárgala con balas y dispara hasta 30 m a quien no tenga permiso en tu armario, y a lobos y bandidos."),
+            new ItemDefinition(ItemIds.VendingMachine, "Máquina expendedora", ItemCategory.Placeable, 1,
+                description: "Tu tienda: llénala, pon hasta 4 ofertas y cualquiera puede comprarte aunque no estés. Solo tú abres su interior."),
             new ItemDefinition(ItemIds.HempSeed, "Semilla de cáñamo", ItemCategory.Placeable, 50,
                 description: "Sale al recoger cáñamo. Siémbrala en tierra: en unos minutos da mucha más tela que uno silvestre, y semillas."),
             new ItemDefinition(ItemIds.BerrySeed, "Semilla de moras", ItemCategory.Placeable, 50,

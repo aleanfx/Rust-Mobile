@@ -79,12 +79,14 @@ const stamp = () => ((Date.now() - t0) / 1000).toFixed(1).padStart(6);
   const trotted = Math.hypot(p1[0] - p0[0], p1[2] - p0[2]);
   check('trots where the rider looks', trotted > 6, `${trotted.toFixed(1)} m, speed=${num(h, 'speed')}`);
   await wait(1500);
-  // Gallop: sprint held, turning gently so it stays on the meadow.
+  // Gallop: sprint held, back the way it came (open ground), turning gently so it stays on the meadow.
+  await cmd('turn-180', 800);
   await page.keyboard.down('ShiftLeft');
   await page.keyboard.down('KeyW');
   let top = 0, lowest = 100;
   for (let i = 0; i < 16; i++) {
     await wait(1000);
+    await page.evaluate(() => window.unityInstance.SendMessage('Oxfall', 'DebugCommand', 'turn-10'));
     h = await horse();
     top = Math.max(top, num(h, 'speed'));
     lowest = Math.min(lowest, num(h, 'stamina'));

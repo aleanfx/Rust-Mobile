@@ -101,6 +101,7 @@ namespace Oxfall.Game.UI
                 case ItemIds.Workbench:
                 case ItemIds.ShotgunTrap:
                 case ItemIds.AutoTurret:
+                case ItemIds.VendingMachine:
                 case ItemIds.HighWoodWall:
                 case ItemIds.LargeBox:
                 case ItemIds.HighStoneWall:

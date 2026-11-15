@@ -40,6 +40,10 @@ namespace Oxfall.Core.Rules
         Grow = 24,
         /// <summary>Harvest a ripe crop (asked for; the server answers with <see cref="Pickup"/>, the crop going into the harvester's pockets).</summary>
         Harvest = 25,
+        /// <summary>A vending machine's owner sets (or clears) one of its offers: slot in <see cref="BuildOp.Code"/>.</summary>
+        SetOrder = 26,
+        /// <summary>Buy one offer of a vending machine once (asked for; copies need do nothing: the slots follow).</summary>
+        Vend = 27,
     }
 
     /// <summary>
@@ -67,9 +71,13 @@ namespace Oxfall.Core.Rules
         /// <summary>A lock's code (SetCode, EnterCode), what a door is made of (Door), or the side stairs come out on (Stairs).</summary>
         public readonly int Code;
 
+        /// <summary>A vending machine's offer (SetOrder).</summary>
+        public readonly VendOrder Order;
+
         private BuildOp(BuildOpKind kind, PieceType type, int x, int z, EdgeAxis axis, BuildingTier tier = BuildingTier.Twig,
-            bool open = false, float top = 0f, Deployable deployed = default, int code = 0, int level = 0)
+            bool open = false, float top = 0f, Deployable deployed = default, int code = 0, int level = 0, VendOrder order = default)
         {
+            Order = order;
             Level = level;
             Code = code;
             Kind = kind;
@@ -148,6 +156,14 @@ namespace Oxfall.Core.Rules
         /// <summary>A crop has grown this many seconds.</summary>
         public static BuildOp Grow(int id, float age) => OnDeployable(BuildOpKind.Grow, id).WithTop(age);
 
+        /// <summary>Sets offer <paramref name="slot"/> of a vending machine (<see cref="VendOrder.None"/> clears it).</summary>
+        public static BuildOp SetOrder(int id, int slot, VendOrder order) =>
+            new BuildOp(BuildOpKind.SetOrder, PieceType.Foundation, 0, 0, default, deployed: Target(id), code: slot, order: order);
+
+        /// <summary>Buys offer <paramref name="slot"/> of a vending machine once.</summary>
+        public static BuildOp Vend(int id, int slot) =>
+            new BuildOp(BuildOpKind.Vend, PieceType.Foundation, 0, 0, default, deployed: Target(id), code: slot);
+
         /// <summary>Harvest a crop.</summary>
         public static BuildOp Harvest(int id) => OnDeployable(BuildOpKind.Harvest, id);
 
@@ -211,9 +227,9 @@ namespace Oxfall.Core.Rules
         /// <summary>The piece an upgrade or removal is about.</summary>
         public PieceRef Piece => PieceRef.IsEdgeType(Type) ? PieceRef.OnEdge(EdgeAt, Type) : PieceRef.InCell(Type, Cell);
 
-        public BuildOp WithTop(float top) => new BuildOp(Kind, Type, X, Z, Axis, Tier, Open, top, Deployed, Code, Level);
-        public BuildOp WithTier(BuildingTier tier) => new BuildOp(Kind, Type, X, Z, Axis, tier, Open, Top, Deployed, Code, Level);
-        public BuildOp WithOpen(bool open) => new BuildOp(Kind, Type, X, Z, Axis, Tier, open, Top, Deployed, Code, Level);
+        public BuildOp WithTop(float top) => new BuildOp(Kind, Type, X, Z, Axis, Tier, Open, top, Deployed, Code, Level, Order);
+        public BuildOp WithTier(BuildingTier tier) => new BuildOp(Kind, Type, X, Z, Axis, tier, Open, Top, Deployed, Code, Level, Order);
+        public BuildOp WithOpen(bool open) => new BuildOp(Kind, Type, X, Z, Axis, Tier, open, Top, Deployed, Code, Level, Order);
 
         public override string ToString()
         {
@@ -237,6 +253,8 @@ namespace Oxfall.Core.Rules
                 case BuildOpKind.DeployableHealth: return $"DeployableHealth {Id} {Top:0.#}";
                 case BuildOpKind.Grow: return $"Grow {Id} {Top:0.#}";
                 case BuildOpKind.Harvest: return "Harvest " + Id;
+                case BuildOpKind.SetOrder: return $"SetOrder {Id}#{Code} {Order}";
+                case BuildOpKind.Vend: return $"Vend {Id}#{Code}";
                 default: return $"{Kind} {Type} ({X},{Z}{(PieceRef.IsEdgeType(Type) ? "," + Axis : "")}{(Level > 0 ? "@" + Level : "")})";
             }
         }
@@ -347,6 +365,18 @@ namespace Oxfall.Core.Rules
                 case BuildOpKind.Grow:
                     w.Int(Id);
                     w.Float(Top);
+                    break;
+                case BuildOpKind.SetOrder:
+                    w.Int(Id);
+                    w.Byte((byte)Code);
+                    w.String(Order.Sell ?? "", 64);
+                    w.Int(Order.SellAmount);
+                    w.String(Order.Price ?? "", 64);
+                    w.Int(Order.PriceAmount);
+                    break;
+                case BuildOpKind.Vend:
+                    w.Int(Id);
+                    w.Byte((byte)Code);
                     break;
                 default:
                     throw new InvalidOperationException("Unknown build op " + Kind);
@@ -477,6 +507,24 @@ namespace Oxfall.Core.Rules
                 }
                 case BuildOpKind.Harvest:
                     return Harvest(r.Int());
+                case BuildOpKind.SetOrder:
+                {
+                    int id = r.Int();
+                    int slot = ReadOrderSlot(r);
+                    string sell = r.String();
+                    int sellAmount = r.Int();
+                    string price = r.String();
+                    int priceAmount = r.Int();
+                    var order = new VendOrder(sell, sellAmount, price, priceAmount);
+                    if (!order.IsEmpty && (order.Price == null || sellAmount < 1 || sellAmount > Vending.MaxAmount || priceAmount < 1 || priceAmount > Vending.MaxAmount))
+                        throw new ProtocolException("Bad offer.");
+                    return SetOrder(id, slot, order.IsEmpty ? VendOrder.None : order);
+                }
+                case BuildOpKind.Vend:
+                {
+                    int id = r.Int();
+                    return Vend(id, ReadOrderSlot(r));
+                }
                 default:
                     throw new ProtocolException("Unknown build op " + (byte)kind + ".");
             }
@@ -523,6 +571,13 @@ namespace Oxfall.Core.Rules
             int level = ReadLevel(r);
             if (type == PieceType.Foundation && level != 0) throw new ProtocolException("Foundations are on the ground.");
             return PieceRef.IsEdgeType(type) ? PieceRef.OnEdge(new Edge(x, z, axis, level), type) : PieceRef.InCell(type, new Cell(x, z, level));
+        }
+
+        private static int ReadOrderSlot(NetReader r)
+        {
+            int slot = r.Byte();
+            if (slot >= Vending.Orders) throw new ProtocolException("No such offer.");
+            return slot;
         }
 
         private static int ReadLevel(NetReader r)
@@ -632,6 +687,11 @@ namespace Oxfall.Core.Rules
                     return settlement.SetDeployableHealth(op.Id, op.HealthLeft);
                 case BuildOpKind.Grow:
                     return settlement.SetCropAge(op.Id, op.Top);
+                case BuildOpKind.SetOrder:
+                    return settlement.SetOrder(op.Id, op.Code, op.Order);
+                case BuildOpKind.Vend:
+                    // What changes hands is in the slots, which follow on their own.
+                    return settlement.TryGet(op.Id, out _);
                 default:
                     return false;
             }
@@ -696,6 +756,9 @@ namespace Oxfall.Core.Rules
             foreach (var hurt in settlement.DamagedDeployables) ops.Add(BuildOp.DeployableHealth(hurt.Key, hurt.Value));
             foreach (var crop in settlement.CropAges)
                 if (crop.Value > 0f) ops.Add(BuildOp.Grow(crop.Key, crop.Value));
+            foreach (var machine in settlement.AllOrders)
+                for (int i = 0; i < machine.Value.Length; i++)
+                    if (!machine.Value[i].IsEmpty) ops.Add(BuildOp.SetOrder(machine.Key, i, machine.Value[i]));
             // Locks, with their codes hidden: who put each on, who knows its code, and whether it is locked.
             foreach (var pair in settlement.Locks)
             {

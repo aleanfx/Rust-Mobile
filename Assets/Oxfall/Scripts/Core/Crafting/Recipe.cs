@@ -211,6 +211,9 @@ namespace Oxfall.Core.Crafting
             new Recipe("auto_turret", ItemIds.AutoTurret, 1, 40f,
                 new Ingredient(ItemIds.MetalFragments, 500), new Ingredient(ItemIds.Gears, 1), new Ingredient(ItemIds.MetalPipe, 1),
                 new Ingredient(ItemIds.MetalSpring, 1)).AtWorkbench().Blueprint(250),
+            // A shop: a metal cabinet with a window and a slot, made at the workbench.
+            new Recipe("vending_machine", ItemIds.VendingMachine, 1, 30f,
+                new Ingredient(ItemIds.MetalFragments, 250), new Ingredient(ItemIds.Wood, 200), new Ingredient(ItemIds.Gears, 1)).AtWorkbench(),
             new Recipe("handmade_shells", ItemIds.Shell, 2, 5f,
                 new Ingredient(ItemIds.Gunpowder, 5), new Ingredient(ItemIds.Stone, 10)),
             new Recipe("pistol_bullets", ItemIds.PistolBullet, 4, 5f,

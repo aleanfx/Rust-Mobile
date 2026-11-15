@@ -310,6 +310,24 @@ namespace Oxfall.Game.UI
             Mathf.Min(Segment(p, new Vector2(-0.55f, 0.02f), new Vector2(-0.15f, -0.4f), Stroke),
                 Segment(p, new Vector2(-0.15f, -0.4f), new Vector2(0.6f, 0.45f), Stroke)));
 
+        /// <summary>A vending machine: a cabinet with a window of goods and a coin slot beside it.</summary>
+        public static Sprite Shop => Get("shop", p =>
+        {
+            float body = Mathf.Abs(RoundBox(p, Vector2.zero, new Vector2(0.58f, 0.8f), 0.1f)) - Stroke * 0.7f;
+            float window = Mathf.Abs(RoundBox(p, new Vector2(-0.12f, 0.12f), new Vector2(0.28f, 0.48f), 0.05f)) - Stroke * 0.55f;
+            float shelf = Segment(p, new Vector2(-0.4f, 0.12f), new Vector2(0.16f, 0.12f), 0.05f);
+            float slot = Segment(p, new Vector2(0.36f, 0.3f), new Vector2(0.36f, 0.05f), 0.06f);
+            float tray = Segment(p, new Vector2(-0.34f, -0.58f), new Vector2(0.34f, -0.58f), 0.07f);
+            return Min(body, window, shelf, slot, tray);
+        });
+
+        /// <summary>Two arrows passing each other: a trade.</summary>
+        public static Sprite Swap => Get("swap", p =>
+            Min(Segment(p, new Vector2(-0.6f, 0.28f), new Vector2(0.6f, 0.28f), 0.08f),
+                Segment(p, new Vector2(0.6f, 0.28f), new Vector2(0.32f, 0.56f), 0.08f),
+                Segment(p, new Vector2(0.6f, -0.28f), new Vector2(-0.6f, -0.28f), 0.08f),
+                Segment(p, new Vector2(-0.6f, -0.28f), new Vector2(-0.32f, -0.56f), 0.08f)));
+
         public static Sprite Clock => Get("clock", p =>
             Min(Mathf.Abs(Circle(p, Vector2.zero, 0.66f)) - Stroke * 0.7f,
                 Segment(p, Vector2.zero, new Vector2(0f, 0.42f), 0.08f),

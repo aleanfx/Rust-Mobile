@@ -463,6 +463,15 @@ namespace Oxfall.Core.Net
         /// </summary>
         public static void GiveTestKit(Inventory inventory, int kit = 0)
         {
+            if (kit == 11)
+            {
+                // A vending machine and things to stock it with and pay for them.
+                inventory.Add(ItemIds.VendingMachine, 1);
+                inventory.Add(ItemIds.Wood, 500);
+                inventory.Add(ItemIds.Scrap, 100);
+                inventory.Add(ItemIds.MetalFragments, 200);
+                return;
+            }
             if (kit == 10)
             {
                 // A turret, bullets for it, and a cupboard to stand it under.
