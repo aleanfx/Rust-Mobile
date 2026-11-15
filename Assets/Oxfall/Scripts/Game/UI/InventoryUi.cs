@@ -162,9 +162,9 @@ namespace Oxfall.Game.UI
             bool furnace = d.Kind == DeployableKind.Furnace, bag = Deployables.IsLoot(d.Kind), fire = d.Kind == DeployableKind.Campfire;
             bool recycler = d.Kind == DeployableKind.Recycler;
             bool cupboard = d.Kind == DeployableKind.ToolCupboard;
-            bool trap = d.Kind == DeployableKind.ShotgunTrap;
+            bool trap = d.Kind == DeployableKind.ShotgunTrap, turret = d.Kind == DeployableKind.AutoTurret;
             _lootTitle.text = furnace ? "HORNO" : d.Kind == DeployableKind.SupplyDrop ? "SUMINISTROS" : bag ? "BOLSA" : fire ? "FOGATA"
-                : recycler ? "RECICLADORA" : cupboard ? "ARMARIO" : trap ? "TRAMPA" : "CAJA";
+                : recycler ? "RECICLADORA" : cupboard ? "ARMARIO" : trap ? "TRAMPA" : turret ? "TORRETA" : "CAJA";
             _lootRows = 0;
             _boxPage = 0;
             for (int i = 0; i < _boxSlots.Length; i++) _boxSlots[i].Rect.gameObject.SetActive(i < box.SlotCount);
@@ -380,6 +380,14 @@ namespace Oxfall.Game.UI
                     : "Vacía: carga cartuchos para que dispare";
                 _lootStatus.color = shells > 0 ? UiTheme.Good : UiTheme.Bad;
             }
+            if (_boxKind == DeployableKind.AutoTurret)
+            {
+                int rounds = _boxInventory.Count(ItemIds.RifleBullet) + _boxInventory.Count(ItemIds.PistolBullet);
+                _lootStatus.text = rounds > 0
+                    ? $"Armada · {rounds} balas\nDispara a 30 m a quien no tenga permiso en tu armario, y a lobos y bandidos"
+                    : "Sin balas: cárgala con balas de rifle o de pistola";
+                _lootStatus.color = rounds > 0 ? UiTheme.Good : UiTheme.Bad;
+            }
             if (_boxKind == DeployableKind.Campfire)
             {
                 int raw = _boxInventory.Count(ItemIds.RawMeat), fish = _boxInventory.Count(ItemIds.RawFish);
@@ -396,7 +404,7 @@ namespace Oxfall.Game.UI
             if (any)
                 _lootQuickLabel.text = _pickedInBox ? "AL INVENTARIO" : furnace ? "AL HORNO" : _boxKind == DeployableKind.Campfire ? "AL FUEGO"
                     : _boxKind == DeployableKind.Recycler ? "A RECICLAR" : _boxKind == DeployableKind.ToolCupboard ? "AL ARMARIO"
-                    : _boxKind == DeployableKind.ShotgunTrap ? "A LA TRAMPA" : "A LA CAJA";
+                    : _boxKind == DeployableKind.ShotgunTrap ? "A LA TRAMPA" : _boxKind == DeployableKind.AutoTurret ? "A LA TORRETA" : "A LA CAJA";
             if (any && Paged && !_pickedInBox) _lootQuickLabel.text = "A LA CAJA GRANDE";
         }
 

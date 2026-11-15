@@ -166,6 +166,7 @@ namespace Oxfall.Game.Construction
                     else if (d.Kind == DeployableKind.Campfire) _hud.SetUseButton("FOGATA", Icons.Flame);
                     else if (d.Kind == DeployableKind.Recycler) _hud.SetUseButton("RECICLAR", Icons.Recycle);
                     else if (d.Kind == DeployableKind.ShotgunTrap) _hud.SetUseButton("TRAMPA", Icons.Box);
+                    else if (d.Kind == DeployableKind.AutoTurret) _hud.SetUseButton("TORRETA", Icons.Box);
                     else _hud.SetUseButton("ABRIR", Icons.Box);
                     break;
                 case Target.Cupboard:

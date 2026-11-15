@@ -211,6 +211,13 @@ namespace Oxfall.Server
                         Broadcast(writer.ToArray());
                     }
                     _world.TrapShots.Clear();
+                    // Turrets' shots the same way.
+                    foreach (var shot in _world.TurretShots)
+                    {
+                        Messages.TurretShot(writer, shot.Turret, shot.Kind, shot.Target, shot.X, shot.Y, shot.Z, shot.Damage, shot.Killed);
+                        Broadcast(writer.ToArray());
+                    }
+                    _world.TurretShots.Clear();
                     // A tool or weapon that wore out: its owner is told (the slot itself follows in their update).
                     foreach (var (owner, item) in _world.Broken)
                         if (_sessions.TryGetValue(owner, out var broke))

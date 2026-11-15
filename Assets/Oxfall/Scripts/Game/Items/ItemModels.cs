@@ -204,6 +204,12 @@ namespace Oxfall.Game.Items
                     Materials = new[] { m.Planks, m.GunMetal, m.Metal },
                     IconRotation = Tilt(-16f, 215f),
                 },
+                [ItemIds.AutoTurret] = new ItemModel
+                {
+                    Mesh = MeshFactory.AutoTurret(),
+                    Materials = new[] { m.BarrelPaint[2], m.GunMetal, m.WarnYellow, m.LedRed },
+                    IconRotation = Tilt(-14f, 215f),
+                },
                 [ItemIds.LargeBox] = new ItemModel
                 {
                     Mesh = MeshFactory.LargeBox(),

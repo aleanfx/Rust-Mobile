@@ -207,6 +207,10 @@ namespace Oxfall.Core.Crafting
             // The door guard: a blunderbuss on a box, learned at the workbench.
             new Recipe("shotgun_trap", ItemIds.ShotgunTrap, 1, 20f,
                 new Ingredient(ItemIds.Blunderbuss, 1), new Ingredient(ItemIds.Wood, 100), new Ingredient(ItemIds.MetalFragments, 50)).AtWorkbench().Blueprint(80),
+            // The base's guard: a rifle on a turning head, learned at the workbench.
+            new Recipe("auto_turret", ItemIds.AutoTurret, 1, 40f,
+                new Ingredient(ItemIds.MetalFragments, 500), new Ingredient(ItemIds.Gears, 1), new Ingredient(ItemIds.MetalPipe, 1),
+                new Ingredient(ItemIds.MetalSpring, 1)).AtWorkbench().Blueprint(250),
             new Recipe("handmade_shells", ItemIds.Shell, 2, 5f,
                 new Ingredient(ItemIds.Gunpowder, 5), new Ingredient(ItemIds.Stone, 10)),
             new Recipe("pistol_bullets", ItemIds.PistolBullet, 4, 5f,

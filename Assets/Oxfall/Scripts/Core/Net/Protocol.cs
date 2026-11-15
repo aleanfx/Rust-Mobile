@@ -12,7 +12,7 @@ namespace Oxfall.Core.Net
     public static class Protocol
     {
         /// <summary>Raised whenever a message changes shape; a client of another version is turned away.</summary>
-        public const ushort Version = 27;
+        public const ushort Version = 28;
 
         /// <summary>Snapshots per second the server sends.</summary>
         public const int TickRate = 20;
@@ -199,6 +199,8 @@ namespace Oxfall.Core.Net
         Minicopters = 68,
         /// <summary>Every horse: where, which way, how fast, its wind and food, and its rider.</summary>
         Horses = 69,
+        /// <summary>An automatic turret fired: which, at what (a player or an animal, and its id), where it was, the damage and whether it killed.</summary>
+        TurretShot = 70,
     }
 
     /// <summary>What a player does to their own belongings (inside an <see cref="MessageType.Act"/> message).</summary>
@@ -1276,6 +1278,33 @@ namespace Oxfall.Core.Net
             w.UShort(target);
             w.Byte((byte)Math.Min(255, Math.Max(0, (int)Math.Round(damage))));
             w.Bool(killed);
+        }
+
+        public static void TurretShot(NetWriter w, int turret, Rules.TurretTarget kind, int target, float x, float y, float z, float damage, bool killed)
+        {
+            w.Reset();
+            w.Byte((byte)MessageType.TurretShot);
+            w.Int(turret);
+            w.Byte((byte)kind);
+            w.Int(target);
+            w.Float(x);
+            w.Float(y);
+            w.Float(z);
+            w.Byte((byte)Math.Min(255, Math.Max(0, (int)Math.Round(damage))));
+            w.Bool(killed);
+        }
+
+        public static void ReadTurretShot(NetReader r, out int turret, out Rules.TurretTarget kind, out int target, out float x, out float y, out float z, out int damage, out bool killed)
+        {
+            turret = r.Int();
+            kind = (Rules.TurretTarget)r.Byte();
+            if (kind != Rules.TurretTarget.Player && kind != Rules.TurretTarget.Animal) throw new ProtocolException("Unknown turret target.");
+            target = r.Int();
+            x = r.Float();
+            y = r.Float();
+            z = r.Float();
+            damage = r.Byte();
+            killed = r.Bool();
         }
 
         public static void ReadTrapShot(NetReader r, out int trap, out ushort target, out int damage, out bool killed)

@@ -2085,6 +2085,68 @@ namespace Oxfall.Game.World
             return b.Build("Shotgun trap");
         }
 
+        /// <summary>Where a turret's head turns, over its feet.</summary>
+        public static readonly Vector3 TurretPivot = new Vector3(0f, 0.82f, 0f);
+
+        /// <summary>An automatic turret's stand: a tripod of steel legs and a drum with its battery. Submeshes: paint, steel, warning stripe.</summary>
+        public static Mesh AutoTurretBase()
+        {
+            var b = new FlatMeshBuilder(3) { UvScale = 0.6f };
+            for (int i = 0; i < 3; i++)
+            {
+                float a = i * 120f * Mathf.Deg2Rad;
+                var foot = new Vector3(Mathf.Sin(a) * 0.42f, 0f, Mathf.Cos(a) * 0.42f);
+                b.AddTube(1, foot, new Vector3(Mathf.Sin(a) * 0.1f, 0.55f, Mathf.Cos(a) * 0.1f), 0.03f, 0.025f, 5);
+                b.AddCylinder(1, foot, 0.06f, 0.06f, 0.025f, 6, 0f);
+            }
+            b.AddCylinder(0, new Vector3(0f, 0.5f, 0f), 0.17f, 0.15f, 0.26f, 10, 0f);
+            b.AddCylinder(2, new Vector3(0f, 0.6f, 0f), 0.172f, 0.172f, 0.05f, 10, 0f);
+            b.AddBox(0, new Vector3(-0.1f, 0.42f, -0.24f), new Vector3(0.1f, 0.6f, -0.14f));
+            b.AddCylinder(1, new Vector3(0f, 0.76f, 0f), 0.09f, 0.09f, 0.07f, 8, 0f);
+            return b.Build("TurretBase");
+        }
+
+        /// <summary>An automatic turret's head, turning about its origin (see <see cref="TurretPivot"/>): an armoured box, the rifle barrel out of its front, a sensor eye. Submeshes: paint, steel, warning stripe, lens.</summary>
+        public static Mesh AutoTurretHead()
+        {
+            var b = new FlatMeshBuilder(4) { UvScale = 0.6f };
+            b.AddBox(0, new Vector3(-0.17f, 0f, -0.26f), new Vector3(0.17f, 0.26f, 0.2f));
+            b.AddBox(2, new Vector3(-0.175f, 0.2f, -0.265f), new Vector3(0.175f, 0.235f, 0.205f));
+            // Angled armour plates on the sides.
+            b.AddBox(1, new Vector3(-0.2f, 0.03f, -0.2f), new Vector3(-0.17f, 0.23f, 0.16f));
+            b.AddBox(1, new Vector3(0.17f, 0.03f, -0.2f), new Vector3(0.2f, 0.23f, 0.16f));
+            // The barrel and its muzzle brake.
+            b.AddTube(1, new Vector3(0.05f, 0.12f, 0.2f), new Vector3(0.05f, 0.12f, 0.72f), 0.025f, 0.022f, 8, 1);
+            b.AddTube(1, new Vector3(0.05f, 0.12f, 0.68f), new Vector3(0.05f, 0.12f, 0.76f), 0.035f, 0.035f, 8, 1);
+            // A magazine under it, a sight on top, the sensor eye beside the barrel.
+            b.AddBox(1, new Vector3(-0.02f, -0.12f, -0.02f), new Vector3(0.1f, 0.0f, 0.1f));
+            b.AddBox(1, new Vector3(-0.04f, 0.26f, -0.08f), new Vector3(0.04f, 0.32f, 0.06f));
+            b.AddCylinder(3, new Vector3(-0.08f, 0.13f, 0.2f), 0.045f, 0.045f, 0.02f, 10, 0f, Quaternion.Euler(90f, 0f, 0f));
+            return b.Build("TurretHead");
+        }
+
+        /// <summary>A whole turret (stand and head, facing +Z), for its icon and the ghost when placing it.</summary>
+        public static Mesh AutoTurret()
+        {
+            var stand = AutoTurretBase();
+            var head = AutoTurretHead();
+            var merged = new Mesh { name = "AutoTurret" };
+            var parts = new Mesh[4];
+            for (int i = 0; i < 4; i++)
+            {
+                var list = new List<CombineInstance>();
+                if (i < stand.subMeshCount) list.Add(new CombineInstance { mesh = stand, subMeshIndex = i, transform = Matrix4x4.identity });
+                if (i < head.subMeshCount) list.Add(new CombineInstance { mesh = head, subMeshIndex = i, transform = Matrix4x4.Translate(TurretPivot) });
+                parts[i] = new Mesh();
+                parts[i].CombineMeshes(list.ToArray(), true, true);
+            }
+            var all = new CombineInstance[4];
+            for (int i = 0; i < 4; i++) all[i] = new CombineInstance { mesh = parts[i], subMeshIndex = 0, transform = Matrix4x4.identity };
+            merged.CombineMeshes(all, false, false);
+            merged.RecalculateBounds();
+            return merged;
+        }
+
         /// <summary>
         /// A high wall of logs: eleven sharpened trunks side by side along X (4 m), standing from 1.5 m
         /// under its feet to 5 m over them, bound by two plank rails on its inner (-Z) face with

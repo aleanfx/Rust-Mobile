@@ -684,6 +684,7 @@ namespace Oxfall.Game
             _net.PlayerJoined += name => { if (Time.time - _onlineSince > 3f) _chat.Add(null, $"{name} ha llegado a la isla"); };
             _net.PlayerLeft += name => _chat.Add(null, $"{name} se ha ido");
             _net.TrapFired += OnTrapFired;
+            _net.TurretFired += OnTurretFired;
             _net.Bitten += (target, kind, damage, killed) =>
             {
                 Debug.Log($"[Oxfall] Bitten: {_net.NameOf(target) ?? "someone"} by {kind}, -{damage}{(killed ? ", killed" : "")}");
@@ -1176,6 +1177,70 @@ namespace Oxfall.Game
             _audio.Play(SoundCue.Hurt);
             if (killed) _killer = "una trampa de escopeta";
             else _hud.ShowToast($"¡Una trampa de escopeta!  −{damage}");
+        }
+
+        /// <summary>A turret fired (told by the server, or alone by this game): its head swings on, a flash, a bang, a tracer; for the one hit, the hurt.</summary>
+        private void OnTurretFired(int turret, TurretTarget kind, int target, Vector3 at, int damage, bool killed)
+        {
+            Debug.Log($"[Oxfall] Turret {turret} fired at {kind} {target}, -{damage}{(killed ? ", killed" : "")}");
+            var view = _deployables.Turret(turret);
+            if (view != null)
+            {
+                // Where this phone shows the target.
+                if (kind == TurretTarget.Player && target == _net.PlayerId) at = _player.transform.position + Vector3.up * 1.2f;
+                view.Aim(at);
+                view.Muzzle(out var muzzle, out var forward);
+                var to = (at - muzzle).normalized;
+                _explosions.MuzzleFlash(muzzle, to, false);
+                float yaw = Mathf.Atan2(to.x, to.z) * Mathf.Rad2Deg, pitch = Mathf.Asin(Mathf.Clamp(to.y, -1f, 1f)) * Mathf.Rad2Deg;
+                Gatherer.Spray(Firearms.Rifle, muzzle, muzzle, yaw, pitch, (ushort)(turret * 31 + (int)(Time.time * 10f)), _explosions, null);
+                GameAudio.PlayAt(_audio.Bank.RifleShot, muzzle, 0.8f, 6f, 160f, 0.05f);
+            }
+            if (kind != TurretTarget.Player || target != _net.PlayerId || !_actions.Online) return;
+            _hud.ShowHurt(damage);
+            _audio.Play(SoundCue.Hurt);
+            if (killed) _killer = "una torreta automática";
+            else _hud.ShowToast($"¡Una torreta!  −{damage}");
+        }
+
+        private readonly System.Collections.Generic.Dictionary<int, float> _turretReady = new System.Collections.Generic.Dictionary<int, float>();
+        private readonly System.Collections.Generic.List<Deployable> _turretList = new System.Collections.Generic.List<Deployable>();
+
+        /// <summary>Alone: turrets fire at wolves, bandits and angry boars in front of them (online the server does it all).</summary>
+        private void TickTurretsAlone()
+        {
+            if (_actions.Online || _fauna == null || _settlement == null) return;
+            _turretList.Clear();
+            foreach (var d in _settlement.Deployables)
+                if (d.Kind == DeployableKind.AutoTurret) _turretList.Add(d);
+            var ground = _world.Shape.Ground;
+            foreach (var t in _turretList)
+            {
+                var ammo = _settlement.Container(t.Id);
+                if (Turrets.NextRound(ammo) == null) continue;
+                bool Sees(float x, float y, float z)
+                {
+                    float ex = t.X, ey = t.Y + Turrets.MuzzleHeight, ez = t.Z;
+                    for (int i = 1; i < 10; i++)
+                    {
+                        float k = i / 10f;
+                        if (ground.Height(ex + (x - ex) * k, ez + (z - ez) * k) > ey + (y - ey) * k) return false;
+                    }
+                    return _fauna.WallBetween == null || !_fauna.WallBetween(ex, ey, ez, x, y, z);
+                }
+                var animal = Turrets.NearestAnimal(t, _fauna.All, Sees, out _);
+                if (animal == null)
+                {
+                    Turrets.Idle(t, _turretReady, Time.time);
+                    continue;
+                }
+                var view = _deployables.Turret(t.Id);
+                var at = new Vector3(animal.X, animal.Y + 0.5f, animal.Z);
+                view?.Aim(at);
+                if (!Turrets.TryFire(t, ammo, Time.time, _turretReady, out float damage)) continue;
+                bool killed = _fauna.Hit(animal.Id, damage, 0, t.X, t.Z);
+                OnTurretFired(t.Id, TurretTarget.Animal, animal.Id, at, Mathf.RoundToInt(damage), killed);
+            }
         }
 
         private void OnBitten(AnimalKind kind, int damage, bool killed)
@@ -1705,6 +1770,11 @@ namespace Oxfall.Game
                 case "face-compound": FaceCompound(); break;
                 case "over-compound": OverCompound(); break;
                 case "open-trap": OpenBox(Nearest(DeployableKind.ShotgunTrap)); break;
+                case "load-turret":
+                    // Test: puts every bullet carried into the open turret.
+                    for (int i = 0; i < _inventory.CarrySlots; i++)
+                        if (Turrets.Takes(_inventory[i].ItemId)) _actions.Put(i, -1);
+                    break;
                 case "load-trap":
                     // Test: puts every shell carried into the open trap.
                     for (int i = 0; i < _inventory.CarrySlots; i++)
@@ -1875,6 +1945,22 @@ namespace Oxfall.Game
                 case "go-motorboat": GoToBoat(BoatKind.Motorboat); break;
                 case "go-copter": GoToCopter(); break;
                 case "go-horse": GoToHorse(); break;
+                case "give-turret" when _actions.Online:
+                    _net.SendAct(ActKind.DevGive, 10);
+                    break;
+                case "give-turret":
+                    ServerWorld.GiveTestKit(_inventory, 10);
+                    break;
+                case "turret": HoldItem(ItemIds.AutoTurret); break;
+                case "open-turret": OpenBox(Nearest(DeployableKind.AutoTurret)); break;
+                case "turrets":
+                    foreach (var d in _settlement.Deployables)
+                        if (d.Kind == DeployableKind.AutoTurret)
+                        {
+                            var ammo = _settlement.Container(d.Id);
+                            Debug.Log($"[Oxfall] Turret {d.Id} at ({d.X:0.0}, {d.Y:0.0}, {d.Z:0.0}) yaw={d.Yaw:0} rifle={ammo.Count(ItemIds.RifleBullet)} pistol={ammo.Count(ItemIds.PistolBullet)}");
+                        }
+                    break;
                 case "horses":
                     foreach (var h in _horses.All)
                         Debug.Log($"[Oxfall] Horse {h.Id} at ({h.X:0.0}, {h.Y:0.0}, {h.Z:0.0}) yaw={h.Yaw:0} speed={h.Speed:0.0} stamina={h.Stamina:0} food={h.Food:0} driver={h.Driver}");
@@ -2941,6 +3027,7 @@ namespace Oxfall.Game
             TickBoats(Time.deltaTime);
             TickCopters(Time.deltaTime);
             TickHorses(Time.deltaTime);
+            TickTurretsAlone();
             // Alone, the weather from the seed and the time (online the server says it).
             if (_weather != null && !_actions.Online && (_weatherCheck -= Time.deltaTime) <= 0f)
             {

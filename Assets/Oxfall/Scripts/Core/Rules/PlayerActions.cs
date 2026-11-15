@@ -89,6 +89,8 @@ namespace Oxfall.Core.Rules
         NeedsSoil,
         /// <summary>The crop is still growing: nothing to harvest yet.</summary>
         NotRipe,
+        /// <summary>A turret takes only rifle and pistol bullets.</summary>
+        NotBullets,
     }
 
     /// <summary>
@@ -378,6 +380,7 @@ namespace Oxfall.Core.Rules
             if (bag.Kind == DeployableKind.Recycler && !settlement.Recycling.Takes(s.Inventory[from].ItemId)) return ActionResult.NothingToRecycle;
             if (bag.Kind == DeployableKind.ToolCupboard && !Upkeep.Takes(s.Inventory[from].ItemId)) return ActionResult.NotUpkeep;
             if (bag.Kind == DeployableKind.ShotgunTrap && !GunTraps.Takes(s.Inventory[from].ItemId)) return ActionResult.NotShells;
+            if (bag.Kind == DeployableKind.AutoTurret && !Turrets.Takes(s.Inventory[from].ItemId)) return ActionResult.NotBullets;
             bool moved = to == -1 ? Inventory.TransferAll(s.Inventory, from, box) : Inventory.Transfer(s.Inventory, from, box, to);
             return moved ? ActionResult.Ok : ActionResult.NoSpace;
         }

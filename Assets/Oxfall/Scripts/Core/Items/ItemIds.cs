@@ -86,5 +86,6 @@ namespace Oxfall.Core.Items
         public const string LowGradeFuel = "low_grade_fuel";
         public const string HempSeed = "hemp_seed";
         public const string BerrySeed = "berry_seed";
+        public const string AutoTurret = "auto_turret";
     }
 }

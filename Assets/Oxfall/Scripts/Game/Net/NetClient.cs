@@ -113,6 +113,9 @@ namespace Oxfall.Game.Net
         /// <summary>A shotgun trap fired: which, at whom (player id), what it took off, and whether it killed them.</summary>
         public event Action<int, ushort, int, bool> TrapFired;
 
+        /// <summary>A turret fired: which, at what (player or animal, and its id), where, the damage and whether it killed.</summary>
+        public event Action<int, TurretTarget, int, Vector3, int, bool> TurretFired;
+
         private readonly List<AnimalSnap> _animals = new List<AnimalSnap>();
         private readonly List<BoatSnap> _boats = new List<BoatSnap>();
 
@@ -630,6 +633,13 @@ namespace Oxfall.Game.Net
                     Messages.ReadTrapShot(reader, out int trap, out ushort target, out int damage, out bool killed);
                     if (_players.TryGetValue(target, out var victim)) victim.Flinch();
                     TrapFired?.Invoke(trap, target, damage, killed);
+                    break;
+                }
+                case MessageType.TurretShot:
+                {
+                    Messages.ReadTurretShot(reader, out int turret, out var kind, out int target, out float tx, out float ty, out float tz, out int damage, out bool killed);
+                    if (kind == TurretTarget.Player && _players.TryGetValue((ushort)target, out var victim)) victim.Flinch();
+                    TurretFired?.Invoke(turret, kind, target, new Vector3(tx, ty, tz), damage, killed);
                     break;
                 }
                 case MessageType.Weather:

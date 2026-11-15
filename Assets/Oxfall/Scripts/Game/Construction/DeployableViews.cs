@@ -31,6 +31,41 @@ namespace Oxfall.Game.Construction
         }
     }
 
+    /// <summary>An automatic turret's head: it sweeps slowly while it has nothing to shoot at, and snaps round onto a target.</summary>
+    public sealed class TurretView : MonoBehaviour
+    {
+        public Transform Head;
+        private float _yaw, _pitch, _aimYaw, _aimPitch, _aimedAt = -10f;
+
+        /// <summary>Turns the head to a point in the world (it holds that aim a while).</summary>
+        public void Aim(Vector3 at)
+        {
+            var local = transform.InverseTransformPoint(at) - MeshFactory.TurretPivot;
+            _aimYaw = Mathf.Atan2(local.x, local.z) * Mathf.Rad2Deg;
+            _aimPitch = -Mathf.Atan2(local.y, new Vector2(local.x, local.z).magnitude) * Mathf.Rad2Deg;
+            _aimedAt = Time.time;
+        }
+
+        /// <summary>Where the barrel's end is now, and the way it points.</summary>
+        public void Muzzle(out Vector3 at, out Vector3 forward)
+        {
+            forward = Head.forward;
+            at = Head.TransformPoint(new Vector3(0.05f, 0.12f, 0.78f));
+        }
+
+        private void Update()
+        {
+            if (Head == null) return;
+            bool aiming = Time.time - _aimedAt < 2.5f;
+            float wantYaw = aiming ? _aimYaw : Mathf.Sin(Time.time * 0.45f + transform.position.x) * 60f;
+            float wantPitch = aiming ? _aimPitch : 0f;
+            float rate = aiming ? 540f : 40f;
+            _yaw = Mathf.MoveTowardsAngle(_yaw, wantYaw, rate * Time.deltaTime);
+            _pitch = Mathf.MoveTowardsAngle(_pitch, Mathf.Clamp(wantPitch, -35f, 45f), rate * Time.deltaTime);
+            Head.localRotation = Quaternion.Euler(_pitch, _yaw, 0f);
+        }
+    }
+
     /// <summary>
     /// Draws what is set down in the settlement and nothing else: it listens to the Core
     /// <see cref="Settlement"/> and adds, lights and removes objects to match. A campfire always
@@ -53,6 +88,7 @@ namespace Oxfall.Game.Construction
         public event Action<GameObject> MachineStarted;
 
         private readonly Mesh _hempPlant, _berryPlant;
+        private readonly Mesh _turretBase = MeshFactory.AutoTurretBase(), _turretHead = MeshFactory.AutoTurretHead();
         private readonly ItemModel _soil;
         private readonly Material[] _hempMaterials, _berryMaterials, _greenBerryMaterials, _witheredMaterials;
         private readonly Dictionary<int, Transform> _plants = new Dictionary<int, Transform>();
@@ -131,6 +167,11 @@ namespace Oxfall.Game.Construction
                 ShowCrop(d);
                 return;
             }
+            if (d.Kind == DeployableKind.AutoTurret)
+            {
+                ShowTurret(d, model);
+                return;
+            }
             var go = new GameObject(d.Kind.ToString());
             go.transform.SetParent(_root, false);
             go.transform.SetPositionAndRotation(new Vector3(d.X, d.Y, d.Z), Quaternion.Euler(0f, d.Yaw, 0f));
@@ -172,6 +213,35 @@ namespace Oxfall.Game.Construction
                 Changed(d.Id);
             }
         }
+
+        /// <summary>An automatic turret: its stand, and a head on it that turns.</summary>
+        private void ShowTurret(Deployable d, ItemModel model)
+        {
+            var go = new GameObject(d.Kind.ToString());
+            go.transform.SetParent(_root, false);
+            go.transform.SetPositionAndRotation(new Vector3(d.X, d.Y, d.Z), Quaternion.Euler(0f, d.Yaw, 0f));
+            go.AddComponent<MeshFilter>().sharedMesh = _turretBase;
+            go.AddComponent<MeshRenderer>().sharedMaterials = new[] { model.Materials[0], model.Materials[1], model.Materials[2] };
+            var head = new GameObject("Head");
+            head.transform.SetParent(go.transform, false);
+            head.transform.localPosition = MeshFactory.TurretPivot;
+            head.AddComponent<MeshFilter>().sharedMesh = _turretHead;
+            head.AddComponent<MeshRenderer>().sharedMaterials = model.Materials;
+            var collider = go.AddComponent<BoxCollider>();
+            collider.center = new Vector3(0f, 0.55f, 0f);
+            collider.size = new Vector3(0.7f, 1.1f, 0.7f);
+            var tag = go.AddComponent<DeployableTag>();
+            tag.Id = d.Id;
+            tag.Kind = d.Kind;
+            go.AddComponent<TurretView>().Head = head.transform;
+            _views.Add(d.Id, go);
+            float max = Deployables.MaxHealth(d.Kind);
+            if (_settlement.DeployableHealth(d.Id) < max)
+                BuildingViews.Scorch(go.GetComponent<MeshRenderer>(), _settlement.DeployableHealth(d.Id) / max);
+        }
+
+        /// <summary>A turret's head and barrel, to aim it and fire from it (null: no such turret on screen).</summary>
+        public TurretView Turret(int id) => _views.TryGetValue(id, out var go) ? go.GetComponent<TurretView>() : null;
 
         /// <summary>A sown crop: a mound of earth with the plant on it, as big as it has grown.</summary>
         private void ShowCrop(Deployable d)

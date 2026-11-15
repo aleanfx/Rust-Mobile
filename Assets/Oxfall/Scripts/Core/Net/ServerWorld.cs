@@ -463,6 +463,15 @@ namespace Oxfall.Core.Net
         /// </summary>
         public static void GiveTestKit(Inventory inventory, int kit = 0)
         {
+            if (kit == 10)
+            {
+                // A turret, bullets for it, and a cupboard to stand it under.
+                inventory.Add(ItemIds.AutoTurret, 1);
+                inventory.Add(ItemIds.RifleBullet, 60);
+                inventory.Add(ItemIds.PistolBullet, 40);
+                inventory.Add(ItemIds.ToolCupboard, 1);
+                return;
+            }
             if (kit == 9)
             {
                 // Seeds to sow a field.
@@ -610,6 +619,7 @@ namespace Oxfall.Core.Net
             TickMinicopters(deltaSeconds);
             TickHorses(deltaSeconds);
             TickTraps();
+            TickTurrets();
             TickAirdrops();
             Environment.Weather.At(Seed, Time, out float rain, out _);
             float daylight = Day.Daylight;

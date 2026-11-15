@@ -125,6 +125,7 @@ namespace Oxfall.Game.Construction
                 case DeployableKind.ShotgunTrap: return "Trampa colocada: cárgala con cartuchos; dispara a quien no tenga permiso en tu armario";
                 case DeployableKind.WoodWall:
                 case DeployableKind.StoneWall: return "Muro levantado: rodea tu casa para que nadie entre sin explosivos o escalera";
+                case DeployableKind.AutoTurret: return "Torreta colocada: cárgala con balas. Vigila lo que tiene delante, hasta 30 m";
                 case DeployableKind.HempPlant: return "Cáñamo sembrado: crece solo en unos minutos (más rápido con lluvia)";
                 case DeployableKind.BerryPlant: return "Moras sembradas: vuelve cuando estén maduras y cosecha";
                 case DeployableKind.Ladder: return "Escalera puesta: avanza para subir, retrocede para bajar, salta para soltarte";
@@ -163,7 +164,7 @@ namespace Oxfall.Game.Construction
             var ahead = _player.transform.position + forward * reach;
             float lookYaw = _player.transform.eulerAngles.y;
             // A trap points where the player looks (out of the base); the rest face back towards them.
-            _yaw = Kind == DeployableKind.Campfire || Kind == DeployableKind.SleepingBag || Kind == DeployableKind.ShotgunTrap ? lookYaw : lookYaw + 180f;
+            _yaw = Kind == DeployableKind.Campfire || Kind == DeployableKind.SleepingBag || Kind == DeployableKind.ShotgunTrap || Kind == DeployableKind.AutoTurret ? lookYaw : lookYaw + 180f;
 
             _valid = true;
             _whyNot = "";

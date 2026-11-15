@@ -511,6 +511,8 @@ namespace Oxfall.Game.Net
                 return ActionResult.NotUpkeep;
             if (box.Kind == DeployableKind.ShotgunTrap && !GunTraps.Takes(Inventory[from].ItemId))
                 return ActionResult.NotShells;
+            if (box.Kind == DeployableKind.AutoTurret && !Turrets.Takes(Inventory[from].ItemId))
+                return ActionResult.NotBullets;
             _net.SendAct(ActKind.Put, from, to);
             return ActionResult.Ok;
         }
@@ -558,6 +560,7 @@ namespace Oxfall.Game.Net
                 case ActionResult.OnBuilding: return "Choca con un edificio";
                 case ActionResult.NeedsSoil: return "Las semillas van en tierra, no sobre un piso";
                 case ActionResult.NotRipe: return "Aún no está lista para cosechar";
+                case ActionResult.NotBullets: return "La torreta solo carga balas de rifle o de pistola";
                 case ActionResult.NeedsDoorway: return "Apunta a un marco de puerta vacío";
                 case ActionResult.NoPiece: return "Ya no está ahí";
                 case ActionResult.MaxTier: return "Ya está al nivel máximo";
