@@ -256,9 +256,11 @@ namespace Oxfall.Game.Construction
                 _point = new Vector3(ahead.x, _player.transform.position.y, ahead.z);
                 _yaw = _player.transform.eulerAngles.y + 180f;
                 Fail("Apunta a un muro");
-                _ghost.transform.SetPositionAndRotation(_point, Quaternion.Euler(0f, _yaw, 0f));
+                // A ladder this tall standing in the open would fill the screen: no ghost until a wall is aimed at.
+                _ghost.SetActive(false);
                 return;
             }
+            _ghost.SetActive(true);
             var normal = new Vector3(hit.normal.x, 0f, hit.normal.z).normalized;
             _yaw = Mathf.Atan2(normal.x, normal.z) * Mathf.Rad2Deg;
             var foot = hit.point + normal * HighWalls.LadderGap;
