@@ -87,6 +87,13 @@ namespace Oxfall.Game.Player
         /// <summary>Where gunfire shows: muzzle flashes, bullets, what they strike, the kick.</summary>
         public Explosions Effects { get; set; }
 
+        /// <summary>The X on the tree (the glint in the rock) being worked; set up by the game.</summary>
+        public WeakSpot Spot { get; set; }
+
+        /// <summary>Whether a hit on this collider at this point is in a player's head.</summary>
+        public static bool IsHead(Collider collider, Vector3 point) =>
+            collider != null && collider.GetComponent<Net.PlayerTag>() != null && Combat.IsHead(point.y - collider.transform.position.y);
+
         /// <summary>A gun fired from this hand: which kind (for the HUD and tests).</summary>
         public event Action<ToolKind> Fired;
 
@@ -94,6 +101,7 @@ namespace Oxfall.Game.Player
         private float _gunKick = 10f;
         private bool _wasReloading;
         private readonly Dictionary<(ArrowTarget Kind, int Id), int> _pelletHits = new Dictionary<(ArrowTarget, int), int>();
+        private readonly Dictionary<(ArrowTarget Kind, int Id), int> _headHits = new Dictionary<(ArrowTarget, int), int>();
 
         public void Init(PlayerInput input, Inventory inventory, Hotbar hotbar, ItemCatalog catalog, Transform head,
             IReadOnlyDictionary<string, ItemModel> models, Material flameMaterial, Vitals vitals, IslandShape shape)
@@ -186,6 +194,7 @@ namespace Oxfall.Game.Player
                 AnimateHand(dt);
                 return;
             }
+            Spot?.Tick(_head.position, dt);
             if (_input.Attack && _cooldown <= 0f && CanSwing)
             {
                 _cooldown = Mathf.Max(SwingSeconds, Combat.SwingSeconds(_hotbar.HeldTool));
@@ -234,7 +243,7 @@ namespace Oxfall.Game.Player
         /// Online, a blow that lands on another player goes to the server (their id, the tool in
         /// hand), which judges it. Null when playing alone.
         /// </summary>
-        public Action<ushort, ToolKind> StrikePlayer;
+        public Action<ushort, ToolKind, bool> StrikePlayer;
 
         /// <summary>A blow that lands on an animal, living or a carcass (its id, the tool in hand).</summary>
         public Action<int, ToolKind> StrikeAnimal;
@@ -256,7 +265,12 @@ namespace Oxfall.Game.Player
             var player = hit.collider.GetComponent<Net.PlayerTag>();
             if (player != null)
             {
-                if (StrikePlayer != null && Combat.CanHurt(tool)) StrikePlayer(player.Id, tool);
+                if (StrikePlayer != null && Combat.CanHurt(tool))
+                {
+                    bool head = IsHead(hit.collider, hit.point);
+                    if (head) Sound?.Invoke(SoundCue.Headshot);
+                    StrikePlayer(player.Id, tool, head);
+                }
                 return;
             }
             var sleeper = hit.collider.GetComponent<Net.SleeperTag>();
@@ -275,7 +289,7 @@ namespace Oxfall.Game.Player
             // Aiming down at a pond, the cast can reach the pond's bed: water is checked then too.
             var node = hit.collider.GetComponentInParent<ResourceNodeView>();
             if (node == null) TryDrink();
-            else Gather(node);
+            else Gather(node, Spot != null && Spot.IsOn(node, ray));
         }
 
         /// <summary>Eats one of what is in hand.</summary>
@@ -342,16 +356,37 @@ namespace Oxfall.Game.Player
         /// Online, the server decides what a hit gives: this sends the swing (node id, tool) instead of
         /// taking from the node here. Null when playing alone.
         /// </summary>
-        public Action<int, ToolKind> RemoteHit;
+        public Action<int, ToolKind, bool> RemoteHit;
 
         /// <summary>Opens a crate in sight (the use button): taken like a hit, whatever is in hand.</summary>
         public void Open(ResourceNodeView node)
         {
             if (node == null || node.Node.IsDepleted) return;
-            Gather(node);
+            Gather(node, false);
         }
 
-        private void Gather(ResourceNodeView node)
+        /// <summary>A blow aimed straight at the weak spot showing on a node, as a test would land it. False if none shows.</summary>
+        public bool StrikeWeakSpot()
+        {
+            var node = Spot?.Node;
+            var at = Spot?.Point;
+            if (node == null || !at.HasValue || !CanSwing) return false;
+            _swing = 0f;
+            Sound?.Invoke(SoundCue.Swing);
+            Gather(node, true);
+            return true;
+        }
+
+        /// <summary>Called when the weak spot was found: a crack, chips flying, and a harder shudder.</summary>
+        private void FoundWeakSpot(ResourceNodeView node)
+        {
+            Sound?.Invoke(SoundCue.WeakSpot);
+            var at = Spot?.Point;
+            if (Effects != null && at.HasValue) Effects.Impact(at.Value, (_head.position - at.Value).normalized, false);
+            Debug.Log($"[Oxfall] Weak spot on {node.Node.Type} {node.Node.Id}");
+        }
+
+        private void Gather(ResourceNodeView node, bool weak)
         {
             if (RemoteHit != null)
             {
@@ -370,14 +405,19 @@ namespace Oxfall.Game.Player
                     return;
                 }
                 PlayHitSound(node.Node.Type);
+                if (weak) FoundWeakSpot(node);
                 node.Shake();
-                RemoteHit(node.Node.Id, tool);
+                RemoteHit(node.Node.Id, tool, weak);
+                Spot?.AfterBlow(node, _head.position, weak);
                 return;
             }
 
             bool works = GatherTable.PerHit(node.Node.Type, _hotbar.HeldTool) > 0;
-            var yields = node.Hit(_hotbar.HeldTool);
+            weak &= works;
+            var yields = node.Hit(_hotbar.HeldTool, weak);
             if (yields.Count > 0 || !node.Node.IsDepleted) PlayHitSound(node.Node.Type);
+            if (weak && yields.Count > 0) FoundWeakSpot(node);
+            if (works) Spot?.AfterBlow(node, _head.position, weak);
             if (yields.Count == 0)
             {
                 // Bare hands or a torch on a tree or a rock: say once in a while what is missing. (A barrel
@@ -469,7 +509,9 @@ namespace Oxfall.Game.Player
             var player = collider != null ? collider.GetComponent<Net.PlayerTag>() : null;
             var animal = collider != null ? collider.GetComponent<AnimalTag>() : null;
             var sleeper = collider != null ? collider.GetComponent<Net.SleeperTag>() : null;
-            if (player != null) Actions.ArrowHit(ArrowTarget.Player, player.Id);
+            bool head = player != null && IsHead(collider, point);
+            if (head) Sound?.Invoke(SoundCue.Headshot);
+            if (player != null) Actions.ArrowHit(ArrowTarget.Player, player.Id, head);
             else if (animal != null) Actions.ArrowHit(ArrowTarget.Animal, animal.Id);
             else if (sleeper != null) Actions.ArrowHit(ArrowTarget.Sleeper, sleeper.Owner);
             else Actions.ArrowHit(ArrowTarget.None, 0);
@@ -584,8 +626,11 @@ namespace Oxfall.Game.Player
                 Effects.Punch(big ? 3.5f : 2f);
             }
             _pelletHits.Clear();
-            Spray(gun, origin, muzzle, yaw, pitch, seed, Effects, _pelletHits);
-            foreach (var pair in _pelletHits) Actions.GunHit(pair.Key.Kind, pair.Key.Id, pair.Value);
+            _headHits.Clear();
+            Spray(gun, origin, muzzle, yaw, pitch, seed, Effects, _pelletHits, _headHits);
+            if (_headHits.Count > 0) Sound?.Invoke(SoundCue.Headshot);
+            foreach (var pair in _pelletHits)
+                Actions.GunHit(pair.Key.Kind, pair.Key.Id, pair.Value, _headHits.TryGetValue(pair.Key, out int head) ? head : 0);
             Fired?.Invoke(gun.Tool);
         }
 
@@ -594,7 +639,7 @@ namespace Oxfall.Game.Player
         /// spray: where each lands is drawn, and (if <paramref name="hits"/> is given) who it struck is counted.
         /// </summary>
         public static void Spray(GunSpec gun, Vector3 origin, Vector3 muzzle, float yaw, float pitch, ushort seed, Explosions effects,
-            Dictionary<(ArrowTarget Kind, int Id), int> hits)
+            Dictionary<(ArrowTarget Kind, int Id), int> hits, Dictionary<(ArrowTarget Kind, int Id), int> headHits = null)
         {
             for (int i = 0; i < gun.Pellets; i++)
             {
@@ -614,6 +659,11 @@ namespace Oxfall.Game.Player
                             : animal != null ? (ArrowTarget.Animal, animal.Id) : (ArrowTarget.Sleeper, sleeper.Owner);
                         hits.TryGetValue(key, out int n);
                         hits[key] = n + 1;
+                        if (headHits != null && player != null && IsHead(hit.collider, hit.point))
+                        {
+                            headHits.TryGetValue(key, out int h);
+                            headHits[key] = h + 1;
+                        }
                     }
                     effects?.Impact(hit.point, hit.normal, flesh);
                 }

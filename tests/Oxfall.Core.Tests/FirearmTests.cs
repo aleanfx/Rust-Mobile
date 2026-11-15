@@ -181,11 +181,11 @@ namespace Oxfall.Core.Tests
             Assert.AreEqual(ToolKind.Shotgun, tool);
             Assert.AreEqual((1.5f, 2.5f, -3.5f, 270f, -12.5f, (ushort)65000), (x, y, z, yaw, pitch, seed));
 
-            Messages.GunHit(w, ArrowTarget.Sleeper, 77, 5);
+            Messages.GunHit(w, ArrowTarget.Sleeper, 77, 5, 2);
             r = new NetReader(w.ToArray());
             Assert.AreEqual(MessageType.GunHit, (MessageType)r.Byte());
-            Messages.ReadGunHit(r, out var kind, out int target, out int pellets);
-            Assert.AreEqual((ArrowTarget.Sleeper, 77, 5), (kind, target, pellets));
+            Messages.ReadGunHit(r, out var kind, out int target, out int pellets, out int head);
+            Assert.AreEqual((ArrowTarget.Sleeper, 77, 5, 2), (kind, target, pellets, head));
 
             Messages.Gunshot(w, 9, ToolKind.Revolver, 1f, 2f, 3f, 45f, 5f, 12);
             r = new NetReader(w.ToArray());

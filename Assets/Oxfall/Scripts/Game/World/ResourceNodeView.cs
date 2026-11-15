@@ -33,10 +33,10 @@ namespace Oxfall.Game.World
         private static readonly System.Random Loot = new System.Random();
 
         /// <summary>Hits the node with a tool and returns what it gave (possibly nothing).</summary>
-        public IReadOnlyList<Yield> Hit(ToolKind tool)
+        public IReadOnlyList<Yield> Hit(ToolKind tool, bool weakSpot = false)
         {
             int before = Node.Remaining;
-            var yields = Node.Hit(tool, Loot);
+            var yields = Node.Hit(tool, Loot, weakSpot);
             if (yields.Count > 0 || Node.Remaining != before)
             {
                 _shake = ShakeSeconds;

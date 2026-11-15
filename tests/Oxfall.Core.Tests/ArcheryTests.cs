@@ -140,11 +140,11 @@ namespace Oxfall.Core.Tests
             Messages.ReadShoot(r, out float x, out float y, out float z, out float yaw, out float pitch);
             Assert.AreEqual((1f, 2f, 3f, 45f, -10f), (x, y, z, yaw, pitch));
 
-            Messages.ArrowHit(w, ArrowTarget.Animal, 123456);
+            Messages.ArrowHit(w, ArrowTarget.Animal, 123456, true);
             r = new NetReader(w.Buffer, 0, w.Length);
             Assert.AreEqual(MessageType.ArrowHit, (MessageType)r.Byte());
-            Messages.ReadArrowHit(r, out var kind, out int target);
-            Assert.AreEqual((ArrowTarget.Animal, 123456), (kind, target));
+            Messages.ReadArrowHit(r, out var kind, out int target, out bool head);
+            Assert.AreEqual((ArrowTarget.Animal, 123456, true), (kind, target, head));
 
             Messages.Arrow(w, 7, 1f, 2f, 3f, 90f, 5f);
             r = new NetReader(w.Buffer, 0, w.Length);

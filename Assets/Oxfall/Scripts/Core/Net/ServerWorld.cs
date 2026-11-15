@@ -301,7 +301,7 @@ namespace Oxfall.Core.Net
         /// it gave nothing or was not allowed: too far, too fast, dead, no such node, or a tool they do
         /// not have). <paramref name="lost"/> is how much did not fit.
         /// </summary>
-        public IReadOnlyList<(string ItemId, int Amount)> Hit(ushort playerId, int nodeId, ToolKind tool, float now, out int lost)
+        public IReadOnlyList<(string ItemId, int Amount)> Hit(ushort playerId, int nodeId, ToolKind tool, float now, out int lost, bool weakSpot = false)
         {
             _yields.Clear();
             lost = 0;
@@ -314,7 +314,7 @@ namespace Oxfall.Core.Net
             if (!Enum.IsDefined(typeof(ToolKind), tool) || !record.Survivor.HasTool(tool)) return _yields;
 
             player.LastHitTime = now;
-            foreach (var y in node.State.Hit(tool, _random))
+            foreach (var y in node.State.Hit(tool, _random, weakSpot && GatherTable.HasWeakSpot(node.State.Type)))
             {
                 _yields.Add((y.ItemId, y.Amount));
                 lost += record.Survivor.Inventory.Add(y.ItemId, y.Amount);
@@ -329,7 +329,7 @@ namespace Oxfall.Core.Net
         /// really have. The damage is taken off the target, who may die of it (and drop their bag).
         /// False when the blow does not count.
         /// </summary>
-        public bool Strike(ushort attackerId, ushort targetId, ToolKind tool, float now, out float damage, out bool killed)
+        public bool Strike(ushort attackerId, ushort targetId, ToolKind tool, float now, out float damage, out bool killed, bool head = false)
         {
             damage = 0f;
             killed = false;
@@ -346,7 +346,7 @@ namespace Oxfall.Core.Net
 
             attacker.LastHitTime = now;
             Spend(a, attacker, tool);
-            damage = t.Survivor.TakeHit(Combat.MeleeDamage(tool));
+            damage = t.Survivor.TakeHit(Combat.MeleeDamage(tool) * (head ? Combat.HeadshotMultiplier : 1f));
             killed = t.Survivor.Vitals.IsDead;
             return true;
         }
@@ -407,6 +407,13 @@ namespace Oxfall.Core.Net
                 case ActKind.Mount: return Mount(playerId, a);
                 case ActKind.Dismount: return RiddenBy(playerId) != null ? GetOff(playerId) : Dismount(playerId);
                 case ActKind.Ride: return Ride(playerId, a);
+                case ActKind.Fall:
+                {
+                    // Only ever hurts the one who tells it; a seat or a ladder breaks no fall.
+                    if (s.Vitals.IsDead || Aboard(playerId)) return ActionResult.Ok;
+                    s.TakeFall(Math.Max(0, a) / 100f);
+                    return ActionResult.Ok;
+                }
                 case ActKind.Reel:
                 {
                     if (!record.Angler.Casting) return ActionResult.Ok;

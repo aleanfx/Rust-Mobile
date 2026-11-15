@@ -75,6 +75,16 @@ namespace Oxfall.Core.Rules
             return done;
         }
 
+        /// <summary>A fall of <paramref name="height"/> metres: no clothing softens it. Returns the damage done.</summary>
+        public float TakeFall(float height)
+        {
+            float amount = Falls.Damage(height);
+            if (Vitals.IsDead || amount <= 0f) return 0f;
+            float done = Math.Min(amount, Vitals.Health);
+            Vitals.Damage(amount);
+            return done;
+        }
+
         /// <summary>A tool or weapon of theirs wore out and broke (its item id).</summary>
         public event Action<string> ToolBroke;
 

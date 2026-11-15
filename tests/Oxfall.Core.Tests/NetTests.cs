@@ -376,10 +376,10 @@ namespace Oxfall.Core.Tests
         public void NodeMessagesRoundTrip()
         {
             var w = new NetWriter();
-            Messages.Hit(w, 1234, (byte)ToolKind.Pickaxe);
+            Messages.Hit(w, 1234, (byte)ToolKind.Pickaxe, true);
             var bytes = w.ToArray();
-            Messages.ReadHit(new NetReader(bytes, 1, bytes.Length - 1), out var id, out var tool);
-            Assert.AreEqual((1234, (byte)ToolKind.Pickaxe), (id, tool));
+            Messages.ReadHit(new NetReader(bytes, 1, bytes.Length - 1), out var id, out var tool, out bool weak);
+            Assert.AreEqual((1234, (byte)ToolKind.Pickaxe, true), (id, tool, weak));
 
             Messages.NodeStates(w, new List<(int, int)> { (5, 0), (6, 300) });
             bytes = w.ToArray();

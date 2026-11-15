@@ -12,7 +12,7 @@ namespace Oxfall.Core.Net
     public static class Protocol
     {
         /// <summary>Raised whenever a message changes shape; a client of another version is turned away.</summary>
-        public const ushort Version = 29;
+        public const ushort Version = 30;
 
         /// <summary>Snapshots per second the server sends.</summary>
         public const int TickRate = 20;
@@ -251,6 +251,8 @@ namespace Oxfall.Core.Net
         Dismount = 26,
         /// <summary>Gets on a horse (a: its id), feeding it berries carried if it is hungry.</summary>
         Ride = 27,
+        /// <summary>The player landed from a fall of a centimetres (the client feels it; it only hurts the teller).</summary>
+        Fall = 28,
     }
 
     /// <summary>A horse as everyone is told of it.</summary>
@@ -470,18 +472,20 @@ namespace Oxfall.Core.Net
         }
 
         /// <summary>The player swung at a tree, rock or plant with this tool.</summary>
-        public static void Hit(NetWriter w, int nodeId, byte tool)
+        public static void Hit(NetWriter w, int nodeId, byte tool, bool weakSpot = false)
         {
             w.Reset();
             w.Byte((byte)MessageType.Hit);
             w.Int(nodeId);
             w.Byte(tool);
+            w.Bool(weakSpot);
         }
 
-        public static void ReadHit(NetReader r, out int nodeId, out byte tool)
+        public static void ReadHit(NetReader r, out int nodeId, out byte tool, out bool weakSpot)
         {
             nodeId = r.Int();
             tool = r.Byte();
+            weakSpot = r.Bool();
         }
 
         /// <summary>Something done to the player's own belongings: a slot or index, or a recipe.</summary>
@@ -515,6 +519,7 @@ namespace Oxfall.Core.Net
                     break;
                 case ActKind.Respawn:
                 case ActKind.Open:
+                case ActKind.Fall:
                     w.Int(a);
                     break;
                 case ActKind.Cast:
@@ -547,6 +552,7 @@ namespace Oxfall.Core.Net
                     break;
                 case ActKind.Respawn:
                 case ActKind.Open:
+                case ActKind.Fall:
                     a = r.Int();
                     break;
                 case ActKind.Cast:
@@ -1141,18 +1147,20 @@ namespace Oxfall.Core.Net
         }
 
         /// <summary>A blow at another player with the tool in hand.</summary>
-        public static void Strike(NetWriter w, ushort target, byte tool)
+        public static void Strike(NetWriter w, ushort target, byte tool, bool head = false)
         {
             w.Reset();
             w.Byte((byte)MessageType.Strike);
             w.UShort(target);
             w.Byte(tool);
+            w.Bool(head);
         }
 
-        public static void ReadStrike(NetReader r, out ushort target, out byte tool)
+        public static void ReadStrike(NetReader r, out ushort target, out byte tool, out bool head)
         {
             target = r.UShort();
             tool = r.Byte();
+            head = r.Bool();
         }
 
         /// <summary>Someone hurt someone (attacker 0: nobody, as a fall or hunger).</summary>
@@ -1336,18 +1344,20 @@ namespace Oxfall.Core.Net
             pitch = r.Float();
         }
 
-        public static void ArrowHit(NetWriter w, Rules.ArrowTarget kind, int target)
+        public static void ArrowHit(NetWriter w, Rules.ArrowTarget kind, int target, bool head = false)
         {
             w.Reset();
             w.Byte((byte)MessageType.ArrowHit);
             w.Byte((byte)kind);
             w.Int(target);
+            w.Bool(head);
         }
 
-        public static void ReadArrowHit(NetReader r, out Rules.ArrowTarget kind, out int target)
+        public static void ReadArrowHit(NetReader r, out Rules.ArrowTarget kind, out int target, out bool head)
         {
             kind = (Rules.ArrowTarget)r.Byte();
             target = r.Int();
+            head = r.Bool();
         }
 
         public static void Arrow(NetWriter w, ushort shooter, float x, float y, float z, float yaw, float pitch)
@@ -1398,20 +1408,23 @@ namespace Oxfall.Core.Net
             seed = r.UShort();
         }
 
-        public static void GunHit(NetWriter w, Rules.ArrowTarget kind, int target, int pellets)
+        /// <summary>Pellets of the last shot hit a target, <paramref name="headPellets"/> of them in the head.</summary>
+        public static void GunHit(NetWriter w, Rules.ArrowTarget kind, int target, int pellets, int headPellets = 0)
         {
             w.Reset();
             w.Byte((byte)MessageType.GunHit);
             w.Byte((byte)kind);
             w.Int(target);
             w.Byte((byte)Math.Max(0, Math.Min(255, pellets)));
+            w.Byte((byte)Math.Max(0, Math.Min(pellets, Math.Min(255, headPellets))));
         }
 
-        public static void ReadGunHit(NetReader r, out Rules.ArrowTarget kind, out int target, out int pellets)
+        public static void ReadGunHit(NetReader r, out Rules.ArrowTarget kind, out int target, out int pellets, out int headPellets)
         {
             kind = (Rules.ArrowTarget)r.Byte();
             target = r.Int();
             pellets = r.Byte();
+            headPellets = Math.Min(pellets, (int)r.Byte());
         }
 
         public static void Reload(NetWriter w, Items.ToolKind tool)

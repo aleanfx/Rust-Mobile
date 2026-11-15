@@ -50,7 +50,7 @@ namespace Oxfall.Core.Net
         /// (<paramref name="damage"/>, <paramref name="killed"/>; for an animal also <paramref name="blow"/>).
         /// False when it hurt nobody: the ground, no shot in the air, or a target out of reach of it.
         /// </summary>
-        public bool ArrowHit(ushort playerId, ArrowTarget kind, int targetId, float now, out float damage, out bool killed, out AnimalBlow blow)
+        public bool ArrowHit(ushort playerId, ArrowTarget kind, int targetId, float now, out float damage, out bool killed, out AnimalBlow blow, bool head = false)
         {
             damage = 0f;
             killed = false;
@@ -68,7 +68,7 @@ namespace Oxfall.Core.Net
                 if (!Players.TryGet(targetKey, out var target) || !target.Placed) return false;
                 if (!_online.TryGetValue(targetKey, out var t) || t.Survivor.Vitals.IsDead) return false;
                 if (Distance(shot.X, shot.Z, target.Pose.X, target.Pose.Z) > reach) return false;
-                damage = t.Survivor.TakeHit(shot.Damage);
+                damage = t.Survivor.TakeHit(shot.Damage * (head ? Combat.HeadshotMultiplier : 1f));
                 killed = t.Survivor.Vitals.IsDead;
                 return true;
             }

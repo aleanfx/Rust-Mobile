@@ -29,6 +29,10 @@ namespace Oxfall.Game.Audio
         DryFire,
         Bandage,
         Rifle,
+        /// <summary>A blow that found a tree's X or a rock's glint.</summary>
+        WeakSpot,
+        /// <summary>This player's hit landed in someone's head.</summary>
+        Headshot,
     }
 
     /// <summary>
@@ -153,6 +157,8 @@ namespace Oxfall.Game.Audio
                 case SoundCue.Revolver: Shot(_bank.RevolverShot, 1f, 0.05f); break;
                 case SoundCue.Shotgun: Shot(_bank.ShotgunShot, 1f, 0.05f); break;
                 case SoundCue.Rifle: Shot(_bank.RifleShot, 1f, 0.04f); break;
+                case SoundCue.WeakSpot: Shot(_bank.WeakSpot, 0.9f, 0.06f); break;
+                case SoundCue.Headshot: Shot(_bank.Headshot, 0.8f, 0.02f); break;
                 case SoundCue.Reload: Shot(_bank.GunReload, 0.7f, 0f); break;
                 case SoundCue.DryFire: Shot(_bank.DryFire, 0.7f, 0.05f); break;
             }

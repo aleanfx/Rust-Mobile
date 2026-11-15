@@ -128,6 +128,17 @@ namespace Oxfall.Core.Gathering
             }
         }
 
+        /// <summary>
+        /// Whether blows on it can find a weak spot: the painted X on a tree's bark, the glint in a rock.
+        /// A blow that lands on it takes <see cref="WeakSpotBonus"/> times as much, and the spot moves on.
+        /// </summary>
+        public static bool HasWeakSpot(ResourceNodeType type) =>
+            type == ResourceNodeType.Tree || type == ResourceNodeType.Stone || type == ResourceNodeType.MetalOre || type == ResourceNodeType.Sulfur;
+
+        /// <summary>How many times a normal blow's take a blow on the weak spot gets (1: it has none).</summary>
+        public static float WeakSpotBonus(ResourceNodeType type) =>
+            type == ResourceNodeType.Tree ? 2f : HasWeakSpot(type) ? 1.5f : 1f;
+
         public static string MainItem(ResourceNodeType type)
         {
             switch (type)
@@ -174,10 +185,12 @@ namespace Oxfall.Core.Gathering
         /// node is depleted, or (a barrel) it is not broken open yet. The last hit never gives more than
         /// what is left. <paramref name="random"/> rolls what a barrel held.
         /// </summary>
-        public IReadOnlyList<Yield> Hit(ToolKind tool, Random random = null)
+        public IReadOnlyList<Yield> Hit(ToolKind tool, Random random = null, bool weakSpot = false)
         {
             if (IsDepleted) return Array.Empty<Yield>();
-            int amount = Math.Min(GatherTable.PerHit(Type, tool), Remaining);
+            int perHit = GatherTable.PerHit(Type, tool);
+            if (weakSpot && perHit > 0) perHit = (int)Math.Round(perHit * GatherTable.WeakSpotBonus(Type));
+            int amount = Math.Min(perHit, Remaining);
             if (amount <= 0) return Array.Empty<Yield>();
 
             Remaining -= amount;

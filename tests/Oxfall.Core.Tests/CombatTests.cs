@@ -48,6 +48,45 @@ namespace Oxfall.Core.Tests
         }
 
         [Test]
+        public void ABlowToTheHeadHurtsTwiceAsMuch()
+        {
+            var (world, a, pa, b, pb) = Duel();
+            Assert.IsTrue(world.Strike(pa.Id, pb.Id, ToolKind.Spear, 1f, out float head, out bool killed, head: true));
+            Assert.AreEqual(Combat.MeleeDamage(ToolKind.Spear) * Combat.HeadshotMultiplier, head, 1e-3f);
+            Assert.IsFalse(killed);
+            Assert.IsTrue(world.Strike(pa.Id, pb.Id, ToolKind.Spear, 3f, out _, out killed, head: true));
+            Assert.IsTrue(killed, "two spear blows to the head kill");
+            Assert.IsTrue(Combat.IsHead(1.6f));
+            Assert.IsFalse(Combat.IsHead(1.2f), "the chest");
+        }
+
+        [Test]
+        public void FallsHurtPastFourMetresAndKillFromNineteen()
+        {
+            Assert.AreEqual(0f, Falls.Damage(3.5f));
+            Assert.AreEqual(0f, Falls.Damage(float.NaN));
+            Assert.Greater(Falls.Damage(8f), 20f);
+            Assert.Less(Falls.Damage(8f), 40f);
+            Assert.GreaterOrEqual(Falls.Damage(Falls.LethalHeight), 100f);
+
+            var (world, a, pa, b, pb) = Duel();
+            b.Survivor.Inventory.Add(ItemIds.WoodenSpear, 1);
+            Assert.AreEqual(ActionResult.Ok, world.Act(pb.Id, ActKind.Fall, 300, 0, null));
+            Assert.AreEqual(100f, b.Survivor.Vitals.Health, 1e-3f, "three metres is nothing");
+            Assert.AreEqual(ActionResult.Ok, world.Act(pb.Id, ActKind.Fall, 1000, 0, null));
+            Assert.AreEqual(100f - Falls.Damage(10f), b.Survivor.Vitals.Health, 1e-3f);
+            Assert.AreEqual(ActionResult.Ok, world.Act(pb.Id, ActKind.Fall, 4000, 0, null));
+            Assert.IsTrue(b.Survivor.Vitals.IsDead, "forty metres kills");
+
+            var w = new NetWriter();
+            Messages.Act(w, ActKind.Fall, 1234);
+            var r = new NetReader(w.ToArray());
+            Assert.AreEqual(MessageType.Act, (MessageType)r.Byte());
+            Assert.AreEqual(ActKind.Fall, Messages.ReadAct(r, out int cm, out _, out _));
+            Assert.AreEqual(1234, cm);
+        }
+
+        [Test]
         public void BlowsThatCouldNotHaveLandedDoNotCount()
         {
             var (world, a, pa, b, pb) = Duel();
@@ -80,12 +119,13 @@ namespace Oxfall.Core.Tests
         public void HurtAndStrikeRoundTrip()
         {
             var w = new NetWriter();
-            Messages.Strike(w, 513, (byte)ToolKind.Spear);
+            Messages.Strike(w, 513, (byte)ToolKind.Spear, true);
             var r = new NetReader(w.ToArray());
             Assert.AreEqual((byte)MessageType.Strike, r.Byte());
-            Messages.ReadStrike(r, out ushort target, out byte tool);
+            Messages.ReadStrike(r, out ushort target, out byte tool, out bool head);
             Assert.AreEqual(513, target);
             Assert.AreEqual((byte)ToolKind.Spear, tool);
+            Assert.IsTrue(head);
 
             Messages.Hurt(w, 7, 9, 33.6f, true);
             r = new NetReader(w.ToArray());

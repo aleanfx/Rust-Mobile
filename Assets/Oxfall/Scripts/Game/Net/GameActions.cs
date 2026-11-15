@@ -231,11 +231,11 @@ namespace Oxfall.Game.Net
         }
 
         /// <summary>Some pellets of this player's last shot hit something (a player online, an animal, a sleeper).</summary>
-        public void GunHit(ArrowTarget kind, int target, int pellets)
+        public void GunHit(ArrowTarget kind, int target, int pellets, int headPellets = 0)
         {
             if (Online)
             {
-                _net.SendGunHit(kind, target, pellets);
+                _net.SendGunHit(kind, target, pellets, headPellets);
                 return;
             }
             if (_lastGun == null || Time.time - _lastGunAt > 1f) return;
@@ -319,11 +319,11 @@ namespace Oxfall.Game.Net
         }
 
         /// <summary>This player's oldest arrow in the air landed on something (a player online, an animal, or nothing).</summary>
-        public void ArrowHit(ArrowTarget kind, int target)
+        public void ArrowHit(ArrowTarget kind, int target, bool head = false)
         {
             if (Online)
             {
-                _net.SendArrowHit(kind, target);
+                _net.SendArrowHit(kind, target, head);
                 return;
             }
             if (_shots.Count == 0) return;
@@ -402,6 +402,15 @@ namespace Oxfall.Game.Net
                 return ActionResult.NotFood;
             _net.SendAct(ActKind.Eat, slot);
             return ActionResult.Ok;
+        }
+
+        /// <summary>The player landed from a drop of <paramref name="height"/> metres: it hurts past a few metres. Returns the damage (alone).</summary>
+        public float Fall(float height)
+        {
+            if (Falls.Damage(height) <= 0f) return 0f;
+            if (!Online) return _survivor.TakeFall(height);
+            _net.SendAct(ActKind.Fall, Mathf.RoundToInt(Mathf.Min(height, Falls.MaxHeight) * 100f));
+            return Falls.Damage(height);
         }
 
         public ActionResult Drink()

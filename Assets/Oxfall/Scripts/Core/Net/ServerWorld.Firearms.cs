@@ -66,7 +66,7 @@ namespace Oxfall.Core.Net
         /// for an animal also <paramref name="blow"/>). False when it hurt nobody.
         /// </summary>
         public bool GunHit(ushort playerId, ArrowTarget kind, int targetId, int pellets, float now,
-            out float damage, out bool killed, out AnimalBlow blow)
+            out float damage, out bool killed, out AnimalBlow blow, int headPellets = 0)
         {
             damage = 0f;
             killed = false;
@@ -85,7 +85,11 @@ namespace Oxfall.Core.Net
                 var tp = target.Pose;
                 if (!Firearms.CouldHit(gun, shot.X, shot.Y, shot.Z, shot.Yaw, shot.Pitch, tp.X, tp.Y, tp.Z, 1.8f)) return false;
                 shot.PelletsLeft -= pellets;
-                damage = t.Survivor.TakeHit(Firearms.Damage(gun, pellets, Distance3(shot, tp.X, tp.Y + 1f, tp.Z)));
+                headPellets = Math.Max(0, Math.Min(headPellets, pellets));
+                float range = Distance3(shot, tp.X, tp.Y + 1f, tp.Z);
+                float amount = Firearms.Damage(gun, pellets, range);
+                if (headPellets > 0) amount += Firearms.Damage(gun, headPellets, range) * (Combat.HeadshotMultiplier - 1f);
+                damage = t.Survivor.TakeHit(amount);
                 killed = t.Survivor.Vitals.IsDead;
                 return true;
             }

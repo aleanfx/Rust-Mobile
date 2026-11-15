@@ -190,18 +190,18 @@ namespace Oxfall.Game.Net
         private readonly List<BuildOp> _ops = new List<BuildOp>();
 
         /// <summary>A swing at a node; the server answers with what it gave.</summary>
-        public void SendHit(int nodeId, ToolKind tool)
+        public void SendHit(int nodeId, ToolKind tool, bool weakSpot)
         {
             if (State != Status.Online || _socket == null) return;
-            Messages.Hit(_writer, nodeId, (byte)tool);
+            Messages.Hit(_writer, nodeId, (byte)tool, weakSpot);
             _socket.Send(_writer.Buffer, _writer.Length);
         }
 
         /// <summary>A blow at another player; the server judges it and tells everyone if it landed.</summary>
-        public void SendStrike(ushort target, ToolKind tool)
+        public void SendStrike(ushort target, ToolKind tool, bool head)
         {
             if (State != Status.Online || _socket == null) return;
-            Messages.Strike(_writer, target, (byte)tool);
+            Messages.Strike(_writer, target, (byte)tool, head);
             _socket.Send(_writer.Buffer, _writer.Length);
         }
 
@@ -254,10 +254,10 @@ namespace Oxfall.Game.Net
             _socket.Send(_writer.Buffer, _writer.Length);
         }
 
-        public void SendGunHit(ArrowTarget kind, int target, int pellets)
+        public void SendGunHit(ArrowTarget kind, int target, int pellets, int headPellets)
         {
             if (State != Status.Online || _socket == null) return;
-            Messages.GunHit(_writer, kind, target, pellets);
+            Messages.GunHit(_writer, kind, target, pellets, headPellets);
             _socket.Send(_writer.Buffer, _writer.Length);
         }
 
@@ -268,10 +268,10 @@ namespace Oxfall.Game.Net
             _socket.Send(_writer.Buffer, _writer.Length);
         }
 
-        public void SendArrowHit(ArrowTarget kind, int target)
+        public void SendArrowHit(ArrowTarget kind, int target, bool head)
         {
             if (State != Status.Online || _socket == null) return;
-            Messages.ArrowHit(_writer, kind, target);
+            Messages.ArrowHit(_writer, kind, target, head);
             _socket.Send(_writer.Buffer, _writer.Length);
         }
 

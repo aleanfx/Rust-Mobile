@@ -120,6 +120,7 @@ namespace Oxfall.Game
         private float _gameFog, _gameFar;
         // Who dealt the last blow that killed this player (online), for the death screen.
         private string _killer;
+        private float _fellAt = -100f;
 
         /// <summary>How warm the player feels (see <see cref="Temperature"/>), and whether they were told they are freezing.</summary>
         private float _warmth = Temperature.DayAir;
@@ -255,6 +256,7 @@ namespace Oxfall.Game
             _arrows = ArrowFlights.Create(MeshFactory.Arrow(), arrowMaterials);
             gatherer.Arrows = _arrows;
             gatherer.StringMaterial = materials.Rope;
+            gatherer.Spot = new WeakSpot(materials.WeakSpotPaint, materials.Flame, MeshFactory.Flame());
             gatherer.ArrowMaterials = arrowMaterials;
             _actions.AnimalHit += OnAnimalHit;
 
@@ -517,6 +519,7 @@ namespace Oxfall.Game
             _interactor.Board += BoardBoat;
             _interactor.LeaveBoat += LeaveBoat;
             _player.LeaveBoat += LeaveBoat;
+            _player.Landed += OnLanded;
             _interactor.Busy = () => (_keypad != null && _keypad.IsOpen) || (_cupboard != null && _cupboard.IsOpen) || (_vending != null && _vending.IsOpen) || (_inventoryUi != null && _inventoryUi.IsOpen)
                 || (_team != null && _team.IsOpen) || _hud.CraftPanelOpen;
             _interactor.DoorUsed += () => audio.Play(SoundCue.Wood);
@@ -1187,6 +1190,19 @@ namespace Oxfall.Game
         }
 
         /// <summary>A turret fired (told by the server, or alone by this game): its head swings on, a flash, a bang, a tracer; for the one hit, the hurt.</summary>
+        /// <summary>The player landed from a drop: past a few metres it hurts (a thud, the screen's edges red).</summary>
+        private void OnLanded(float height)
+        {
+            if (_vitals.IsDead) return;
+            float damage = _actions.Fall(height);
+            Debug.Log($"[Oxfall] Landed from {height:0.0} m, -{damage:0}");
+            if (damage <= 0f) return;
+            _fellAt = Time.time;
+            _hud.ShowHurt(damage);
+            _audio.Play(SoundCue.Hurt);
+            _explosions?.Punch(Mathf.Clamp(damage / 10f, 1f, 5f));
+        }
+
         private void OnTurretFired(int turret, TurretTarget kind, int target, Vector3 at, int damage, bool killed)
         {
             Debug.Log($"[Oxfall] Turret {turret} fired at {kind} {target}, -{damage}{(killed ? ", killed" : "")}");
@@ -1481,6 +1497,7 @@ namespace Oxfall.Game
             _hud.CloseCraftPanel();
             _player.enabled = false;
             _gatherer.enabled = false;
+            if (_killer == null && Time.time - _fellAt < 3f) _killer = "una caída";
             if (_killer == null && _warmth < Temperature.Freezing) _killer = "el frío";
             if (_killer == null && Radiation.Hurt(_rads) > 0f) _killer = "la radiación";
             _rads = 0f;
@@ -2120,6 +2137,16 @@ namespace Oxfall.Game
                 case "deploy": _placer.Place(); break;
                 case "starve": _vitals.Damage(1000f); break;
                 case "use": _gatherer.UseOnce(); break;
+                case "weak-spot":
+                    // A blow straight at the X (or glint) showing, and where it went after.
+                    Debug.Log($"[Oxfall] Weak spot blow: {_gatherer.StrikeWeakSpot()}");
+                    break;
+                case "spot":
+                {
+                    var sn = _gatherer.Spot?.Node;
+                    Debug.Log(sn == null ? "[Oxfall] Spot none" : $"[Oxfall] Spot {sn.Node.Type} {sn.Node.Id} at {_gatherer.Spot.Point.Value} left={sn.Node.Remaining}");
+                    break;
+                }
                 case "wake": WakeUp(); break;
                 case "hungry": _vitals.Respawn(40f, 30f, 20f); _vitalsUi.Refresh(); break;
                 case "view-pond":
@@ -2207,6 +2234,10 @@ namespace Oxfall.Game
                     else if (command.StartsWith("time-") && float.TryParse(command.Substring(5),
                                  System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out float hour))
                         _dayNight.SetHour(hour);
+                    // drop-H lifts the player H metres into the air where they stand, to fall.
+                    else if (command.StartsWith("drop-") && float.TryParse(command.Substring(5),
+                                 System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out float dropHeight))
+                        _player.Teleport(_player.transform.position + Vector3.up * dropHeight, _player.Yaw, _player.Pitch);
                     // look-D looks D degrees up (negative: down).
                     else if (command.StartsWith("look-") && float.TryParse(command.Substring(5),
                                  System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out float up))

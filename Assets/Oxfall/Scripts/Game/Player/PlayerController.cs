@@ -72,6 +72,16 @@ namespace Oxfall.Game.Player
         /// <summary>Seconds left after jumping off a ladder before it catches the player again.</summary>
         private float _offLadder;
 
+        // A fall: whether the feet have left the ground, and the highest they have been since.
+        private bool _airborne;
+        private float _fallTop;
+
+        /// <summary>The player landed from a drop of this many metres (on the ground, a floor or a roof; water breaks a fall).</summary>
+        public event System.Action<float> Landed;
+
+        /// <summary>Forgets a fall in progress (a teleport, a seat, a ladder, the sea).</summary>
+        private void Grounded() => _airborne = false;
+
         public void Init(PlayerInput input, float yaw)
         {
             _input = input;
@@ -105,6 +115,7 @@ namespace Oxfall.Game.Player
             Head.localRotation = Quaternion.Euler(_pitch, 0f, 0f);
             _verticalSpeed = 0f;
             _body.enabled = true;
+            Grounded();
         }
 
         /// <summary>Raises the player's feet to a height if they are below it (a floor was built under them).</summary>
@@ -115,6 +126,7 @@ namespace Oxfall.Game.Player
             transform.position = new Vector3(transform.position.x, y, transform.position.z);
             _verticalSpeed = 0f;
             _body.enabled = true;
+            Grounded();
         }
 
         private void Update()
@@ -137,6 +149,7 @@ namespace Oxfall.Game.Player
                 _body.enabled = true;
                 _verticalSpeed = 0f;
                 Head.localPosition = new Vector3(0f, SeatedEyeHeight, 0f);
+                Grounded();
                 return;
             }
             if (Fly != null)
@@ -149,6 +162,7 @@ namespace Oxfall.Game.Player
                 _body.enabled = true;
                 _verticalSpeed = 0f;
                 Head.localPosition = new Vector3(0f, SeatedEyeHeight, 0f);
+                Grounded();
                 return;
             }
             if (Row != null)
@@ -169,6 +183,7 @@ namespace Oxfall.Game.Player
                 _body.enabled = true;
                 _verticalSpeed = 0f;
                 Head.localPosition = new Vector3(0f, SeatedEyeHeight, 0f);
+                Grounded();
                 return;
             }
             if (Head.localPosition.y != EyeHeight) Head.localPosition = new Vector3(0f, EyeHeight, 0f);
@@ -184,6 +199,7 @@ namespace Oxfall.Game.Player
             float? ladderTop = _offLadder > 0f || IsSwimming || Climbable == null ? null : Climbable(transform.position);
             // At its foot, stepping back walks away from it rather than down into the ground.
             IsClimbing = ladderTop.HasValue && !(_body.isGrounded && _input.Move.y <= 0.05f);
+            if (IsClimbing || IsSwimming) Grounded();
             if (IsClimbing)
             {
                 if (_input.Jump)
@@ -223,8 +239,25 @@ namespace Oxfall.Game.Player
 
             var velocity = move * speed + Vector3.up * _verticalSpeed;
             _body.Move(velocity * dt);
+            TrackFall();
 
             KeepInsideWorld();
+        }
+
+        private void TrackFall()
+        {
+            float y = transform.position.y;
+            if (IsSwimming) { Grounded(); return; }
+            if (!_body.isGrounded)
+            {
+                if (!_airborne) { _airborne = true; _fallTop = y; }
+                else if (y > _fallTop) _fallTop = y;
+                return;
+            }
+            if (!_airborne) return;
+            _airborne = false;
+            float drop = _fallTop - y;
+            if (drop > 0.5f) Landed?.Invoke(drop);
         }
 
         /// <summary>The sea goes on forever, but the playable world does not: swim too far and the current turns you back.</summary>

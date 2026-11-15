@@ -38,6 +38,8 @@ namespace Oxfall.Game.Audio
         public AudioClip BowDraw { get; }
         public AudioClip BowShot { get; }
         public AudioClip HitMetal { get; }
+        public AudioClip WeakSpot { get; }
+        public AudioClip Headshot { get; }
         public AudioClip Grunt { get; }
         public AudioClip Bark { get; }
         public AudioClip FireLoop { get; }
@@ -144,6 +146,14 @@ namespace Oxfall.Game.Audio
             HitMetal = Make("metal", 0.6f, (t, i) =>
                 Thump(t, 85f, 0.08f) * 0.55f + Noise() * Env(t, 0.001f, 0.02f) * 0.35f
                 + (Tone(t, 310f) * 0.35f + Tone(t, 523f) * 0.22f + Tone(t, 887f) * 0.14f + Tone(t, 1391f) * 0.08f) * Env(t, 0.001f, 0.22f));
+            // The weak spot: a sharp crack that splits, with a bright ring over the knock.
+            WeakSpot = Make("weak spot", 0.35f, (t, i) =>
+                Thump(t, 140f, 0.05f) * 0.8f + Noise() * Env(t, 0.0005f, 0.018f) * 0.8f
+                + (Tone(t, 1480f) * 0.3f + Tone(t, 2220f) * 0.18f) * Env(t, 0.001f, 0.09f));
+            // A head hit: a short, high, dull 'tink' that cuts through the shot.
+            Headshot = Make("headshot", 0.3f, (t, i) =>
+                (Tone(t, 1960f) * 0.4f + Tone(t, 2940f) * 0.2f + Tone(t, 3920f) * 0.1f) * Env(t, 0.0008f, 0.07f)
+                + Thump(t, 110f, 0.03f) * 0.4f);
             FireLoop = MakeLoop("fire", 3f, FireSample);
             var falls = new float[14];
             for (int k = 0; k < falls.Length; k++) falls[k] = 0.35f + (float)_random.NextDouble() * 1.5f;

@@ -482,8 +482,8 @@ namespace Oxfall.Server
                 }
                 case MessageType.Hit:
                 {
-                    Messages.ReadHit(reader, out int nodeId, out byte tool);
-                    var got = _world.Hit(id, nodeId, (ToolKind)tool, now, out int lost);
+                    Messages.ReadHit(reader, out int nodeId, out byte tool, out bool weakSpot);
+                    var got = _world.Hit(id, nodeId, (ToolKind)tool, now, out int lost, weakSpot);
                     if (got.Count == 0) break;
                     Messages.Gathered(writer, nodeId, got);
                     session.Connection.Send(writer.ToArray());
@@ -495,8 +495,8 @@ namespace Oxfall.Server
                 }
                 case MessageType.Strike:
                 {
-                    Messages.ReadStrike(reader, out ushort target, out byte tool);
-                    if (!_world.Strike(id, target, (ToolKind)tool, now, out float damage, out bool killed)) break;
+                    Messages.ReadStrike(reader, out ushort target, out byte tool, out bool head);
+                    if (!_world.Strike(id, target, (ToolKind)tool, now, out float damage, out bool killed, head)) break;
                     // Everyone sees the blow land (the victim's own health follows in their next update).
                     Messages.Hurt(writer, target, id, damage, killed);
                     Broadcast(writer.ToArray());
@@ -534,8 +534,8 @@ namespace Oxfall.Server
                 }
                 case MessageType.ArrowHit:
                 {
-                    Messages.ReadArrowHit(reader, out var kind, out int target);
-                    if (!_world.ArrowHit(id, kind, target, now, out float damage, out bool killed, out var blow)) break;
+                    Messages.ReadArrowHit(reader, out var kind, out int target, out bool head);
+                    if (!_world.ArrowHit(id, kind, target, now, out float damage, out bool killed, out var blow, head)) break;
                     if (kind == ArrowTarget.Player)
                     {
                         Messages.Hurt(writer, (ushort)target, id, damage, killed);
@@ -566,8 +566,8 @@ namespace Oxfall.Server
                 }
                 case MessageType.GunHit:
                 {
-                    Messages.ReadGunHit(reader, out var kind, out int target, out int pellets);
-                    if (!_world.GunHit(id, kind, target, pellets, now, out float damage, out bool killed, out var blow)) break;
+                    Messages.ReadGunHit(reader, out var kind, out int target, out int pellets, out int headPellets);
+                    if (!_world.GunHit(id, kind, target, pellets, now, out float damage, out bool killed, out var blow, headPellets)) break;
                     if (kind == ArrowTarget.Player)
                     {
                         Messages.Hurt(writer, (ushort)target, id, damage, killed);

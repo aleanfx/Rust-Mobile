@@ -24,6 +24,24 @@ namespace Oxfall.Core.Tests
         }
 
         [Test]
+        public void The_weak_spot_doubles_a_blow_on_a_tree_and_adds_half_on_rock()
+        {
+            var tree = new ResourceNode(1, ResourceNodeType.Tree);
+            var normal = tree.Hit(ToolKind.Hatchet);
+            var weak = tree.Hit(ToolKind.Hatchet, null, weakSpot: true);
+            Assert.That(weak[0].Amount, Is.EqualTo(normal[0].Amount * 2));
+
+            var ore = new ResourceNode(2, ResourceNodeType.MetalOre);
+            int plain = ore.Hit(ToolKind.Pickaxe)[0].Amount;
+            Assert.That(ore.Hit(ToolKind.Pickaxe, null, true)[0].Amount, Is.EqualTo((int)System.Math.Round(plain * 1.5)));
+
+            Assert.That(GatherTable.HasWeakSpot(ResourceNodeType.Hemp), Is.False);
+            var hemp = new ResourceNode(3, ResourceNodeType.Hemp);
+            Assert.That(hemp.Hit(ToolKind.None, null, true)[0].Amount, Is.EqualTo(GatherTable.Capacity(ResourceNodeType.Hemp)), "nothing to find in a plant");
+            Assert.That(new ResourceNode(4, ResourceNodeType.Tree).Hit(ToolKind.Torch, null, true), Is.Empty, "a torch still gathers nothing");
+        }
+
+        [Test]
         public void A_torch_gathers_nothing()
         {
             var tree = new ResourceNode(1, ResourceNodeType.Tree);

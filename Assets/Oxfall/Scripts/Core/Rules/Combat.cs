@@ -55,6 +55,15 @@ namespace Oxfall.Core.Rules
         /// </summary>
         public const float ReachSlack = 1.6f;
 
+        /// <summary>A blow, an arrow or a bullet in the head does this many times its damage (players only).</summary>
+        public const float HeadshotMultiplier = 2f;
+
+        /// <summary>Where the head begins on a standing player, measured up from the feet (they are 1.8 m tall).</summary>
+        public const float HeadHeight = 1.48f;
+
+        /// <summary>Whether a hit this high above a standing player's feet is in the head.</summary>
+        public static bool IsHead(float heightAboveFeet) => heightAboveFeet >= HeadHeight && heightAboveFeet <= 2.0f;
+
         /// <summary>Whether a blow with this hurts players at all.</summary>
         public static bool CanHurt(ToolKind tool) => MeleeDamage(tool) > 0f;
 
