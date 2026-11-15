@@ -38,6 +38,7 @@ namespace Oxfall.Core.Rules
         private readonly Dictionary<int, float> _bagReady = new Dictionary<int, float>();
         private readonly Dictionary<int, float> _rotting = new Dictionary<int, float>();
         private readonly Dictionary<int, float> _cooking = new Dictionary<int, float>();
+        private readonly Dictionary<int, float> _crops = new Dictionary<int, float>();
         private readonly Dictionary<PieceRef, int> _owners = new Dictionary<PieceRef, int>();
         private readonly Dictionary<LockTarget, CodeLockState> _locks = new Dictionary<LockTarget, CodeLockState>();
         private readonly List<int> _scratch = new List<int>();
@@ -304,6 +305,7 @@ namespace Oxfall.Core.Rules
             if (deployable.Kind == DeployableKind.ToolCupboard) _authorized[deployable.Id] = new HashSet<int> { deployable.Owner };
             if (deployable.Kind == DeployableKind.Bag) _rotting[deployable.Id] = Rules.Deployables.DeathBagSeconds;
             if (deployable.Kind == DeployableKind.SupplyDrop) _rotting[deployable.Id] = Rules.Deployables.SupplyDropSeconds;
+            if (Crops.IsCrop(deployable.Kind)) _crops[deployable.Id] = 0f;
             DeployableAdded?.Invoke(deployable);
             return deployable;
         }
@@ -321,6 +323,7 @@ namespace Oxfall.Core.Rules
             _bagReady.Remove(id);
             _rotting.Remove(id);
             _cooking.Remove(id);
+            _crops.Remove(id);
             _deployableHealth.Remove(id);
             RemoveLock(LockTarget.On(id));
             DeployableRemoved?.Invoke(id);
@@ -338,6 +341,51 @@ namespace Oxfall.Core.Rules
             if (on) _lit.Add(id, new Furnace());
             else _lit.Remove(id);
             DeployableChanged?.Invoke(id);
+        }
+
+        // ---- Crops
+
+        /// <summary>How fast crops grow now (see <see cref="Crops.Rate"/>; whoever ticks this sets it from the weather).</summary>
+        public float GrowthRate { get; set; } = 1f;
+
+        /// <summary>Seconds of growth a planted crop has had (0 for anything else).</summary>
+        public float CropAge(int id) => _crops.TryGetValue(id, out float age) ? age : 0f;
+
+        /// <summary>Where a planted crop is now.</summary>
+        public CropStage CropStageOf(int id) =>
+            _crops.TryGetValue(id, out float age) && _deployables.TryGetValue(id, out var d) ? Crops.Stage(d.Kind, age) : CropStage.Sprout;
+
+        public IEnumerable<KeyValuePair<int, float>> CropAges => _crops;
+
+        /// <summary>Sets how long a crop has grown (as the server says, or from a save). False if it is no crop.</summary>
+        public bool SetCropAge(int id, float age)
+        {
+            if (!_crops.ContainsKey(id)) return false;
+            var before = CropStageOf(id);
+            _crops[id] = Math.Max(0f, age);
+            if (CropStageOf(id) != before) DeployableChanged?.Invoke(id);
+            return true;
+        }
+
+        /// <summary>Crops grow; each that reaches a new stage is told in <paramref name="grew"/> (when given) and to views.</summary>
+        private void Grow(float dt, List<BuildOp> grew)
+        {
+            if (_crops.Count == 0) return;
+            _scratch.Clear();
+            _scratch.AddRange(_crops.Keys);
+            float step = dt * Math.Max(0f, GrowthRate);
+            foreach (int id in _scratch)
+            {
+                var kind = _deployables[id].Kind;
+                float age = _crops[id];
+                var before = Crops.Stage(kind, age);
+                // Past withering there is nothing more to count.
+                if (before == CropStage.Withered) continue;
+                _crops[id] = age + step;
+                if (Crops.Stage(kind, age + step) == before) continue;
+                grew?.Add(BuildOp.Grow(id, age + step));
+                DeployableChanged?.Invoke(id);
+            }
         }
 
         // ---- Tool cupboards
@@ -552,6 +600,8 @@ namespace Oxfall.Core.Rules
             if (dt <= 0f) return;
             Clock += dt;
             Upkeep.Tick(this, dt, decayed);
+            // Crops reaching a new stage go out with the changes the owner tells everyone.
+            Grow(dt, decayed);
             if (_rotting.Count > 0)
             {
                 _scratch.Clear();
@@ -656,6 +706,7 @@ namespace Oxfall.Core.Rules
             foreach (var target in locks) RemoveLock(target);
             _owners.Clear();
             _deployableHealth.Clear();
+            _crops.Clear();
             Upkeep.Clear();
             _nextId = 1;
             _clearing = false;

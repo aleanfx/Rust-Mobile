@@ -31,6 +31,7 @@ namespace Oxfall.Game.Construction
             Workbench,
             Player,
             Boat,
+            Crop,
         }
 
         private BuildingGrid _grid;
@@ -76,6 +77,9 @@ namespace Oxfall.Game.Construction
 
         /// <summary>The player opens a supply crate.</summary>
         public event Action<ResourceNodeView> OpenCrate;
+
+        /// <summary>The player harvested a crop (what it was, how far along).</summary>
+        public event Action<DeployableKind, CropStage> Harvested;
 
         /// <summary>The player taps MESA at a workbench.</summary>
         public event Action UseWorkbench;
@@ -173,6 +177,18 @@ namespace Oxfall.Game.Construction
                 case Target.Workbench:
                     _hud.SetUseButton("MESA", Icons.Hammer);
                     break;
+                case Target.Crop:
+                {
+                    var stage = _settlement.CropStageOf(_deployable);
+                    if (Crops.Harvestable(stage)) _hud.SetUseButton(stage == CropStage.Ripe ? "COSECHAR" : "ARRANCAR", Icons.Hand);
+                    else
+                    {
+                        _settlement.TryGet(_deployable, out var crop);
+                        int percent = Mathf.FloorToInt(Crops.Growth01(crop.Kind, _settlement.CropAge(_deployable)) * 100f);
+                        _hud.SetUseButton($"CRECE {percent}%", Icons.Hand);
+                    }
+                    break;
+                }
                 case Target.Player:
                     _hud.SetUseButton("INVITAR", Icons.Team);
                     break;
@@ -229,6 +245,11 @@ namespace Oxfall.Game.Construction
             var tag = hit.collider.GetComponent<DeployableTag>();
             if (tag == null || !_settlement.TryGet(tag.Id, out _)) return;
             _deployable = tag.Id;
+            if (Crops.IsCrop(tag.Kind))
+            {
+                _target = Target.Crop;
+                return;
+            }
             if (tag.Kind == DeployableKind.ToolCupboard) _target = Target.Cupboard;
             else if (tag.Kind == DeployableKind.Workbench)
             {
@@ -283,6 +304,26 @@ namespace Oxfall.Game.Construction
                 case Target.Workbench:
                     UseWorkbench?.Invoke();
                     break;
+                case Target.Crop:
+                {
+                    var stage = _settlement.CropStageOf(_deployable);
+                    if (!Crops.Harvestable(stage))
+                    {
+                        _hud.ShowToast($"{Crops.StageName(stage)}: aún no se puede cosechar. La lluvia la hace crecer más rápido");
+                        break;
+                    }
+                    _settlement.TryGet(_deployable, out var crop);
+                    var result = Actions.Build(BuildOp.Harvest(_deployable));
+                    if (result != ActionResult.Ok)
+                    {
+                        _hud.ShowToast(GameActions.Explain(result));
+                        break;
+                    }
+                    Debug.Log($"[Oxfall] Harvested {crop.Kind} {_deployable} ({stage})");
+                    Harvested?.Invoke(crop.Kind, stage);
+                    _timer = 0f;
+                    break;
+                }
                 case Target.Player:
                     Invite?.Invoke(_player);
                     _timer = 0f;

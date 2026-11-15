@@ -52,6 +52,10 @@ namespace Oxfall.Game.Construction
         /// <summary>A recycler started: the object its hum should play from.</summary>
         public event Action<GameObject> MachineStarted;
 
+        private readonly Mesh _hempPlant, _berryPlant;
+        private readonly ItemModel _soil;
+        private readonly Material[] _hempMaterials, _berryMaterials, _greenBerryMaterials, _witheredMaterials;
+        private readonly Dictionary<int, Transform> _plants = new Dictionary<int, Transform>();
         private readonly Mesh _wheel;
         private readonly Material[] _wheelMaterials;
         private readonly Material _lampOn, _lampOff;
@@ -86,6 +90,17 @@ namespace Oxfall.Game.Construction
                 Mesh = MeshFactory.AirdropCrate(),
                 Materials = new[] { materials.DropPaint, materials.Steel, materials.ChuteOrange, materials.WhitePaint },
             };
+            // Crops: the plant as it will grow (the ghost shows it full size), on a mound of dug earth.
+            var shapes = new System.Random(71);
+            _hempPlant = MeshFactory.Hemp(shapes);
+            _berryPlant = MeshFactory.BerryBush(shapes, false);
+            _soil = new ItemModel { Mesh = MeshFactory.SoilMound(), Materials = new[] { materials.Soil } };
+            _models[DeployableKind.HempPlant] = new ItemModel { Mesh = _hempPlant, Materials = new[] { materials.Hemp } };
+            _models[DeployableKind.BerryPlant] = new ItemModel { Mesh = _berryPlant, Materials = new[] { materials.Berries, materials.Leaves[0] } };
+            _hempMaterials = new[] { materials.Hemp };
+            _berryMaterials = new[] { materials.Berries, materials.Leaves[0] };
+            _greenBerryMaterials = new[] { materials.GreenBerries, materials.Leaves[0] };
+            _witheredMaterials = new[] { materials.Withered, materials.Withered };
             _wheel = MeshFactory.RecyclerWheel();
             _wheelMaterials = new[] { materials.Steel, materials.BarrelRust };
             _lampOn = materials.LedGreen;
@@ -111,6 +126,11 @@ namespace Oxfall.Game.Construction
         private void Show(Deployable d)
         {
             if (_views.ContainsKey(d.Id) || !_models.TryGetValue(d.Kind, out var model)) return;
+            if (Crops.IsCrop(d.Kind))
+            {
+                ShowCrop(d);
+                return;
+            }
             var go = new GameObject(d.Kind.ToString());
             go.transform.SetParent(_root, false);
             go.transform.SetPositionAndRotation(new Vector3(d.X, d.Y, d.Z), Quaternion.Euler(0f, d.Yaw, 0f));
@@ -153,8 +173,56 @@ namespace Oxfall.Game.Construction
             }
         }
 
+        /// <summary>A sown crop: a mound of earth with the plant on it, as big as it has grown.</summary>
+        private void ShowCrop(Deployable d)
+        {
+            var go = new GameObject(d.Kind.ToString());
+            go.transform.SetParent(_root, false);
+            go.transform.SetPositionAndRotation(new Vector3(d.X, d.Y, d.Z), Quaternion.Euler(0f, d.Yaw, 0f));
+            go.AddComponent<MeshFilter>().sharedMesh = _soil.Mesh;
+            go.AddComponent<MeshRenderer>().sharedMaterials = _soil.Materials;
+            var plant = new GameObject("Plant");
+            plant.transform.SetParent(go.transform, false);
+            plant.AddComponent<MeshFilter>().sharedMesh = d.Kind == DeployableKind.BerryPlant ? _berryPlant : _hempPlant;
+            plant.AddComponent<MeshRenderer>();
+            // Easy to aim at whatever its size; knee high, so it is looked at, not walked into.
+            var collider = go.AddComponent<BoxCollider>();
+            collider.center = new Vector3(0f, 0.45f, 0f);
+            collider.size = new Vector3(0.5f, 0.9f, 0.5f);
+            if (Walker != null) Physics.IgnoreCollision(collider, Walker);
+            var tag = go.AddComponent<DeployableTag>();
+            tag.Id = d.Id;
+            tag.Kind = d.Kind;
+            _views.Add(d.Id, go);
+            _plants[d.Id] = plant.transform;
+            Grow(d.Id, d.Kind);
+        }
+
+        /// <summary>A crop's plant drawn for the stage it is at: bigger as it grows, berries ripening, brown once withered.</summary>
+        private void Grow(int id, DeployableKind kind)
+        {
+            if (!_plants.TryGetValue(id, out var plant)) return;
+            var stage = _settlement.CropStageOf(id);
+            float size;
+            switch (stage)
+            {
+                case CropStage.Sprout: size = 0.22f; break;
+                case CropStage.Young: size = 0.5f; break;
+                case CropStage.Grown: size = 0.8f; break;
+                case CropStage.Ripe: size = 1f; break;
+                default: size = 0.85f; break;
+            }
+            bool berry = kind == DeployableKind.BerryPlant;
+            plant.localScale = new Vector3(size, stage == CropStage.Withered ? size * 0.7f : size, size) * (berry ? 1.1f : 1f);
+            plant.localRotation = stage == CropStage.Withered ? Quaternion.Euler(12f, 0f, 8f) : Quaternion.identity;
+            plant.GetComponent<MeshRenderer>().sharedMaterials = stage == CropStage.Withered ? (berry ? _witheredMaterials : new[] { _witheredMaterials[0] })
+                : !berry ? _hempMaterials
+                : stage == CropStage.Ripe ? _berryMaterials : _greenBerryMaterials;
+        }
+
         private void Hide(int id)
         {
+            _plants.Remove(id);
             if (!_views.TryGetValue(id, out var go)) return;
             _views.Remove(id);
             _fires.Remove(id);
@@ -168,6 +236,11 @@ namespace Oxfall.Game.Construction
         private void Changed(int id)
         {
             if (!_views.TryGetValue(id, out var go) || !_settlement.TryGet(id, out var d)) return;
+            if (Crops.IsCrop(d.Kind))
+            {
+                Grow(id, d.Kind);
+                return;
+            }
             if (d.Kind == DeployableKind.Recycler)
             {
                 Run(go, _settlement.IsLit(id));

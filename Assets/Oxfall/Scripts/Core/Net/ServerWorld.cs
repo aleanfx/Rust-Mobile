@@ -461,6 +461,13 @@ namespace Oxfall.Core.Net
         /// </summary>
         public static void GiveTestKit(Inventory inventory, int kit = 0)
         {
+            if (kit == 9)
+            {
+                // Seeds to sow a field.
+                inventory.Add(ItemIds.HempSeed, 6);
+                inventory.Add(ItemIds.BerrySeed, 6);
+                return;
+            }
             if (kit == 8)
             {
                 // Fuel, and what it is made from.
@@ -591,6 +598,8 @@ namespace Oxfall.Core.Net
             Day.Tick(deltaSeconds);
             _wentOut.Clear();
             _rotted.Clear();
+            Environment.Weather.At(Seed, Time, out float rainNow, out _);
+            Settlement.GrowthRate = Crops.Rate(rainNow);
             Settlement.Tick(deltaSeconds, _wentOut, _rotted, Announcements);
             foreach (int id in _wentOut) Announcements.Add(BuildOp.Light(id, false));
             foreach (int id in _rotted) Announcements.Add(BuildOp.Pickup(id));

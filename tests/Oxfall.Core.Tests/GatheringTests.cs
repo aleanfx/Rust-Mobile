@@ -60,7 +60,8 @@ namespace Oxfall.Core.Tests
         {
             var hemp = new ResourceNode(3, ResourceNodeType.Hemp);
             var y = hemp.Hit(ToolKind.None);
-            Assert.That(y.Single().ItemId, Is.EqualTo(ItemIds.Cloth));
+            Assert.That(y.First().ItemId, Is.EqualTo(ItemIds.Cloth));
+            Assert.That(y.Single(v => v.ItemId == ItemIds.HempSeed).Amount, Is.EqualTo(1), "a seed to plant");
             Assert.That(hemp.IsDepleted, Is.True);
         }
 
@@ -69,8 +70,9 @@ namespace Oxfall.Core.Tests
         {
             var bush = new ResourceNode(4, ResourceNodeType.BerryBush);
             var y = bush.Hit(ToolKind.None);
-            Assert.That(y.Single().ItemId, Is.EqualTo(ItemIds.Berries));
-            Assert.That(y.Single().Amount, Is.EqualTo(GatherTable.Capacity(ResourceNodeType.BerryBush)));
+            Assert.That(y.First().ItemId, Is.EqualTo(ItemIds.Berries));
+            Assert.That(y.First().Amount, Is.EqualTo(GatherTable.Capacity(ResourceNodeType.BerryBush)));
+            Assert.That(y.Single(v => v.ItemId == ItemIds.BerrySeed).Amount, Is.EqualTo(1));
             Assert.That(bush.IsDepleted, Is.True);
         }
 

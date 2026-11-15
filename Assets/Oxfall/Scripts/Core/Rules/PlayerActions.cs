@@ -85,6 +85,10 @@ namespace Oxfall.Core.Rules
         Hurt,
         /// <summary>A high wall would run into a building.</summary>
         OnBuilding,
+        /// <summary>A seed goes in open ground, not on a floor.</summary>
+        NeedsSoil,
+        /// <summary>The crop is still growing: nothing to harvest yet.</summary>
+        NotRipe,
     }
 
     /// <summary>
@@ -586,6 +590,21 @@ namespace Oxfall.Core.Rules
                     done = BuildOp.Pickup(d.Id);
                     return ActionResult.Ok;
                 }
+                case BuildOpKind.Harvest:
+                {
+                    if (!settlement.TryGet(op.Id, out var d)) return ActionResult.NoPiece;
+                    if (!Crops.IsCrop(d.Kind)) return ActionResult.Invalid;
+                    if (!Near(x, y, z, d.X, d.Y, d.Z, UseReach)) return ActionResult.TooFar;
+                    var stage = settlement.CropStageOf(d.Id);
+                    if (!Crops.Harvestable(stage)) return ActionResult.NotRipe;
+                    var crop = Crops.Harvest(d.Kind, stage);
+                    foreach (var item in crop)
+                        if (s.Inventory.SpaceFor(item.ItemId) < item.Amount) return ActionResult.NoSpace;
+                    settlement.Remove(d.Id);
+                    foreach (var item in crop) s.Inventory.Add(item.ItemId, item.Amount);
+                    done = BuildOp.Pickup(d.Id);
+                    return ActionResult.Ok;
+                }
                 case BuildOpKind.RepairDeployable:
                 {
                     if (!settlement.TryGet(op.Id, out var d)) return ActionResult.NoPiece;
@@ -735,6 +754,12 @@ namespace Oxfall.Core.Rules
             if (ground < IslandGround.WaterLevel + 0.3f) return ActionResult.InWater;
             if (Monuments.NoBuilding(settlement.Ground, x, z)) return ActionResult.Monument;
             bool wall = HighWalls.IsWall(kind);
+            // A seed goes in the earth itself: not on a floor, not on rock under a building.
+            if (Crops.IsCrop(kind))
+            {
+                if (Math.Abs(y - ground) > 0.35f || settlement.Grid.HasFoundation(BuildingGrid.CellAt(x, z)))
+                    return ActionResult.NeedsSoil;
+            }
             if (wall)
             {
                 var stands = HighWalls.CanStandWall(settlement, x, y, z, yaw);

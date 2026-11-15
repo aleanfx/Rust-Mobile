@@ -47,6 +47,12 @@ namespace Oxfall.Game.Rendering
         public Material Stone { get; }
         public Material MetalOre { get; }
         public Material Hemp { get; }
+        /// <summary>A crop left too long: dry, straw brown.</summary>
+        public Material Withered { get; }
+        /// <summary>Freshly dug earth round a sown crop.</summary>
+        public Material Soil { get; }
+        /// <summary>Berries not yet ripe: hard and pale green.</summary>
+        public Material GreenBerries { get; }
         public Material HandRock { get; }
         public Material Planks { get; }
         /// <summary>Twig building pieces: pale, freshly cut sticks.</summary>
@@ -219,6 +225,9 @@ namespace Oxfall.Game.Rendering
             Stone = Textured("OxfallStone") ?? Make("Stone", new Color(0.47f, 0.45f, 0.42f), 0.10f);
             MetalOre = Textured("OxfallOre") ?? Make("Metal ore", new Color(0.50f, 0.33f, 0.22f), 0.22f);
             Hemp = Make("Hemp", new Color(0.36f, 0.43f, 0.22f), 0.05f);
+            Withered = Make("Withered", new Color(0.52f, 0.42f, 0.26f), 0.03f);
+            Soil = Make("Soil", new Color(0.24f, 0.17f, 0.11f), 0.02f);
+            GreenBerries = Make("Green berries", new Color(0.48f, 0.58f, 0.28f), 0.25f);
             HandRock = Textured("OxfallStone") ?? Make("Hand rock", new Color(0.50f, 0.48f, 0.45f), 0.12f);
             Planks = Textured("OxfallPlanks") ?? Make("Planks", new Color(0.49f, 0.36f, 0.25f), 0.06f);
             Twig = Tinted(Bark, "Twig", Bark.HasProperty(BaseMap) && Bark.GetTexture(BaseMap) != null

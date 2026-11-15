@@ -510,6 +510,15 @@ namespace Oxfall.Game
                 _guide.Saw("crate");
             };
             _interactor.UseWorkbench += () => _hud.OpenCraftPanel(1);
+            _interactor.Harvested += (kind, stage) =>
+            {
+                var crop = Crops.Harvest(kind, stage);
+                var parts = new System.Collections.Generic.List<string>();
+                foreach (var y in crop)
+                    parts.Add($"{y.Amount} {(_catalog.TryGet(y.ItemId, out var def) ? def.DisplayName.ToLowerInvariant() : y.ItemId)}");
+                _hud.ShowToast(stage == CropStage.Withered ? "Estaba seca: solo quedó una semilla" : "Cosecha: " + string.Join(", ", parts));
+                _audio?.Play(SoundCue.Plant);
+            };
             _interactor.EnterCode += OpenKeypad;
             _interactor.ManageLock += OpenKeypad;
             _hud.UseTapped += _interactor.Use;
@@ -848,7 +857,7 @@ namespace Oxfall.Game
             bool bow = held?.Tool == ToolKind.Bow || held?.Tool == ToolKind.Crossbow;
             _gunLabel = null;
             int arrows = bow ? _inventory.Count(ItemIds.Arrow) : 0;
-            _hud.SetAttackLabel(plan || deploy || door || codeLock ? "COLOCAR" : hammer ? "MEJORAR" : food ? "COMER" : medical ? "CURAR"
+            _hud.SetAttackLabel(deploy && Crops.IsCrop(kind) ? "SEMBRAR" : plan || deploy || door || codeLock ? "COLOCAR" : hammer ? "MEJORAR" : food ? "COMER" : medical ? "CURAR"
                 : bow ? (arrows > 0 ? $"FLECHAS {arrows}" : "SIN FLECHAS")
                 : Firearms.TryGet(held?.Tool ?? ToolKind.None, out var gun) ? GunLabel(gun)
                 : satchel ? $"LANZAR {_inventory.Count(held.Id)}" : rod ? (_rod.Casting ? "RECOGER" : "LANZAR") : "GOLPEAR");
@@ -1841,6 +1850,26 @@ namespace Oxfall.Game
                 case "go-boat": GoToBoat(); break;
                 case "go-motorboat": GoToBoat(BoatKind.Motorboat); break;
                 case "go-copter": GoToCopter(); break;
+                case "give-seeds" when _actions.Online:
+                    _net.SendAct(ActKind.DevGive, 9);
+                    break;
+                case "give-seeds":
+                    ServerWorld.GiveTestKit(_inventory, 9);
+                    break;
+                case "hemp-seed": HoldItem(ItemIds.HempSeed); break;
+                case "berry-seed": HoldItem(ItemIds.BerrySeed); break;
+                case "grow-crops":
+                    // Alone: every crop a third of its growing further on (online the server grows them).
+                    foreach (var d in new System.Collections.Generic.List<Deployable>(_settlement.Deployables))
+                        if (Crops.IsCrop(d.Kind)) _settlement.SetCropAge(d.Id, _settlement.CropAge(d.Id) + Crops.GrowSeconds(d.Kind) / 3f + 1f);
+                    break;
+                case "crops":
+                    foreach (var d in _settlement.Deployables)
+                        if (Crops.IsCrop(d.Kind))
+                            Debug.Log($"[Oxfall] Crop {d.Id} {d.Kind} at ({d.X:0.0}, {d.Y:0.0}, {d.Z:0.0}) stage={_settlement.CropStageOf(d.Id)} age={_settlement.CropAge(d.Id):0} " +
+                                      $"cloth={_inventory.Count(ItemIds.Cloth)} berries={_inventory.Count(ItemIds.Berries)} hemp-seed={_inventory.Count(ItemIds.HempSeed)} berry-seed={_inventory.Count(ItemIds.BerrySeed)}");
+                    break;
+                case "aim-crop": AimAtCrop(); break;
                 case "copters":
                     foreach (var c in _copters.All)
                         Debug.Log($"[Oxfall] Copter {c.Id} at ({c.X:0.0}, {c.Y:0.0}, {c.Z:0.0}) yaw={c.Yaw:0} " +
@@ -2459,6 +2488,26 @@ namespace Oxfall.Game
             Debug.Log($"[Oxfall] Aimed at {type} {target} from {eye}: yaw {yaw:0} pitch {pitch:0}");
         }
 
+        /// <summary>For tests: looks at the middle of the nearest crop.</summary>
+        private void AimAtCrop()
+        {
+            var eye = _player.Head.position;
+            float best = float.MaxValue;
+            Vector3 target = Vector3.zero;
+            foreach (var d in _settlement.Deployables)
+            {
+                if (!Crops.IsCrop(d.Kind)) continue;
+                var mid = new Vector3(d.X, d.Y + 0.4f, d.Z);
+                float dist = (mid - eye).sqrMagnitude;
+                if (dist < best) { best = dist; target = mid; }
+            }
+            if (best == float.MaxValue) return;
+            var to = target - eye;
+            float yaw = Mathf.Atan2(to.x, to.z) * Mathf.Rad2Deg;
+            float pitch = -Mathf.Atan2(to.y, new Vector2(to.x, to.z).magnitude) * Mathf.Rad2Deg;
+            _player.Teleport(_player.transform.position, yaw, pitch);
+        }
+
         /// <summary>For tests: raises every piece to a tier, free.</summary>
         private void UpgradeAll(BuildingTier tier)
         {
@@ -2811,7 +2860,12 @@ namespace Oxfall.Game
             // Trees and rocks grow back on their own timers; checking once a second is plenty.
             _crafting?.Tick(Time.deltaTime);
             // Furnaces burn here alone; online the server burns them and says what came out.
-            if (_settlement != null && !_actions.Online) _settlement.Tick(Time.deltaTime);
+            if (_settlement != null && !_actions.Online)
+            {
+                // Crops grow faster in the rain.
+                if (_weather != null) _settlement.GrowthRate = Crops.Rate(_weather.Rain);
+                _settlement.Tick(Time.deltaTime);
+            }
             _respawnTimer += Time.deltaTime;
             if (_respawnTimer < RespawnTickSeconds || _world == null) return;
             CloseWhatIsFar();

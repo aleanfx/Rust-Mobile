@@ -36,6 +36,10 @@ namespace Oxfall.Core.Rules
         Stairs = 22,
         /// <summary>Mend a high wall or a ladder with the hammer (the server answers with <see cref="DeployableHealth"/>).</summary>
         RepairDeployable = 23,
+        /// <summary>A planted crop has grown this long (seconds, in <see cref="BuildOp.Top"/>): told when it reaches a new stage.</summary>
+        Grow = 24,
+        /// <summary>Harvest a ripe crop (asked for; the server answers with <see cref="Pickup"/>, the crop going into the harvester's pockets).</summary>
+        Harvest = 25,
     }
 
     /// <summary>
@@ -141,6 +145,12 @@ namespace Oxfall.Core.Rules
         /// <summary>Mends a high wall or a ladder to full health, for half of what its lost share cost.</summary>
         public static BuildOp RepairDeployable(int id) => OnDeployable(BuildOpKind.RepairDeployable, id);
 
+        /// <summary>A crop has grown this many seconds.</summary>
+        public static BuildOp Grow(int id, float age) => OnDeployable(BuildOpKind.Grow, id).WithTop(age);
+
+        /// <summary>Harvest a crop.</summary>
+        public static BuildOp Harvest(int id) => OnDeployable(BuildOpKind.Harvest, id);
+
         /// <summary>Lights a furnace, or puts it out.</summary>
         public static BuildOp Light(int id, bool on) =>
             new BuildOp(BuildOpKind.Light, PieceType.Foundation, 0, 0, default, open: on, deployed: Target(id));
@@ -225,6 +235,8 @@ namespace Oxfall.Core.Rules
                 case BuildOpKind.Health: return $"Health {(OnDoor ? "door " + EdgeAt : Piece.ToString())} {Top:0.#}";
                 case BuildOpKind.Repair: return $"Repair {(OnDoor ? "door " + EdgeAt : Piece.ToString())}";
                 case BuildOpKind.DeployableHealth: return $"DeployableHealth {Id} {Top:0.#}";
+                case BuildOpKind.Grow: return $"Grow {Id} {Top:0.#}";
+                case BuildOpKind.Harvest: return "Harvest " + Id;
                 default: return $"{Kind} {Type} ({X},{Z}{(PieceRef.IsEdgeType(Type) ? "," + Axis : "")}{(Level > 0 ? "@" + Level : "")})";
             }
         }
@@ -289,6 +301,7 @@ namespace Oxfall.Core.Rules
                 case BuildOpKind.Pickup:
                 case BuildOpKind.ClearAuthorized:
                 case BuildOpKind.RepairDeployable:
+                case BuildOpKind.Harvest:
                     w.Int(Id);
                     break;
                 case BuildOpKind.Light:
@@ -331,6 +344,7 @@ namespace Oxfall.Core.Rules
                     if (Kind == BuildOpKind.Health) w.Float(Top);
                     break;
                 case BuildOpKind.DeployableHealth:
+                case BuildOpKind.Grow:
                     w.Int(Id);
                     w.Float(Top);
                     break;
@@ -456,6 +470,13 @@ namespace Oxfall.Core.Rules
                     int id = r.Int();
                     return DeployableHealth(id, Finite(r.Float()));
                 }
+                case BuildOpKind.Grow:
+                {
+                    int id = r.Int();
+                    return Grow(id, Finite(r.Float()));
+                }
+                case BuildOpKind.Harvest:
+                    return Harvest(r.Int());
                 default:
                     throw new ProtocolException("Unknown build op " + (byte)kind + ".");
             }
@@ -609,6 +630,8 @@ namespace Oxfall.Core.Rules
                     }
                 case BuildOpKind.DeployableHealth:
                     return settlement.SetDeployableHealth(op.Id, op.HealthLeft);
+                case BuildOpKind.Grow:
+                    return settlement.SetCropAge(op.Id, op.Top);
                 default:
                     return false;
             }
@@ -671,6 +694,8 @@ namespace Oxfall.Core.Rules
                 foreach (int owner in settlement.AuthorizedOn(d.Id)) ops.Add(BuildOp.Authorize(d.Id, owner));
             }
             foreach (var hurt in settlement.DamagedDeployables) ops.Add(BuildOp.DeployableHealth(hurt.Key, hurt.Value));
+            foreach (var crop in settlement.CropAges)
+                if (crop.Value > 0f) ops.Add(BuildOp.Grow(crop.Key, crop.Value));
             // Locks, with their codes hidden: who put each on, who knows its code, and whether it is locked.
             foreach (var pair in settlement.Locks)
             {

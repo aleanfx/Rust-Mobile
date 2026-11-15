@@ -87,6 +87,7 @@ namespace Oxfall.Game.Construction
             _hud.ShowToast(Kind == DeployableKind.ToolCupboard ? "Ponlo en el centro de tu casa y toca COLOCAR"
                 : HighWalls.IsWall(Kind) ? "Apunta donde va el muro: se une solo al muro de al lado"
                 : Kind == DeployableKind.Ladder ? "Apunta a un muro y toca COLOCAR"
+                : Crops.IsCrop(Kind) ? "Apunta a tierra abierta y toca SEMBRAR"
                 : "Apunta al suelo y toca COLOCAR");
         }
 
@@ -124,6 +125,8 @@ namespace Oxfall.Game.Construction
                 case DeployableKind.ShotgunTrap: return "Trampa colocada: cárgala con cartuchos; dispara a quien no tenga permiso en tu armario";
                 case DeployableKind.WoodWall:
                 case DeployableKind.StoneWall: return "Muro levantado: rodea tu casa para que nadie entre sin explosivos o escalera";
+                case DeployableKind.HempPlant: return "Cáñamo sembrado: crece solo en unos minutos (más rápido con lluvia)";
+                case DeployableKind.BerryPlant: return "Moras sembradas: vuelve cuando estén maduras y cosecha";
                 case DeployableKind.Ladder: return "Escalera puesta: avanza para subir, retrocede para bajar, salta para soltarte";
                 default: return "Colocado";
             }

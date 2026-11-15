@@ -556,6 +556,8 @@ namespace Oxfall.Game.Net
                 case ActionResult.NoSupport: return "Apóyala en un muro";
                 case ActionResult.Hurt: return "Está dañado: repáralo con el martillo antes de recogerlo";
                 case ActionResult.OnBuilding: return "Choca con un edificio";
+                case ActionResult.NeedsSoil: return "Las semillas van en tierra, no sobre un piso";
+                case ActionResult.NotRipe: return "Aún no está lista para cosechar";
                 case ActionResult.NeedsDoorway: return "Apunta a un marco de puerta vacío";
                 case ActionResult.NoPiece: return "Ya no está ahí";
                 case ActionResult.MaxTier: return "Ya está al nivel máximo";

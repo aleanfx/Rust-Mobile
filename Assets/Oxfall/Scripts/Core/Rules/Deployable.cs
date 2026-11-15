@@ -44,6 +44,12 @@ namespace Oxfall.Core.Rules
 
         /// <summary>A large wooden box: twice the room of a small one.</summary>
         LargeBox = 14,
+
+        /// <summary>Hemp grown from a seed (see <see cref="Crops"/>).</summary>
+        HempPlant = 15,
+
+        /// <summary>A berry bush grown from a seed.</summary>
+        BerryPlant = 16,
     }
 
     /// <summary>One thing set down: what it is, where it stands, which way it faces, and who put it there.</summary>
@@ -134,6 +140,8 @@ namespace Oxfall.Core.Rules
                 case DeployableKind.StoneWall: return ItemIds.HighStoneWall;
                 case DeployableKind.Ladder: return ItemIds.Ladder;
                 case DeployableKind.LargeBox: return ItemIds.LargeBox;
+                case DeployableKind.HempPlant: return ItemIds.HempSeed;
+                case DeployableKind.BerryPlant: return ItemIds.BerrySeed;
                 // Nothing is made into a bag, a recycler or a supply crate, and none is picked up.
                 case DeployableKind.Bag:
                 case DeployableKind.Recycler:
@@ -159,6 +167,8 @@ namespace Oxfall.Core.Rules
                 case ItemIds.HighStoneWall: kind = DeployableKind.StoneWall; return true;
                 case ItemIds.Ladder: kind = DeployableKind.Ladder; return true;
                 case ItemIds.LargeBox: kind = DeployableKind.LargeBox; return true;
+                case ItemIds.HempSeed: kind = DeployableKind.HempPlant; return true;
+                case ItemIds.BerrySeed: kind = DeployableKind.BerryPlant; return true;
                 default: kind = default; return false;
             }
         }
@@ -206,6 +216,9 @@ namespace Oxfall.Core.Rules
                     return HighWalls.Thickness * 0.5f;
                 case DeployableKind.Ladder: return 0.12f;
                 case DeployableKind.LargeBox: return 0.75f;
+                case DeployableKind.HempPlant:
+                case DeployableKind.BerryPlant:
+                    return Crops.Spacing * 0.5f;
                 default: return 0.5f;
             }
         }
@@ -231,6 +244,9 @@ namespace Oxfall.Core.Rules
                 case DeployableKind.StoneWall: return 500f;
                 case DeployableKind.Ladder: return 60f;
                 case DeployableKind.LargeBox: return 225f;
+                case DeployableKind.HempPlant:
+                case DeployableKind.BerryPlant:
+                    return 20f;
                 default: return 0f;
             }
         }
@@ -252,6 +268,8 @@ namespace Oxfall.Core.Rules
                 case DeployableKind.StoneWall: return "Muro alto de piedra";
                 case DeployableKind.Ladder: return "Escalera";
                 case DeployableKind.LargeBox: return "Caja grande";
+                case DeployableKind.HempPlant: return "Cáñamo sembrado";
+                case DeployableKind.BerryPlant: return "Moras sembradas";
                 default: return "Objeto";
             }
         }

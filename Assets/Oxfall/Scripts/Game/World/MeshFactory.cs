@@ -372,6 +372,30 @@ namespace Oxfall.Game.World
             return b.Build("FuelCan", 45f);
         }
 
+        /// <summary>A small cloth pouch of seeds tied at the neck, a few seeds spilled beside it. Submeshes: cloth, string, seeds.</summary>
+        public static Mesh SeedPouch()
+        {
+            var b = new FlatMeshBuilder(3) { UvScale = 0.25f };
+            var random = new System.Random(61);
+            b.AddBlob(0, new Vector3(0f, 0.055f, 0f), new Vector3(0.075f, 0.06f, 0.07f), random, 0.05f);
+            b.AddCylinder(0, new Vector3(0f, 0.105f, 0f), 0.022f, 0.035f, 0.04f, 7, 0f);
+            b.AddCylinder(1, new Vector3(0f, 0.1f, 0f), 0.026f, 0.026f, 0.012f, 8, 0f);
+            for (int i = 0; i < 5; i++)
+            {
+                var at = new Vector3(0.08f + Rand(random, 0f, 0.05f), 0.008f, Rand(random, -0.05f, 0.05f));
+                b.AddBlob(2, at, new Vector3(0.012f, 0.008f, 0.009f), random, 0.1f);
+            }
+            return b.Build("SeedPouch", 60f);
+        }
+
+        /// <summary>A low mound of dug earth, where a seed went in. One submesh.</summary>
+        public static Mesh SoilMound()
+        {
+            var b = new FlatMeshBuilder(1) { UvScale = 0.5f };
+            b.AddBlob(0, new Vector3(0f, -0.02f, 0f), new Vector3(0.36f, 0.08f, 0.36f), new System.Random(67), 0.06f);
+            return b.Build("SoilMound", 60f);
+        }
+
         /// <summary>A lump of rendered animal fat. One submesh.</summary>
         public static Mesh FatLump()
         {

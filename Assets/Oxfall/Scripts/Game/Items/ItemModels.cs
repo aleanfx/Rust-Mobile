@@ -484,6 +484,20 @@ namespace Oxfall.Game.Items
                     IconRotation = Tilt(-34f, 30f),
                     IconZoom = 1.2f,
                 },
+                [ItemIds.HempSeed] = new ItemModel
+                {
+                    Mesh = MeshFactory.SeedPouch(),
+                    Materials = new[] { m.Cloth, m.Rope, m.Hemp },
+                    IconRotation = Tilt(-26f, 30f),
+                    IconZoom = 1.3f,
+                },
+                [ItemIds.BerrySeed] = new ItemModel
+                {
+                    Mesh = MeshFactory.SeedPouch(),
+                    Materials = new[] { m.Leather, m.Rope, m.Berries },
+                    IconRotation = Tilt(-26f, 30f),
+                    IconZoom = 1.3f,
+                },
                 [ItemIds.LowGradeFuel] = new ItemModel
                 {
                     Mesh = MeshFactory.FuelCan(),

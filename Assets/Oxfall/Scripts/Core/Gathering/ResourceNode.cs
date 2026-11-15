@@ -190,6 +190,9 @@ namespace Oxfall.Core.Gathering
             var result = new List<Yield>(2) { new Yield(GatherTable.MainItem(Type), amount) };
             // Metal ore comes wrapped in stone.
             if (Type == ResourceNodeType.MetalOre) result.Add(new Yield(ItemIds.Stone, amount));
+            // A wild plant picked leaves a seed in the hand, to grow it at home.
+            string seed = Rules.Crops.WildSeed(Type);
+            if (seed != null && IsDepleted) result.Add(new Yield(seed, 1));
             return result;
         }
 
