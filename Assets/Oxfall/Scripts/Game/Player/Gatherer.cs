@@ -171,7 +171,7 @@ namespace Oxfall.Game.Player
             _cooldown -= dt;
             _hintCooldown -= dt;
 
-            if (_held != null && _held.Shoots)
+            if (_held != null && (_held.Shoots || _hotbar.HeldTool == ToolKind.Crossbow))
             {
                 TickBow(dt);
                 AnimateHand(dt);
@@ -420,6 +420,13 @@ namespace Oxfall.Game.Player
                     }
                     return;
                 }
+                bool crossbow = _hotbar.HeldTool == ToolKind.Crossbow;
+                if (crossbow)
+                {
+                    // Already drawn: it looses at the touch, then takes a while to load again.
+                    if (_input.AttackPressed) Loose();
+                    return;
+                }
                 if (_draw < 0f)
                 {
                     _draw = 0f;
@@ -429,7 +436,7 @@ namespace Oxfall.Game.Player
                 return;
             }
             if (_draw < 0f) return;
-            bool full = _draw >= Combat.DrawSeconds;
+            bool full = _draw >= Combat.DrawSecondsFor(_hotbar.HeldTool);
             _draw = -1f;
             if (full) Loose();
         }
@@ -444,7 +451,8 @@ namespace Oxfall.Game.Player
             float pitch = Mathf.Asin(Mathf.Clamp(forward.y, -1f, 1f)) * Mathf.Rad2Deg;
             if (!Actions.Shoot(origin, yaw, pitch)) return;
             _draw = -1f;
-            _cooldown = 0.3f;
+            _cooldown = _hotbar.HeldTool == ToolKind.Crossbow ? Combat.CrossbowShotSeconds : 0.3f;
+            if (_hotbar.HeldTool == ToolKind.Crossbow) Message?.Invoke("Recargando…");
             _recoil = 0f;
             Sound?.Invoke(SoundCue.BowShot);
             if (Arrows != null) Arrows.Launch(origin, forward, OnArrowLanded);

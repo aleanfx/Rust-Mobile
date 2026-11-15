@@ -102,6 +102,8 @@ namespace Oxfall.Core.Items
                 description: "Una hoja larga y rápida: buena en la pelea y para despiezar animales; corta algo de madera."),
             new ItemDefinition(ItemIds.Sword, "Espada de chatarra", ItemCategory.Tool, 1, ToolKind.Sword, skinnable: true,
                 description: "Martillada de chatarra: golpes lentos y pesados. El arma cuerpo a cuerpo más fuerte."),
+            new ItemDefinition(ItemIds.Crossbow, "Ballesta", ItemCategory.Tool, 1, ToolKind.Crossbow, skinnable: true,
+                description: "Dispara las mismas flechas que el arco, más fuerte y sin tensar; tarda en recargar."),
             new ItemDefinition(ItemIds.WoodenSpear, "Lanza de madera", ItemCategory.Tool, 1, ToolKind.Spear, skinnable: true,
                 description: "Un palo largo con la punta endurecida al fuego: llega más lejos y hace más daño que cualquier herramienta."),
             new ItemDefinition(ItemIds.WoodenBow, "Arco de madera", ItemCategory.Tool, 1, ToolKind.Bow, skinnable: true,

@@ -1047,6 +1047,36 @@ namespace Oxfall.Game.World
         }
 
         /// <summary>
+        /// A crossbow, held level and pointing along +Z from its grip at the origin: a wooden stock,
+        /// a steel bow across its front, the cord drawn back to the latch, an arrow loaded and a
+        /// stirrup at the nose. Submeshes: wood, steel, cord.
+        /// </summary>
+        public static Mesh Crossbow()
+        {
+            var b = new FlatMeshBuilder(3) { UvScale = 0.25f };
+            b.AddBox(0, new Vector3(-0.022f, -0.03f, -0.22f), new Vector3(0.022f, 0.025f, 0.42f));
+            b.AddBox(0, new Vector3(-0.02f, -0.1f, -0.06f), new Vector3(0.02f, -0.03f, -0.01f));
+            b.AddBox(0, new Vector3(-0.03f, -0.06f, -0.34f), new Vector3(0.03f, 0.02f, -0.2f));
+            // The bow: two steel limbs swept forward, and the cord back to the latch.
+            var nose = new Vector3(0f, 0.01f, 0.38f);
+            var left = new Vector3(-0.27f, 0.01f, 0.31f);
+            var right = new Vector3(0.27f, 0.01f, 0.31f);
+            b.AddTube(1, nose, left, 0.014f, 0.009f, 6, 1);
+            b.AddTube(1, nose, right, 0.014f, 0.009f, 6, 1);
+            var latch = new Vector3(0f, 0.03f, 0.08f);
+            b.AddTube(2, left, latch, 0.004f, 0.004f, 4);
+            b.AddTube(2, right, latch, 0.004f, 0.004f, 4);
+            b.AddBox(1, new Vector3(-0.015f, 0.022f, 0.06f), new Vector3(0.015f, 0.04f, 0.1f));
+            // The loaded arrow in its groove.
+            b.AddTube(0, new Vector3(0f, 0.035f, 0.08f), new Vector3(0f, 0.035f, 0.47f), 0.005f, 0.005f, 5);
+            b.AddCone(1, new Vector3(0f, 0.035f, 0.47f), 0.009f, 0.04f, 5, 0f);
+            // The stirrup.
+            b.AddTube(1, new Vector3(-0.05f, 0.0f, 0.42f), new Vector3(0f, 0.0f, 0.5f), 0.007f, 0.007f, 5, 1);
+            b.AddTube(1, new Vector3(0.05f, 0.0f, 0.42f), new Vector3(0f, 0.0f, 0.5f), 0.007f, 0.007f, 5, 1);
+            return b.Build("Crossbow", 40f);
+        }
+
+        /// <summary>
         /// A machete: a long, slightly curved blade along +Y from a wrapped grip at the origin, its
         /// edge towards +X, widening to the tip. Submeshes: steel, grip wrap, rivets.
         /// </summary>

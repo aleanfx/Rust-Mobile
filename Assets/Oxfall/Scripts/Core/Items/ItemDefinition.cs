@@ -51,6 +51,8 @@ namespace Oxfall.Core.Items
         Machete,
         /// <summary>A sword hammered from scrap: slow, heavy blows, the best close weapon.</summary>
         Sword,
+        /// <summary>A crossbow: shoots arrows harder and flatter than a bow, with no draw, but slow to load again.</summary>
+        Crossbow,
     }
 
     /// <summary>

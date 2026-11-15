@@ -75,6 +75,17 @@ namespace Oxfall.Game.Items
                 [ItemIds.Hammer] = Tool(MeshFactory.Hammer(), new[] { m.Bark, m.Stone, m.Rope }),
                 [ItemIds.MetalHatchet] = Tool(MeshFactory.MetalHatchet(), new[] { m.Bark, m.Steel, m.Rope }),
                 [ItemIds.MetalPickaxe] = Tool(MeshFactory.MetalPickaxe(), new[] { m.Bark, m.Steel, m.Rope }),
+                [ItemIds.Crossbow] = new ItemModel
+                {
+                    Mesh = MeshFactory.Crossbow(),
+                    Materials = new[] { m.Planks, m.Steel, m.Rope },
+                    ShowInHand = true,
+                    // Held level, stock to the shoulder, the bow ahead across the view.
+                    HandPosition = new Vector3(0.22f, -0.24f, 0.36f),
+                    HandRotation = Quaternion.Euler(2f, -3f, 0f),
+                    IconRotation = Tilt(-30f, 60f),
+                    IconZoom = 1.2f,
+                },
                 [ItemIds.Machete] = Tool(MeshFactory.Machete(), new[] { m.Steel, m.Leather, m.Metal }),
                 [ItemIds.Sword] = Tool(MeshFactory.SalvagedSword(), new[] { m.Steel, m.Leather, m.BarrelRust }),
                 [ItemIds.WoodenSpear] = new ItemModel

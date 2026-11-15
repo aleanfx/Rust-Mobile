@@ -77,6 +77,20 @@ namespace Oxfall.Core.Rules
         /// <summary>How long after a shot its arrow may still be said to land (the longest flight, with room for lag).</summary>
         public const float ArrowFlightSeconds = 4f;
 
-        public static bool Shoots(ToolKind tool) => tool == ToolKind.Bow;
+        public static bool Shoots(ToolKind tool) => tool == ToolKind.Bow || tool == ToolKind.Crossbow;
+
+        // ---- The crossbow: the same arrows, harder, with no draw but a slow reload.
+
+        public const float CrossbowDamage = 55f;
+        public const float CrossbowShotSeconds = 2.2f;
+
+        /// <summary>Health an arrow from this takes off a player or an animal.</summary>
+        public static float ArrowDamageFor(ToolKind tool) => tool == ToolKind.Crossbow ? CrossbowDamage : ArrowDamage;
+
+        /// <summary>The least time between two shots of this.</summary>
+        public static float ShotSecondsFor(ToolKind tool) => tool == ToolKind.Crossbow ? CrossbowShotSeconds : ShotSeconds;
+
+        /// <summary>Seconds to hold before it looses (a crossbow is already drawn).</summary>
+        public static float DrawSecondsFor(ToolKind tool) => tool == ToolKind.Crossbow ? 0f : DrawSeconds;
     }
 }

@@ -102,20 +102,21 @@ namespace Oxfall.Game.Net
         /// </summary>
         public bool Shoot(Vector3 origin, float yaw, float pitch)
         {
-            if (_survivor.Vitals.IsDead || !_survivor.HasTool(ToolKind.Bow) || Inventory.Count(ItemIds.Arrow) < 1) return false;
+            var tool = Hotbar != null && Hotbar.HeldTool == ToolKind.Crossbow ? ToolKind.Crossbow : ToolKind.Bow;
+            if (_survivor.Vitals.IsDead || !_survivor.HasTool(tool) || Inventory.Count(ItemIds.Arrow) < 1) return false;
             if (Online)
             {
                 _net.SendShoot(origin, yaw, pitch);
                 return true;
             }
             Inventory.Remove(ItemIds.Arrow, 1);
-            Spend(ToolKind.Bow);
-            _shots.Enqueue(new Vector3(origin.x, origin.y, origin.z));
+            Spend(tool);
+            _shots.Enqueue(new Vector4(origin.x, origin.y, origin.z, Combat.ArrowDamageFor(tool)));
             while (_shots.Count > 6) _shots.Dequeue();
             return true;
         }
 
-        private readonly System.Collections.Generic.Queue<Vector3> _shots = new System.Collections.Generic.Queue<Vector3>();
+        private readonly System.Collections.Generic.Queue<Vector4> _shots = new System.Collections.Generic.Queue<Vector4>();
 
         // ---- Guns
 
@@ -253,8 +254,8 @@ namespace Oxfall.Game.Net
             if (_shots.Count == 0) return;
             var from = _shots.Dequeue();
             if (kind != ArrowTarget.Animal || Fauna == null || !Fauna.TryGet(target, out var animal) || animal.IsDead) return;
-            float damage = Mathf.Min(Combat.ArrowDamage, animal.Health);
-            bool killed = Fauna.Hit(target, Combat.ArrowDamage, 0, from.x, from.z);
+            float damage = Mathf.Min(from.w, animal.Health);
+            bool killed = Fauna.Hit(target, from.w, 0, from.x, from.z);
             AnimalHit?.Invoke(target, killed ? AnimalBlow.Killed : AnimalBlow.Hurt, damage);
         }
 

@@ -805,7 +805,7 @@ namespace Oxfall.Game
             if (satchel) _thrower.SetActive(true, held.Id == ItemIds.Beancan ? ChargeKind.Beancan : ChargeKind.Satchel);
             bool food = held?.Category == ItemCategory.Food;
             bool medical = held?.Category == ItemCategory.Medical;
-            bool bow = held?.Tool == ToolKind.Bow;
+            bool bow = held?.Tool == ToolKind.Bow || held?.Tool == ToolKind.Crossbow;
             _gunLabel = null;
             int arrows = bow ? _inventory.Count(ItemIds.Arrow) : 0;
             _hud.SetAttackLabel(plan || deploy || door || codeLock ? "COLOCAR" : hammer ? "MEJORAR" : food ? "COMER" : medical ? "CURAR"
@@ -1773,6 +1773,7 @@ namespace Oxfall.Game
                 case "spear": HoldItem(ItemIds.WoodenSpear); break;
                 case "machete": HoldItem(ItemIds.Machete); break;
                 case "sword": HoldItem(ItemIds.Sword); break;
+                case "crossbow": HoldItem(ItemIds.Crossbow); break;
                 case "give-blades" when _actions.Online:
                     _net.SendAct(ActKind.DevGive, 7);
                     break;

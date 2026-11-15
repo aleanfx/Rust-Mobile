@@ -77,5 +77,6 @@ namespace Oxfall.Core.Items
         public const string Ladder = "ladder";
         public const string Machete = "machete";
         public const string Sword = "salvaged_sword";
+        public const string Crossbow = "crossbow";
     }
 }

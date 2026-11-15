@@ -13,8 +13,8 @@ namespace Oxfall.Core.Net
     /// </summary>
     public sealed partial class ServerWorld
     {
-        private readonly Dictionary<ushort, Queue<(float X, float Y, float Z, float Time)>> _arrows =
-            new Dictionary<ushort, Queue<(float, float, float, float)>>();
+        private readonly Dictionary<ushort, Queue<(float X, float Y, float Z, float Time, float Damage)>> _arrows =
+            new Dictionary<ushort, Queue<(float, float, float, float, float)>>();
 
         /// <summary>Arrows a player may have in the air at once (more are forgotten, oldest first).</summary>
         private const int MaxArrowsInFlight = 6;
@@ -28,17 +28,19 @@ namespace Oxfall.Core.Net
             if (!Players.TryGet(playerId, out var player) || !player.Placed) return false;
             if (!_online.TryGetValue(playerId, out var record) || record.Survivor.Vitals.IsDead) return false;
             var s = record.Survivor;
-            if (!s.HasTool(ToolKind.Bow) || s.Inventory.Count(ItemIds.Arrow) < 1) return false;
-            if (now - player.LastHitTime < Combat.ShotSeconds * 0.75f) return false;
+            // A crossbow if that is what is in hand, else a bow.
+            var tool = Catalog.TryGet(player.Held ?? "", out var held) && held.Tool == ToolKind.Crossbow ? ToolKind.Crossbow : ToolKind.Bow;
+            if (!s.HasTool(tool) || s.Inventory.Count(ItemIds.Arrow) < 1) return false;
+            if (now - player.LastHitTime < Combat.ShotSecondsFor(tool) * 0.75f) return false;
             var p = player.Pose;
             float dx = x - p.X, dz = z - p.Z;
             if (dx * dx + dz * dz > 2.5f * 2.5f || Math.Abs(y - (p.Y + 1.6f)) > 2.5f) return false;
 
             player.LastHitTime = now;
             s.Inventory.Remove(ItemIds.Arrow, 1);
-            Spend(record, player, ToolKind.Bow);
-            if (!_arrows.TryGetValue(playerId, out var flying)) _arrows[playerId] = flying = new Queue<(float, float, float, float)>();
-            flying.Enqueue((x, y, z, now));
+            Spend(record, player, tool);
+            if (!_arrows.TryGetValue(playerId, out var flying)) _arrows[playerId] = flying = new Queue<(float, float, float, float, float)>();
+            flying.Enqueue((x, y, z, now, Combat.ArrowDamageFor(tool)));
             while (flying.Count > MaxArrowsInFlight) flying.Dequeue();
             return true;
         }
@@ -66,7 +68,7 @@ namespace Oxfall.Core.Net
                 if (!Players.TryGet(targetKey, out var target) || !target.Placed) return false;
                 if (!_online.TryGetValue(targetKey, out var t) || t.Survivor.Vitals.IsDead) return false;
                 if (Distance(shot.X, shot.Z, target.Pose.X, target.Pose.Z) > reach) return false;
-                damage = t.Survivor.TakeHit(Combat.ArrowDamage);
+                damage = t.Survivor.TakeHit(shot.Damage);
                 killed = t.Survivor.Vitals.IsDead;
                 return true;
             }
@@ -75,14 +77,14 @@ namespace Oxfall.Core.Net
                 if (!TryGetSleeper(targetId, out var sleeper)) return false;
                 if (Distance(shot.X, shot.Z, sleeper.Pose.X, sleeper.Pose.Z) > reach + SleeperHalfLength) return false;
                 string by = _online.TryGetValue(playerId, out var shooter) ? shooter.Name : null;
-                return HurtSleeper(sleeper, Combat.ArrowDamage, by, out damage, out killed);
+                return HurtSleeper(sleeper, shot.Damage, by, out damage, out killed);
             }
             if (kind == ArrowTarget.Animal)
             {
                 if (!Fauna.TryGet(targetId, out var animal) || animal.IsDead) return false;
                 if (Distance(shot.X, shot.Z, animal.X, animal.Z) > reach) return false;
-                damage = Math.Min(Combat.ArrowDamage, animal.Health);
-                killed = Fauna.Hit(targetId, Combat.ArrowDamage, playerId, shot.X, shot.Z);
+                damage = Math.Min(shot.Damage, animal.Health);
+                killed = Fauna.Hit(targetId, shot.Damage, playerId, shot.X, shot.Z);
                 blow = killed ? AnimalBlow.Killed : AnimalBlow.Hurt;
                 return true;
             }

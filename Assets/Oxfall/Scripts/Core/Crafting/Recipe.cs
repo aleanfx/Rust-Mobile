@@ -127,6 +127,8 @@ namespace Oxfall.Core.Crafting
                 new Ingredient(ItemIds.MetalFragments, 80), new Ingredient(ItemIds.Wood, 50)).AtWorkbench().Blueprint(40),
             new Recipe("salvaged_sword", ItemIds.Sword, 1, 20f,
                 new Ingredient(ItemIds.MetalFragments, 150), new Ingredient(ItemIds.Scrap, 20), new Ingredient(ItemIds.Leather, 10)).AtWorkbench().Blueprint(80),
+            new Recipe("crossbow", ItemIds.Crossbow, 1, 20f,
+                new Ingredient(ItemIds.Wood, 200), new Ingredient(ItemIds.MetalFragments, 75), new Ingredient(ItemIds.Cloth, 30)).AtWorkbench().Blueprint(60),
             new Recipe("burlap_headwrap", ItemIds.BurlapHeadwrap, 1, 5f,
                 new Ingredient(ItemIds.Cloth, 10)),
             new Recipe("burlap_shirt", ItemIds.BurlapShirt, 1, 8f,

@@ -409,6 +409,8 @@ namespace Oxfall.Core.Net
                 // Blades.
                 inventory.Add(ItemIds.Machete, 1);
                 inventory.Add(ItemIds.Sword, 1);
+                inventory.Add(ItemIds.Crossbow, 1);
+                inventory.Add(ItemIds.Arrow, 20);
                 return;
             }
             if (kit == 6)

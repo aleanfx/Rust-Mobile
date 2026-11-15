@@ -66,6 +66,7 @@ namespace Oxfall.Game.UI
                     return 0;
                 case ItemIds.WoodenSpear:
                 case ItemIds.Machete:
+                case ItemIds.Crossbow:
                 case ItemIds.Sword:
                 case ItemIds.WoodenBow:
                 case ItemIds.Arrow:
