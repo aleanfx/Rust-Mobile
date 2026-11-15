@@ -382,8 +382,10 @@ namespace Oxfall.Game.UI
             }
             if (_boxKind == DeployableKind.Campfire)
             {
-                int raw = _boxInventory.Count(ItemIds.RawMeat);
-                _lootStatus.text = raw > 0 ? $"Asando · {raw} de carne cruda" : "Pon carne cruda al fuego: se asa sola";
+                int raw = _boxInventory.Count(ItemIds.RawMeat), fish = _boxInventory.Count(ItemIds.RawFish);
+                _lootStatus.text = raw > 0 ? $"Asando · {raw} de carne cruda" + (fish > 0 ? $" y {fish} de pescado" : "")
+                    : fish > 0 ? $"Asando · {fish} de pescado crudo" : "Pon carne o pescado crudo al fuego: se asa solo";
+                raw += fish;
                 _lootStatus.color = raw > 0 ? UiTheme.Accent : UiTheme.TextMuted;
             }
             // Nothing goes into a bag: it only empties.

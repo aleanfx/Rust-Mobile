@@ -48,6 +48,7 @@ namespace Oxfall.Game
         private BuildingViews _buildings;
         private BuildSystem _build;
         private HammerTool _hammer;
+        private FishingRodTool _rod;
         private DoorPlacer _doorPlacer;
         private Interactor _interactor;
         private DeployablePlacer _placer;
@@ -449,6 +450,9 @@ namespace Oxfall.Game
                 audio.Play(SoundCue.Swing);
             };
             _actions.ChargeArmed += (charge, left) => _explosions.Arm(charge, left, true);
+            _rod = playerObject.AddComponent<FishingRodTool>();
+            _rod.Init(input, player.Head, _hud, _gatherer, _actions, new[] { materials.ChuteOrange, materials.WhitePaint }, materials.Rope);
+            _rod.Sound += audio.Play;
             // Planes, parachutes and the red smoke where a crate came down.
             _airdropViews = new AirdropViews(materials, audio.Bank, _explosions);
             _airdropViews.Started += drop =>
@@ -792,6 +796,8 @@ namespace Oxfall.Game
             bool codeLock = _hotbar.IsHolding(ItemIds.CodeLock);
             bool satchel = held?.Tool == ToolKind.Explosive;
             if (!satchel) _thrower.SetActive(false);
+            bool rod = held?.Tool == ToolKind.FishingRod;
+            if (!rod) _rod.SetActive(false);
             if (!plan) _build.SetActive(false);
             if (!deploy) _placer.Hold(null);
             if (!hammer) _hammer.SetActive(false);
@@ -811,7 +817,8 @@ namespace Oxfall.Game
             _hud.SetAttackLabel(plan || deploy || door || codeLock ? "COLOCAR" : hammer ? "MEJORAR" : food ? "COMER" : medical ? "CURAR"
                 : bow ? (arrows > 0 ? $"FLECHAS {arrows}" : "SIN FLECHAS")
                 : Firearms.TryGet(held?.Tool ?? ToolKind.None, out var gun) ? GunLabel(gun)
-                : satchel ? $"LANZAR {_inventory.Count(held.Id)}" : "GOLPEAR");
+                : satchel ? $"LANZAR {_inventory.Count(held.Id)}" : rod ? (_rod.Casting ? "RECOGER" : "LANZAR") : "GOLPEAR");
+            if (rod) _rod.SetActive(true);
             _hud.SetAttackIcon(held != null ? ItemIcons.Get(held.Id) : null);
         }
 
@@ -1777,6 +1784,14 @@ namespace Oxfall.Game
                 case "machete": HoldItem(ItemIds.Machete); break;
                 case "sword": HoldItem(ItemIds.Sword); break;
                 case "crossbow": HoldItem(ItemIds.Crossbow); break;
+                case "fishing-rod": HoldItem(ItemIds.FishingRod); break;
+                case "go-shore": GoToShore(); break;
+                case "cast": _rod.Cast(); break;
+                case "reel": _rod.Reel(); break;
+                case "fish-state":
+                    Debug.Log($"[Oxfall] Fish casting={_rod.Casting} biting={_rod.Biting} bite-in={_actions.SecondsToBite:0.0} " +
+                              $"raw-fish={_inventory.Count(ItemIds.RawFish)} cooked-fish={_inventory.Count(ItemIds.CookedFish)} aim={_rod.TryAim(out _)}");
+                    break;
                 case "give-blades" when _actions.Online:
                     _net.SendAct(ActKind.DevGive, 7);
                     break;
@@ -2086,6 +2101,28 @@ namespace Oxfall.Game
         }
 
         /// <summary>For tests: takes an item in hand, moving it from the backpack to the last hotbar slot if need be.</summary>
+        /// <summary>For tests: stands on the nearest shore with deep water a few metres ahead, looking at it.</summary>
+        private void GoToShore()
+        {
+            var ground = _settlement.Ground;
+            var from = _player.transform.position;
+            float start = Mathf.Atan2(from.x, from.z);
+            for (float r = 40f; r < IslandGround.HalfSize; r += 3f)
+                for (int k = 0; k < 24; k++)
+                {
+                    float a = start + (k % 2 == 0 ? 1f : -1f) * (k / 2) * 0.26f;
+                    float x = Mathf.Sin(a) * r, z = Mathf.Cos(a) * r;
+                    float wx = Mathf.Sin(a) * (r + 9f), wz = Mathf.Cos(a) * (r + 9f);
+                    float y = ground.Height(x, z);
+                    if (y < IslandGround.WaterLevel + 0.6f || y > IslandGround.WaterLevel + 3f) continue;
+                    if (!Fishing.WaterAt(ground, wx, wz, out _)) continue;
+                    _player.Teleport(new Vector3(x, y + 0.1f, z), a * Mathf.Rad2Deg, 18f);
+                    Debug.Log($"[Oxfall] Shore at ({x:0}, {z:0})");
+                    return;
+                }
+            Debug.Log("[Oxfall] Shore not found");
+        }
+
         private void HoldItem(string id)
         {
             if (_hotbar.SelectItem(id)) return;

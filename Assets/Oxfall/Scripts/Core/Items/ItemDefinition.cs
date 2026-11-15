@@ -53,6 +53,8 @@ namespace Oxfall.Core.Items
         Sword,
         /// <summary>A crossbow: shoots arrows harder and flatter than a bow, with no draw, but slow to load again.</summary>
         Crossbow,
+        /// <summary>A fishing rod: cast at deep water, reel in when the float dips.</summary>
+        FishingRod,
     }
 
     /// <summary>

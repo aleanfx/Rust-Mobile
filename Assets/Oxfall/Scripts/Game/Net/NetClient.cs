@@ -154,6 +154,9 @@ namespace Oxfall.Game.Net
         /// <summary>A tool or weapon of this player's wore out and broke (its item id).</summary>
         public event Action<string> Broke;
 
+        /// <summary>News of the player's fishing line: a bite, or what came up.</summary>
+        public event Action<Oxfall.Core.Rules.FishCatch> Fish;
+
         private readonly List<string> _blueprints = new List<string>();
 
         /// <summary>The weather as the server says it is: rain and fog, 0..1 each.</summary>
@@ -600,6 +603,9 @@ namespace Oxfall.Game.Net
                 }
                 case MessageType.Broke:
                     Broke?.Invoke(Messages.ReadBroke(reader));
+                    break;
+                case MessageType.Fish:
+                    Fish?.Invoke(Messages.ReadFish(reader));
                     break;
                 case MessageType.Blueprints:
                 {

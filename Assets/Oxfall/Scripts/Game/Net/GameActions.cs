@@ -28,7 +28,82 @@ namespace Oxfall.Game.Net
             _settlement = settlement;
             _player = player;
             _net = net;
+            if (_net != null) _net.Fish += c => FishNews?.Invoke(c);
         }
+
+        // ---- Fishing: alone the line is kept here; online the server keeps it and says when a fish bites.
+
+        private readonly Angler _angler = new Angler();
+
+        /// <summary>The island's ground and water.</summary>
+        public Oxfall.Core.World.IslandGround Ground => _settlement.Ground;
+
+        /// <summary>The player's line: a fish bit, or what came up on reeling in, or the line was lost.</summary>
+        public event System.Action<FishCatch> FishNews;
+
+        /// <summary>Casts the rod in hand so the float lands at <paramref name="at"/>.</summary>
+        public ActionResult Cast(Vector3 at)
+        {
+            if (_survivor.Vitals.IsDead) return ActionResult.Dead;
+            var p = _player.position;
+            var r = Fishing.CanCast(_settlement.Ground, p.x, p.y, p.z, at.x, at.z);
+            if (r != ActionResult.Ok) return r;
+            if (Online)
+            {
+                _net.SendAct(ActKind.Cast, Mathf.RoundToInt(at.x * 10f), Mathf.RoundToInt(at.z * 10f));
+                return ActionResult.Ok;
+            }
+            return _angler.Cast(_settlement.Ground, p.x, p.y, p.z, at.x, at.z, Time.time, Random.Range(int.MinValue, int.MaxValue));
+        }
+
+        /// <summary>Reels the line in (what came up arrives as <see cref="FishNews"/>).</summary>
+        public void Reel()
+        {
+            if (Online)
+            {
+                _net.SendAct(ActKind.Reel);
+                return;
+            }
+            if (!_angler.Casting) return;
+            var caught = _angler.Reel(Time.time);
+            if (Fishing.IsFish(caught))
+            {
+                if (!Angler.Land(_survivor, caught)) caught = FishCatch.Escaped;
+                else Spend(ToolKind.FishingRod);
+            }
+            FishNews?.Invoke(caught);
+        }
+
+        /// <summary>Alone: a bite when it comes, a fish gone when it is missed, the line lost when walked off.</summary>
+        public void TickFishing()
+        {
+            if (Online || !_angler.Casting) return;
+            var p = _player.position;
+            if (_angler.TooFarFrom(p.x, p.z) || _survivor.Vitals.IsDead)
+            {
+                _angler.Stop();
+                FishNews?.Invoke(FishCatch.Lost);
+            }
+            else if (!_angler.Told && _angler.Biting(Time.time))
+            {
+                _angler.Told = true;
+                FishNews?.Invoke(FishCatch.Bite);
+            }
+            else if (_angler.Missed(Time.time, 1f))
+            {
+                _angler.Stop();
+                FishNews?.Invoke(FishCatch.Escaped);
+            }
+        }
+
+        /// <summary>The rod was put away: the line comes out (online the server sees the rod go).</summary>
+        public void StopFishing()
+        {
+            if (!Online) _angler.Stop();
+        }
+
+        /// <summary>For tests alone: seconds until the fish bites (negative once it has).</summary>
+        public float SecondsToBite => _angler.Casting ? _angler.BiteAt - Time.time : float.NaN;
 
         /// <summary>Online: changes take effect when the server says so, a moment later.</summary>
         public bool Online => _net != null && _net.State == NetClient.Status.Online;

@@ -185,6 +185,8 @@ namespace Oxfall.Core.Net
         TrapShot = 64,
         /// <summary>The player's skin locker: Oxcoins, skins bought, and the skin each item wears.</summary>
         LockerState = 65,
+        /// <summary>The player's line: a fish bit, or what reeling in brought up (a <see cref="Rules.FishCatch"/>, a byte).</summary>
+        Fish = 66,
     }
 
     /// <summary>What a player does to their own belongings (inside an <see cref="MessageType.Act"/> message).</summary>
@@ -219,6 +221,10 @@ namespace Oxfall.Core.Net
         DevAirdrop = 18,
         /// <summary>Learns a recipe's blueprint at a workbench, for scrap (its id in the recipe field).</summary>
         Learn = 19,
+        /// <summary>Casts the fishing rod in hand: the float lands at (a, b) in tenths of a metre.</summary>
+        Cast = 20,
+        /// <summary>Reels the line in: a fish if one is on the hook.</summary>
+        Reel = 21,
     }
 
     /// <summary>Where a player stands and which way the body faces (degrees about up).</summary>
@@ -419,6 +425,10 @@ namespace Oxfall.Core.Net
                 case ActKind.Open:
                     w.Int(a);
                     break;
+                case ActKind.Cast:
+                    w.Int(a);
+                    w.Int(b);
+                    break;
                 case ActKind.Take:
                 case ActKind.Put:
                 case ActKind.MoveInBox:
@@ -447,6 +457,10 @@ namespace Oxfall.Core.Net
                 case ActKind.Open:
                     a = r.Int();
                     break;
+                case ActKind.Cast:
+                    a = r.Int();
+                    b = r.Int();
+                    break;
                 case ActKind.Take:
                 case ActKind.Put:
                 case ActKind.MoveInBox:
@@ -470,6 +484,7 @@ namespace Oxfall.Core.Net
                 case ActKind.Close:
                 case ActKind.TakeAll:
                 case ActKind.DevAirdrop:
+                case ActKind.Reel:
                     break;
                 default:
                     throw new ProtocolException("Unknown action " + (byte)kind + ".");
@@ -706,6 +721,16 @@ namespace Oxfall.Core.Net
         }
 
         public static string ReadBroke(NetReader r) => r.String();
+
+        /// <summary>The player's line: a fish bit, or what came up on reeling in.</summary>
+        public static void Fish(NetWriter w, Rules.FishCatch what)
+        {
+            w.Reset();
+            w.Byte((byte)MessageType.Fish);
+            w.Byte((byte)what);
+        }
+
+        public static Rules.FishCatch ReadFish(NetReader r) => (Rules.FishCatch)r.Byte();
 
         /// <summary>The weather now: how much rain and how much fog.</summary>
         public static void Weather(NetWriter w, float rain, float fog)

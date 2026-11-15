@@ -61,6 +61,7 @@ namespace Oxfall.Game.UI
                 case ItemIds.MetalHatchet:
                 case ItemIds.MetalPickaxe:
                 case ItemIds.Torch:
+                case ItemIds.FishingRod:
                 case ItemIds.Bandage:
                 case ItemIds.MedicalSyringe:
                     return 0;

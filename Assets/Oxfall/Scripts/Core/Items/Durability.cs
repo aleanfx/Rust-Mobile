@@ -24,6 +24,7 @@ namespace Oxfall.Core.Items
                 case ItemIds.Sword: return 350;
                 case ItemIds.WoodenBow: return 150;
                 case ItemIds.Crossbow: return 200;
+                case ItemIds.FishingRod: return 60;
                 case ItemIds.Blunderbuss: return 80;
                 case ItemIds.Revolver: return 250;
                 case ItemIds.SemiRifle: return 300;

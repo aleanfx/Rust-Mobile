@@ -76,6 +76,9 @@ namespace Oxfall.Game.Player
 
         /// <summary>Materials for the bow's string and the arrow on it.</summary>
         public Material StringMaterial { get; set; }
+
+        /// <summary>A point on what is in hand (in its own metres) as it is now in the world: the rod's tip.</summary>
+        public Vector3 HandPoint(Vector3 local) => _hand.TransformPoint(local);
         public Material[] ArrowMaterials { get; set; }
 
         /// <summary>The bow is drawn (for tests and the HUD).</summary>
@@ -159,7 +162,7 @@ namespace Oxfall.Game.Player
             {
                 var def = _hotbar.HeldDefinition;
                 // The hammer builds (HammerTool) instead of gathering.
-                return def == null || (def.Category == ItemCategory.Tool && def.Tool != ToolKind.Hammer && def.Tool != ToolKind.Explosive
+                return def == null || (def.Category == ItemCategory.Tool && def.Tool != ToolKind.Hammer && def.Tool != ToolKind.Explosive && def.Tool != ToolKind.FishingRod
                                        && !Firearms.IsGun(def.Tool));
             }
         }

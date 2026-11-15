@@ -121,6 +121,8 @@ namespace Oxfall.Game.Rendering
         /// <summary>What an animal gives: raw and roasted meat, bone, and leather.</summary>
         public Material RawMeat { get; }
         public Material CookedMeat { get; }
+        public Material RawFish { get; }
+        public Material CookedFish { get; }
         public Material Bone { get; }
         public Material Leather { get; }
 
@@ -283,6 +285,8 @@ namespace Oxfall.Game.Rendering
             Horn = Make("Horn", new Color(0.78f, 0.71f, 0.58f), 0.3f);
             RawMeat = Make("Raw meat", new Color(0.66f, 0.17f, 0.15f), 0.55f);
             CookedMeat = Make("Cooked meat", new Color(0.40f, 0.21f, 0.10f), 0.35f);
+            RawFish = Make("Raw fish", new Color(0.55f, 0.62f, 0.66f), 0.7f);
+            CookedFish = Make("Cooked fish", new Color(0.62f, 0.42f, 0.18f), 0.4f);
             Bone = Make("Bone", new Color(0.88f, 0.84f, 0.74f), 0.25f);
             Leather = Make("Leather", new Color(0.47f, 0.31f, 0.18f), 0.22f);
             SulfurRock = Tinted(Stone, "Sulfur rock", Stone.HasProperty(BaseMap) && Stone.GetTexture(BaseMap) != null

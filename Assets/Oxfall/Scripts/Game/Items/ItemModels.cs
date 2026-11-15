@@ -86,6 +86,18 @@ namespace Oxfall.Game.Items
                     IconRotation = Tilt(-30f, 60f),
                     IconZoom = 1.2f,
                 },
+                [ItemIds.FishingRod] = new ItemModel
+                {
+                    Mesh = MeshFactory.FishingRod(),
+                    Materials = new[] { m.Bark, m.Leather, m.Steel },
+                    ShowInHand = true,
+                    // Held out ahead and up, the tip high over the water.
+                    HandPosition = new Vector3(0.22f, -0.3f, 0.42f),
+                    HandRotation = Quaternion.Euler(-35f, -8f, -6f),
+                    HandScale = 1f,
+                    IconRotation = Tilt(-30f, 45f),
+                    IconZoom = 1.05f,
+                },
                 [ItemIds.Machete] = Tool(MeshFactory.Machete(), new[] { m.Steel, m.Leather, m.Metal }),
                 [ItemIds.Sword] = Tool(MeshFactory.SalvagedSword(), new[] { m.Steel, m.Leather, m.BarrelRust }),
                 [ItemIds.WoodenSpear] = new ItemModel
@@ -463,6 +475,8 @@ namespace Oxfall.Game.Items
                 },
                 [ItemIds.RawMeat] = Meat(MeshFactory.MeatCut(), new[] { m.RawMeat, m.Bone }),
                 [ItemIds.CookedMeat] = Meat(MeshFactory.MeatCut(), new[] { m.CookedMeat, m.Bone }),
+                [ItemIds.RawFish] = Meat(MeshFactory.Fish(), new[] { m.RawFish, m.RawFish }),
+                [ItemIds.CookedFish] = Meat(MeshFactory.Fish(), new[] { m.CookedFish, m.CookedMeat }),
             };
             return models;
         }

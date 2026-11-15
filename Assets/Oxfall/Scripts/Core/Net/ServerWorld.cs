@@ -31,6 +31,8 @@ namespace Oxfall.Core.Net
         public float MarkZ { get; internal set; }
         /// <summary>Jobs finished since last told: (recipe id, how many did not fit).</summary>
         public List<(string RecipeId, int Lost)> Crafted { get; } = new List<(string, int)>();
+        /// <summary>Their fishing line, if it is in the water.</summary>
+        public Angler Angler { get; } = new Angler();
     }
 
     /// <summary>
@@ -211,6 +213,35 @@ namespace Oxfall.Core.Net
             return itemId;
         }
 
+        /// <summary>News of players' fishing lines since the last tick: a bite, or what was reeled in, or a line lost.</summary>
+        public List<(ushort PlayerId, FishCatch What)> Fished { get; } = new List<(ushort, FishCatch)>();
+
+        private bool HoldsRod(ServerState.Player player) =>
+            Catalog.TryGet(player.Held ?? "", out var held) && held.Tool == ToolKind.FishingRod;
+
+        /// <summary>Lines in the water: a bite is told once; walking off or putting the rod down loses the line.</summary>
+        private void TickFishing(SurvivorRecord record, ServerState.Player player)
+        {
+            var angler = record.Angler;
+            if (!angler.Casting) return;
+            if (record.Survivor.Vitals.IsDead || !HoldsRod(player) || angler.TooFarFrom(player.Pose.X, player.Pose.Z))
+            {
+                angler.Stop();
+                Fished.Add((record.PlayerId, FishCatch.Lost));
+                return;
+            }
+            if (!angler.Told && angler.Biting(Time))
+            {
+                angler.Told = true;
+                Fished.Add((record.PlayerId, FishCatch.Bite));
+            }
+            else if (angler.Missed(Time, Fishing.LagSlack + 2f))
+            {
+                angler.Stop();
+                Fished.Add((record.PlayerId, FishCatch.Escaped));
+            }
+        }
+
         /// <summary>Tools and weapons that broke since the last tick: whose (player id) and what.</summary>
         public List<(ushort PlayerId, string ItemId)> Broken { get; } = new List<(ushort, string)>();
 
@@ -360,6 +391,25 @@ namespace Oxfall.Core.Net
                 }
                 case ActKind.Open: return PlayerActions.Open(Settlement, s, record.Owner, a, player.Pose.X, player.Pose.Y, player.Pose.Z);
                 case ActKind.Close: return PlayerActions.Close(s);
+                case ActKind.Cast:
+                {
+                    if (s.Vitals.IsDead) return ActionResult.Dead;
+                    if (!HoldsRod(player)) return ActionResult.Invalid;
+                    var cast = record.Angler.Cast(Ground, player.Pose.X, player.Pose.Y, player.Pose.Z, a / 10f, b / 10f, Time, _random.Next());
+                    return cast;
+                }
+                case ActKind.Reel:
+                {
+                    if (!record.Angler.Casting) return ActionResult.Ok;
+                    var caught = record.Angler.Reel(Time, Fishing.LagSlack);
+                    if (Fishing.IsFish(caught))
+                    {
+                        if (!Angler.Land(s, caught)) { Fished.Add((playerId, FishCatch.Escaped)); return ActionResult.InventoryFull; }
+                        Spend(record, player, ToolKind.FishingRod);
+                    }
+                    Fished.Add((playerId, caught));
+                    return ActionResult.Ok;
+                }
                 case ActKind.Take:
                 case ActKind.TakeAll:
                 {
@@ -411,6 +461,7 @@ namespace Oxfall.Core.Net
                 inventory.Add(ItemIds.Sword, 1);
                 inventory.Add(ItemIds.Crossbow, 1);
                 inventory.Add(ItemIds.LargeBox, 1);
+                inventory.Add(ItemIds.FishingRod, 1);
                 inventory.Add(ItemIds.Arrow, 20);
                 return;
             }
@@ -536,9 +587,10 @@ namespace Oxfall.Core.Net
             foreach (var record in _online.Values)
             {
                 var s = record.Survivor;
+                bool found = Players.TryGet(record.PlayerId, out var player);
+                if (found) TickFishing(record, player);
                 if (s.Vitals.IsDead) continue;
                 s.Crafting.Tick(deltaSeconds);
-                bool found = Players.TryGet(record.PlayerId, out var player);
                 float exertion = found && player.Speed > RunningSpeed ? 1.8f : 1f;
                 // The cold, where they stand (not before they are placed on the island).
                 float warmth = found && player.Placed ? WarmthOf(s, player.Pose, daylight, rain) : Temperature.DayAir;

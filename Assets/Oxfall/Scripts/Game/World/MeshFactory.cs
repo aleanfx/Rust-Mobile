@@ -766,6 +766,45 @@ namespace Oxfall.Game.World
             return b.Build("MeatCut", 60f);
         }
 
+        /// <summary>A fish lying on its side, head to +X, a forked tail to -X. Submeshes: body, fins.</summary>
+        public static Mesh Fish()
+        {
+            var b = new FlatMeshBuilder(2) { UvScale = 0.3f };
+            var random = new System.Random(97);
+            b.AddBlob(0, new Vector3(0f, 0f, 0f), new Vector3(0.15f, 0.03f, 0.055f), random, 0.04f);
+            b.AddBlob(0, new Vector3(0.1f, 0f, 0f), new Vector3(0.06f, 0.026f, 0.045f), random, 0.04f);
+            // The tail: two lobes, flat; a fin along the back.
+            b.AddPrism(1, -0.006f, 0.006f, new Vector2(-0.13f, 0f), new Vector2(-0.22f, 0.06f), new Vector2(-0.2f, 0f), new Vector2(-0.22f, -0.06f));
+            b.AddPrism(1, -0.004f, 0.004f, new Vector2(-0.05f, 0.045f), new Vector2(0.03f, 0.05f), new Vector2(0.05f, 0.04f), new Vector2(-0.06f, 0.04f));
+            return b.Build("Fish", 60f);
+        }
+
+        /// <summary>
+        /// A fishing rod along +Y: a cork grip at the origin, a small reel below it, a long tapering
+        /// blank with eyes along it. Submeshes: blank, grip, metal.
+        /// </summary>
+        public static Mesh FishingRod()
+        {
+            var b = new FlatMeshBuilder(3) { UvScale = 0.25f };
+            b.AddTube(1, new Vector3(0f, -0.08f, 0f), new Vector3(0f, 0.2f, 0f), 0.018f, 0.016f, 8, 1);
+            b.AddTube(0, new Vector3(0f, 0.2f, 0f), new Vector3(0f, 1.25f, 0f), 0.011f, 0.004f, 6, 0);
+            b.AddTube(2, new Vector3(0f, 0.08f, 0f), new Vector3(0f, 0.08f, -0.05f), 0.006f, 0.006f, 5, 2);
+            b.AddCylinder(2, new Vector3(0f, 0.08f, -0.05f), 0.028f, 0.028f, 0.03f, 10, 0f);
+            foreach (float y in new[] { 0.35f, 0.6f, 0.85f, 1.08f, 1.24f })
+                b.AddTube(2, new Vector3(0f, y, 0f), new Vector3(0f, y, -0.018f), 0.003f, 0.003f, 4, 2);
+            return b.Build("FishingRod", 40f);
+        }
+
+        /// <summary>The float on the line: red above the water, white below, about 7 cm. Submeshes: red, white.</summary>
+        public static Mesh Bobber()
+        {
+            var b = new FlatMeshBuilder(2);
+            b.AddCylinder(1, new Vector3(0f, -0.04f, 0f), 0.006f, 0.028f, 0.04f, 10, 0f);
+            b.AddCylinder(0, new Vector3(0f, 0f, 0f), 0.028f, 0.006f, 0.04f, 10, 0f);
+            b.AddTube(0, new Vector3(0f, 0.04f, 0f), new Vector3(0f, 0.08f, 0f), 0.004f, 0.003f, 4, 0);
+            return b.Build("Bobber", 50f);
+        }
+
         /// <summary>A folded hide, flat, its edges uneven. Submeshes: leather, cord.</summary>
         public static Mesh FoldedHide()
         {

@@ -219,6 +219,14 @@ namespace Oxfall.Server
                             broke.Connection.Send(writer.ToArray());
                         }
                     _world.Broken.Clear();
+                    // Fishing lines: a bite, or what came up, to the one fishing.
+                    foreach (var (angler, what) in _world.Fished)
+                        if (_sessions.TryGetValue(angler, out var fisher))
+                        {
+                            Messages.Fish(writer, what);
+                            fisher.Connection.Send(writer.ToArray());
+                        }
+                    _world.Fished.Clear();
                     // A supply plane set off: everyone sees it cross and the crate come down.
                     foreach (var drop in _world.AirdropsStarted)
                     {

@@ -511,25 +511,28 @@ namespace Oxfall.Core.Rules
         /// charcoal, and meanwhile metal ore turns into fragments. One with no wood left goes out;
         /// its id goes in <paramref name="wentOut"/> (when given) so the server can tell everyone.
         /// </summary>
-        /// <summary>Campfires always burn: raw meat in one roasts, a piece every <see cref="CookSeconds"/>.</summary>
+        /// <summary>Campfires always burn: raw meat or fish in one roasts, a piece every <see cref="CookSeconds"/>.</summary>
         private void Cook(float dt)
         {
             foreach (var d in _deployables.Values)
             {
                 if (d.Kind != DeployableKind.Campfire || !_containers.TryGetValue(d.Id, out var fire)) continue;
-                if (!fire.Has(ItemIds.RawMeat, 1))
+                string raw = fire.Has(ItemIds.RawMeat, 1) ? ItemIds.RawMeat : fire.Has(ItemIds.RawFish, 1) ? ItemIds.RawFish : null;
+                if (raw == null)
                 {
                     _cooking.Remove(d.Id);
                     continue;
                 }
                 _cooking.TryGetValue(d.Id, out float t);
                 t += dt;
-                while (t >= CookSeconds && fire.Has(ItemIds.RawMeat, 1))
+                while (t >= CookSeconds && raw != null)
                 {
+                    string done = raw == ItemIds.RawMeat ? ItemIds.CookedMeat : ItemIds.CookedFish;
+                    if (fire.SpaceFor(done) < 1) break;
                     t -= CookSeconds;
-                    if (fire.SpaceFor(ItemIds.CookedMeat) < 1) break;
-                    fire.Remove(ItemIds.RawMeat, 1);
-                    fire.Add(ItemIds.CookedMeat, 1);
+                    fire.Remove(raw, 1);
+                    fire.Add(done, 1);
+                    raw = fire.Has(ItemIds.RawMeat, 1) ? ItemIds.RawMeat : fire.Has(ItemIds.RawFish, 1) ? ItemIds.RawFish : null;
                 }
                 _cooking[d.Id] = Math.Min(t, CookSeconds);
             }
