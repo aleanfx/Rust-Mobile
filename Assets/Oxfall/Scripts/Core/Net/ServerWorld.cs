@@ -402,6 +402,13 @@ namespace Oxfall.Core.Net
         /// </summary>
         public static void GiveTestKit(Inventory inventory, int kit = 0)
         {
+            if (kit == 5)
+            {
+                // A shotgun trap and shells for it.
+                inventory.Add(ItemIds.ShotgunTrap, 1);
+                inventory.Add(ItemIds.Shell, 24);
+                return;
+            }
             if (kit == 4)
             {
                 // Metal armour, head to feet.
@@ -499,6 +506,7 @@ namespace Oxfall.Core.Net
             foreach (int id in _wentOut) Announcements.Add(BuildOp.Light(id, false));
             foreach (int id in _rotted) Announcements.Add(BuildOp.Pickup(id));
             TickFauna(deltaSeconds);
+            TickTraps();
             TickAirdrops();
             foreach (var record in _online.Values)
             {

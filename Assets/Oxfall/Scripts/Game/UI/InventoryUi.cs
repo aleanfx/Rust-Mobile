@@ -158,8 +158,9 @@ namespace Oxfall.Game.UI
             bool furnace = d.Kind == DeployableKind.Furnace, bag = Deployables.IsLoot(d.Kind), fire = d.Kind == DeployableKind.Campfire;
             bool recycler = d.Kind == DeployableKind.Recycler;
             bool cupboard = d.Kind == DeployableKind.ToolCupboard;
+            bool trap = d.Kind == DeployableKind.ShotgunTrap;
             _lootTitle.text = furnace ? "HORNO" : d.Kind == DeployableKind.SupplyDrop ? "SUMINISTROS" : bag ? "BOLSA" : fire ? "FOGATA"
-                : recycler ? "RECICLADORA" : cupboard ? "ARMARIO" : "CAJA";
+                : recycler ? "RECICLADORA" : cupboard ? "ARMARIO" : trap ? "TRAMPA" : "CAJA";
             _lootRows = 0;
             for (int i = 0; i < _boxSlots.Length; i++) _boxSlots[i].Rect.gameObject.SetActive(i < box.SlotCount);
             // A furnace's two rows leave room under them for how it burns and its switch (a bag or a
@@ -170,7 +171,7 @@ namespace Oxfall.Game.UI
             // A furnace's or a recycler's switch; on a dead player's bag the same button takes everything.
             // A cupboard's goes back to who may build round it.
             _lightButton.gameObject.SetActive(furnace || bag || recycler || cupboard);
-            _lootStatus.gameObject.SetActive(furnace || bag || fire || recycler || cupboard);
+            _lootStatus.gameObject.SetActive(furnace || bag || fire || recycler || cupboard || trap);
             _details.gameObject.SetActive(false);
             _loot.gameObject.SetActive(true);
             Refresh();
@@ -341,6 +342,14 @@ namespace Oxfall.Game.UI
                 _lootStatus.text = perDay.Length == 0 ? "Madera, piedra o metal: pagan lo que construyas aquí" : head + "\nAl día: " + perDay;
                 _lootStatus.color = colour;
             }
+            if (_boxKind == DeployableKind.ShotgunTrap)
+            {
+                int shells = _boxInventory.Count(ItemIds.Shell);
+                _lootStatus.text = shells > 0
+                    ? $"Cargada · {shells} cartuchos\nDispara a quien no tenga permiso en tu armario"
+                    : "Vacía: carga cartuchos para que dispare";
+                _lootStatus.color = shells > 0 ? UiTheme.Good : UiTheme.Bad;
+            }
             if (_boxKind == DeployableKind.Campfire)
             {
                 int raw = _boxInventory.Count(ItemIds.RawMeat);
@@ -354,7 +363,8 @@ namespace Oxfall.Game.UI
             if (Deployables.IsLoot(_boxKind) && _lootRows > 3) _lightButton.gameObject.SetActive(!any);
             if (any)
                 _lootQuickLabel.text = _pickedInBox ? "AL INVENTARIO" : furnace ? "AL HORNO" : _boxKind == DeployableKind.Campfire ? "AL FUEGO"
-                    : _boxKind == DeployableKind.Recycler ? "A RECICLAR" : _boxKind == DeployableKind.ToolCupboard ? "AL ARMARIO" : "A LA CAJA";
+                    : _boxKind == DeployableKind.Recycler ? "A RECICLAR" : _boxKind == DeployableKind.ToolCupboard ? "AL ARMARIO"
+                    : _boxKind == DeployableKind.ShotgunTrap ? "A LA TRAMPA" : "A LA CAJA";
         }
 
         /// <summary>

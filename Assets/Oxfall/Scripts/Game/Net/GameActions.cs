@@ -431,6 +431,8 @@ namespace Oxfall.Game.Net
             if (_survivor.Looting == 0 || Inventory[from].IsEmpty) return ActionResult.Invalid;
             if (_settlement.TryGet(_survivor.Looting, out var box) && box.Kind == DeployableKind.ToolCupboard && !Upkeep.Takes(Inventory[from].ItemId))
                 return ActionResult.NotUpkeep;
+            if (box.Kind == DeployableKind.ShotgunTrap && !GunTraps.Takes(Inventory[from].ItemId))
+                return ActionResult.NotShells;
             _net.SendAct(ActKind.Put, from, to);
             return ActionResult.Ok;
         }
@@ -461,6 +463,7 @@ namespace Oxfall.Game.Net
                 case ActionResult.NeedsWorkbench: return "Hace falta una mesa de trabajo cerca";
                 case ActionResult.NotLearned: return "Primero aprende su plano en una mesa de trabajo (con chatarra)";
                 case ActionResult.NotUpkeep: return "El armario solo guarda madera, piedra y fragmentos de metal";
+                case ActionResult.NotShells: return "La trampa solo carga cartuchos";
                 case ActionResult.Monument: return "Las ruinas son de todos: aquí no se construye";
                 case ActionResult.NothingToRecycle: return "Mete algo que se recicle: piezas, herramientas, armas o ropa";
                 case ActionResult.Obstructed: return "Hay un árbol o una roca en medio";

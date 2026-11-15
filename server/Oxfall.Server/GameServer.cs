@@ -149,6 +149,13 @@ namespace Oxfall.Server
                         Broadcast(writer.ToArray());
                     }
                     _world.Bites.Clear();
+                    // Shotgun traps' shots: everyone near hears them, the one hit sees who did it.
+                    foreach (var (trap, target, damage, killed) in _world.TrapShots)
+                    {
+                        Messages.TrapShot(writer, trap, target, damage, killed);
+                        Broadcast(writer.ToArray());
+                    }
+                    _world.TrapShots.Clear();
                     // A tool or weapon that wore out: its owner is told (the slot itself follows in their update).
                     foreach (var (owner, item) in _world.Broken)
                         if (_sessions.TryGetValue(owner, out var broke))

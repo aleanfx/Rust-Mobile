@@ -145,6 +145,8 @@ namespace Oxfall.Core.Items
 
             new ItemDefinition(ItemIds.BuildingPlan, "Plano de construcción", ItemCategory.Placeable, 1,
                 description: "Llévalo en la mano para construir."),
+            new ItemDefinition(ItemIds.ShotgunTrap, "Trampa de escopeta", ItemCategory.Placeable, 1,
+                description: "Un trabuco sobre una caja: cárgala con cartuchos y dispara a quien pase por delante sin permiso en tu armario."),
             new ItemDefinition(ItemIds.Campfire, "Fogata", ItemCategory.Placeable, 5,
                 description: "Da luz y calor, y cocina."),
             new ItemDefinition(ItemIds.WoodenDoor, "Puerta de madera", ItemCategory.Placeable, 1,

@@ -1656,6 +1656,31 @@ namespace Oxfall.Game.World
         }
 
         /// <summary>
+        /// A shotgun trap: a banded plank box with a blunderbuss along its top, its barrel out through
+        /// a scrap plate towards +Z (0.55 m up), and the trip spring at the back. On the origin.
+        /// Submeshes: 0 planks, 1 gun metal, 2 metal.
+        /// </summary>
+        public static Mesh ShotgunTrap()
+        {
+            var b = new FlatMeshBuilder(3) { UvScale = 0.8f };
+            b.AddBox(0, new Vector3(-0.26f, 0f, -0.3f), new Vector3(0.26f, 0.42f, 0.2f));
+            b.AddBox(2, new Vector3(-0.27f, 0.07f, -0.31f), new Vector3(0.27f, 0.11f, 0.21f));
+            b.AddBox(2, new Vector3(-0.27f, 0.3f, -0.31f), new Vector3(0.27f, 0.34f, 0.21f));
+            // The gun: its stock on the box, the barrel out over the front, a flared muzzle.
+            b.AddBox(0, new Vector3(-0.065f, 0.42f, -0.28f), new Vector3(0.065f, 0.52f, 0.06f));
+            b.AddTube(1, new Vector3(0f, 0.55f, -0.08f), new Vector3(0f, 0.55f, 0.46f), 0.038f, 0.042f, 8, 1);
+            b.AddTube(1, new Vector3(0f, 0.55f, 0.44f), new Vector3(0f, 0.55f, 0.52f), 0.05f, 0.062f, 8);
+            b.AddBox(1, new Vector3(-0.03f, 0.47f, -0.1f), new Vector3(0.03f, 0.53f, 0.0f));
+            // A scrap plate shielding the front, the barrel through it.
+            b.AddBox(2, new Vector3(-0.25f, 0.08f, 0.2f), new Vector3(0.25f, 0.64f, 0.23f));
+            b.AddBox(2, new Vector3(-0.2f, 0.64f, 0.2f), new Vector3(0.12f, 0.7f, 0.23f));
+            // The trip: a spring and its catch at the back.
+            b.AddTube(1, new Vector3(0.14f, 0.42f, -0.22f), new Vector3(0.14f, 0.6f, -0.22f), 0.022f, 0.022f, 6, 1);
+            b.AddBox(2, new Vector3(0.09f, 0.6f, -0.27f), new Vector3(0.19f, 0.66f, -0.17f));
+            return b.Build("Shotgun trap");
+        }
+
+        /// <summary>
         /// A supply crate: a long olive box with dark corner bands, two latches and handles at the
         /// ends, 1.1 x 0.62 x 0.66 m on the origin. Submeshes: 0 paint, 1 bands and latches.
         /// </summary>

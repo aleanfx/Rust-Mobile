@@ -94,6 +94,7 @@ namespace Oxfall.Game.UI
                 case ItemIds.CodeLock:
                 case ItemIds.ToolCupboard:
                 case ItemIds.Workbench:
+                case ItemIds.ShotgunTrap:
                     return 3;
                 default:
                     return 4;

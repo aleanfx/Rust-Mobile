@@ -119,6 +119,7 @@ namespace Oxfall.Game.Construction
                 case DeployableKind.SleepingBag: return "Saco colocado: al morir podrás despertar aquí";
                 case DeployableKind.Workbench: return "Mesa colocada: cerca de ella fabricas armas y herramientas de metal";
                 case DeployableKind.ToolCupboard: return "Armario colocado: solo los autorizados construyen cerca";
+                case DeployableKind.ShotgunTrap: return "Trampa colocada: cárgala con cartuchos; dispara a quien no tenga permiso en tu armario";
                 default: return "Colocado";
             }
         }
@@ -143,7 +144,8 @@ namespace Oxfall.Game.Construction
             float reach = Kind == DeployableKind.SleepingBag ? Reach + 0.4f : Reach;
             var ahead = _player.transform.position + forward * reach;
             float lookYaw = _player.transform.eulerAngles.y;
-            _yaw = Kind == DeployableKind.Campfire || Kind == DeployableKind.SleepingBag ? lookYaw : lookYaw + 180f;
+            // A trap points where the player looks (out of the base); the rest face back towards them.
+            _yaw = Kind == DeployableKind.Campfire || Kind == DeployableKind.SleepingBag || Kind == DeployableKind.ShotgunTrap ? lookYaw : lookYaw + 180f;
 
             _valid = true;
             _whyNot = "";

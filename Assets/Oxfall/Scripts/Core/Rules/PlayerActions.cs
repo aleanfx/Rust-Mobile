@@ -71,6 +71,8 @@ namespace Oxfall.Core.Rules
         NotLearned,
         /// <summary>A tool cupboard keeps only what pays its upkeep: wood, stone and metal fragments.</summary>
         NotUpkeep,
+        /// <summary>A shotgun trap takes only shells.</summary>
+        NotShells,
     }
 
     /// <summary>
@@ -359,6 +361,7 @@ namespace Oxfall.Core.Rules
             // A recycler takes only what it can make something of; a cupboard, what pays its upkeep.
             if (bag.Kind == DeployableKind.Recycler && !settlement.Recycling.Takes(s.Inventory[from].ItemId)) return ActionResult.NothingToRecycle;
             if (bag.Kind == DeployableKind.ToolCupboard && !Upkeep.Takes(s.Inventory[from].ItemId)) return ActionResult.NotUpkeep;
+            if (bag.Kind == DeployableKind.ShotgunTrap && !GunTraps.Takes(s.Inventory[from].ItemId)) return ActionResult.NotShells;
             bool moved = to == -1 ? Inventory.TransferAll(s.Inventory, from, box) : Inventory.Transfer(s.Inventory, from, box, to);
             return moved ? ActionResult.Ok : ActionResult.NoSpace;
         }

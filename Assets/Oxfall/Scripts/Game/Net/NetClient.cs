@@ -110,6 +110,9 @@ namespace Oxfall.Game.Net
         /// <summary>An animal hurt someone: who, what kind of animal, how much, whether it killed them.</summary>
         public event Action<ushort, AnimalKind, int, bool> Bitten;
 
+        /// <summary>A shotgun trap fired: which, at whom (player id), what it took off, and whether it killed them.</summary>
+        public event Action<int, ushort, int, bool> TrapFired;
+
         private readonly List<AnimalSnap> _animals = new List<AnimalSnap>();
         private readonly List<SleeperSnap> _sleepers = new List<SleeperSnap>();
 
@@ -569,6 +572,13 @@ namespace Oxfall.Game.Net
                     Messages.ReadBitten(reader, out ushort target, out var kind, out int damage, out bool killed);
                     if (_players.TryGetValue(target, out var victim)) victim.Flinch();
                     Bitten?.Invoke(target, kind, damage, killed);
+                    break;
+                }
+                case MessageType.TrapShot:
+                {
+                    Messages.ReadTrapShot(reader, out int trap, out ushort target, out int damage, out bool killed);
+                    if (_players.TryGetValue(target, out var victim)) victim.Flinch();
+                    TrapFired?.Invoke(trap, target, damage, killed);
                     break;
                 }
                 case MessageType.Weather:

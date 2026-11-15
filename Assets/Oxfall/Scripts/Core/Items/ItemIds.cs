@@ -51,6 +51,7 @@ namespace Oxfall.Core.Items
         public const string HideVest = "hide_vest";
         public const string HidePants = "hide_pants";
         public const string HideBoots = "hide_boots";
+        public const string ShotgunTrap = "shotgun_trap";
         public const string MetalFacemask = "metal_facemask";
         public const string MetalChestPlate = "metal_chest_plate";
         public const string RoadsignKilt = "roadsign_kilt";

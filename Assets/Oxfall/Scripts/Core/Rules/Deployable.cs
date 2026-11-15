@@ -29,6 +29,9 @@ namespace Oxfall.Core.Rules
         /// it): it only empties, and rots away a while after landing.
         /// </summary>
         SupplyDrop = 9,
+
+        /// <summary>A blunderbuss on a box that fires shells at strangers in front of it (see <see cref="GunTraps"/>).</summary>
+        ShotgunTrap = 10,
     }
 
     /// <summary>One thing set down: what it is, where it stands, which way it faces, and who put it there.</summary>
@@ -95,6 +98,7 @@ namespace Oxfall.Core.Rules
                 case DeployableKind.SleepingBag: return ItemIds.SleepingBag;
                 case DeployableKind.ToolCupboard: return ItemIds.ToolCupboard;
                 case DeployableKind.Workbench: return ItemIds.Workbench;
+                case DeployableKind.ShotgunTrap: return ItemIds.ShotgunTrap;
                 // Nothing is made into a bag, a recycler or a supply crate, and none is picked up.
                 case DeployableKind.Bag:
                 case DeployableKind.Recycler:
@@ -115,6 +119,7 @@ namespace Oxfall.Core.Rules
                 case ItemIds.SleepingBag: kind = DeployableKind.SleepingBag; return true;
                 case ItemIds.ToolCupboard: kind = DeployableKind.ToolCupboard; return true;
                 case ItemIds.Workbench: kind = DeployableKind.Workbench; return true;
+                case ItemIds.ShotgunTrap: kind = DeployableKind.ShotgunTrap; return true;
                 default: kind = default; return false;
             }
         }
@@ -134,6 +139,8 @@ namespace Oxfall.Core.Rules
                 case DeployableKind.SupplyDrop: return 12;
                 // Materials for its upkeep.
                 case DeployableKind.ToolCupboard: return Upkeep.CupboardSlots;
+                // Shells to fire.
+                case DeployableKind.ShotgunTrap: return GunTraps.Slots;
                 default: return 0;
             }
         }
@@ -152,6 +159,7 @@ namespace Oxfall.Core.Rules
                 case DeployableKind.Workbench: return 0.8f;
                 case DeployableKind.Recycler: return 1.1f;
                 case DeployableKind.SupplyDrop: return 0.8f;
+                case DeployableKind.ShotgunTrap: return 0.45f;
                 default: return 0.5f;
             }
         }
@@ -171,6 +179,7 @@ namespace Oxfall.Core.Rules
                 case DeployableKind.SleepingBag: return 50f;
                 case DeployableKind.ToolCupboard: return 150f;
                 case DeployableKind.Workbench: return 300f;
+                case DeployableKind.ShotgunTrap: return 200f;
                 default: return 0f;
             }
         }
@@ -187,6 +196,7 @@ namespace Oxfall.Core.Rules
                 case DeployableKind.Workbench: return "Mesa de trabajo";
                 case DeployableKind.Recycler: return "Recicladora";
                 case DeployableKind.SupplyDrop: return "Suministros";
+                case DeployableKind.ShotgunTrap: return "Trampa de escopeta";
                 default: return "Objeto";
             }
         }

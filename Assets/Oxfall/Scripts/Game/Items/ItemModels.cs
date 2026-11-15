@@ -165,6 +165,12 @@ namespace Oxfall.Game.Items
                     Materials = new[] { m.Planks, m.Bark, m.Metal },
                     IconRotation = Tilt(-14f, 205f),
                 },
+                [ItemIds.ShotgunTrap] = new ItemModel
+                {
+                    Mesh = MeshFactory.ShotgunTrap(),
+                    Materials = new[] { m.Planks, m.GunMetal, m.Metal },
+                    IconRotation = Tilt(-16f, 215f),
+                },
                 [ItemIds.Workbench] = new ItemModel
                 {
                     Mesh = MeshFactory.Workbench(),

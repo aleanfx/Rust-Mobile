@@ -12,7 +12,7 @@ namespace Oxfall.Core.Net
     public static class Protocol
     {
         /// <summary>Raised whenever a message changes shape; a client of another version is turned away.</summary>
-        public const ushort Version = 18;
+        public const ushort Version = 19;
 
         /// <summary>Snapshots per second the server sends.</summary>
         public const int TickRate = 20;
@@ -176,6 +176,8 @@ namespace Oxfall.Core.Net
         Weather = 62,
         /// <summary>A tool or weapon of this player's wore out and broke (its item id).</summary>
         Broke = 63,
+        /// <summary>A shotgun trap fired: which, at whom, what it took off and whether it killed them.</summary>
+        TrapShot = 64,
     }
 
     /// <summary>What a player does to their own belongings (inside an <see cref="MessageType.Act"/> message).</summary>
@@ -950,6 +952,24 @@ namespace Oxfall.Core.Net
         {
             target = r.UShort();
             kind = (AnimalKind)r.Byte();
+            damage = r.Byte();
+            killed = r.Bool();
+        }
+
+        public static void TrapShot(NetWriter w, int trap, ushort target, float damage, bool killed)
+        {
+            w.Reset();
+            w.Byte((byte)MessageType.TrapShot);
+            w.Int(trap);
+            w.UShort(target);
+            w.Byte((byte)Math.Min(255, Math.Max(0, (int)Math.Round(damage))));
+            w.Bool(killed);
+        }
+
+        public static void ReadTrapShot(NetReader r, out int trap, out ushort target, out int damage, out bool killed)
+        {
+            trap = r.Int();
+            target = r.UShort();
             damage = r.Byte();
             killed = r.Bool();
         }

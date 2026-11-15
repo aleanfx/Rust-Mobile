@@ -586,6 +586,7 @@ namespace Oxfall.Game
             // Who comes and goes (not the ones already there when this player arrives).
             _net.PlayerJoined += name => { if (Time.time - _onlineSince > 3f) _chat.Add(null, $"{name} ha llegado a la isla"); };
             _net.PlayerLeft += name => _chat.Add(null, $"{name} se ha ido");
+            _net.TrapFired += OnTrapFired;
             _net.Bitten += (target, kind, damage, killed) =>
             {
                 Debug.Log($"[Oxfall] Bitten: {_net.NameOf(target) ?? "someone"} by {kind}, -{damage}{(killed ? ", killed" : "")}");
@@ -1049,6 +1050,31 @@ namespace Oxfall.Game
         private static string AnimalName(AnimalKind kind) => "un " + Animals.Name(kind).ToLowerInvariant();
 
         /// <summary>An animal hurt this player.</summary>
+        /// <summary>A shotgun trap fired: its flash, bang and pellets at the one it saw; for them, the hurt.</summary>
+        private void OnTrapFired(int trap, ushort target, int damage, bool killed)
+        {
+            Debug.Log($"[Oxfall] Trap {trap} fired at {_net.NameOf(target) ?? "someone"}, -{damage}{(killed ? ", killed" : "")}");
+            if (_settlement.TryGet(trap, out var d))
+            {
+                var at = new Vector3(d.X, d.Y + GunTraps.MuzzleHeight, d.Z);
+                var forward = Quaternion.Euler(0f, d.Yaw, 0f) * Vector3.forward;
+                // Aimed at them where this phone shows them; else straight ahead.
+                if (target == _net.PlayerId) forward = (_player.transform.position + Vector3.up * 1.1f - at).normalized;
+                else if (_net.Players.TryGetValue(target, out var them)) forward = (them.Root.position + Vector3.up * 1.1f - at).normalized;
+                var muzzle = at + forward * 0.5f;
+                _explosions.MuzzleFlash(muzzle, forward, true);
+                float yaw = Mathf.Atan2(forward.x, forward.z) * Mathf.Rad2Deg, pitch = Mathf.Asin(Mathf.Clamp(forward.y, -1f, 1f)) * Mathf.Rad2Deg;
+                if (Firearms.TryGet(ToolKind.Shotgun, out var gun))
+                    Gatherer.Spray(gun, muzzle, muzzle, yaw, pitch, (ushort)(trap * 31 + (int)(Time.time * 10f)), _explosions, null);
+                GameAudio.PlayAt(_audio.Bank.ShotgunShot, muzzle, 1f, 6f, 180f, 0.05f);
+            }
+            if (target != _net.PlayerId) return;
+            _hud.ShowHurt(damage);
+            _audio.Play(SoundCue.Hurt);
+            if (killed) _killer = "una trampa de escopeta";
+            else _hud.ShowToast($"¡Una trampa de escopeta!  −{damage}");
+        }
+
         private void OnBitten(AnimalKind kind, int damage, bool killed)
         {
             Debug.Log($"[Oxfall] Bitten by {kind}, -{damage}{(killed ? ", killed" : "")}");
@@ -1522,6 +1548,19 @@ namespace Oxfall.Game
                     break;
                 case "give-armour":
                     ServerWorld.GiveTestKit(_inventory, 4);
+                    break;
+                case "give-trap" when _actions.Online:
+                    _net.SendAct(ActKind.DevGive, 5);
+                    break;
+                case "give-trap":
+                    ServerWorld.GiveTestKit(_inventory, 5);
+                    break;
+                case "trap": HoldItem(ItemIds.ShotgunTrap); break;
+                case "open-trap": OpenBox(Nearest(DeployableKind.ShotgunTrap)); break;
+                case "load-trap":
+                    // Test: puts every shell carried into the open trap.
+                    for (int i = 0; i < _inventory.CarrySlots; i++)
+                        if (_inventory[i].ItemId == ItemIds.Shell) _actions.Put(i, -1);
                     break;
                 case "give":
                     _inventory.Add(ItemIds.Wood, 1000);
