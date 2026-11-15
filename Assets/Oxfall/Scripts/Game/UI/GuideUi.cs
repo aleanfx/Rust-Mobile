@@ -144,6 +144,13 @@ namespace Oxfall.Game.UI
         /// <summary>Whether its card is on screen (the chat's lines go under it then).</summary>
         public bool Showing => _card.gameObject.activeSelf;
 
+        /// <summary>Moves the card down, out of the way of the status chips over it.</summary>
+        public void SetDrop(float drop)
+        {
+            var at = new Vector2(24f, -232f - drop);
+            if (_card.anchoredPosition != at) _card.anchoredPosition = at;
+        }
+
         /// <summary>Back to the first step, shown again (for tests).</summary>
         public void Restart()
         {

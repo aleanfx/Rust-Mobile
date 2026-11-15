@@ -161,6 +161,7 @@ const stamp = () => ((Date.now() - t0) / 1000).toFixed(1).padStart(6);
   await cmd('box-page', 1200);
   await shot('12-large-box-page2');
   await cmd('close-box', 800);
+  await cmd('inventory', 800);
   check('large box: opens', looting > 0, `looting=${looting}`);
 
   // Fishing: to the shore, cast, wait for a bite, reel in a fish.

@@ -2601,7 +2601,9 @@ namespace Oxfall.Game
             }
             if (_map != null && _map.IsOpen) RefreshMap();
             _chat?.Tick(Time.unscaledDeltaTime);
-            _chat?.SetDrop(_guide != null && _guide.Showing ? 128f : 0f);
+            float chips = _vitalsUi != null ? _vitalsUi.ChipsDrop : 0f;
+            _guide?.SetDrop(chips);
+            _chat?.SetDrop(chips + (_guide != null && _guide.Showing ? 128f : 0f));
             _team?.Tick(Time.unscaledDeltaTime);
 
             // Charges thrown alone burn down here (online the server sets them off).

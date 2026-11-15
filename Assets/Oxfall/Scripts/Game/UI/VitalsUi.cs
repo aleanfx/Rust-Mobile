@@ -191,6 +191,19 @@ namespace Oxfall.Game.UI
             _radBack.color = _radHurts ? RadHurtBack : RadBack;
         }
 
+        /// <summary>How far the status chips shown reach below the vitals (what sits under them moves down by this).</summary>
+        public float ChipsDrop
+        {
+            get
+            {
+                int n = 0;
+                if (_cold != null && _cold.gameObject.activeSelf) n++;
+                if (_rad != null && _rad.gameObject.activeSelf) n++;
+                // The first chip starts 14 px above where the card sat; 12 px of air under the last.
+                return n == 0 ? 0f : n * (RowHeight + 6f) - 2f;
+            }
+        }
+
         /// <summary>The status chips in a column under the vitals, the shown ones only.</summary>
         private void Layout()
         {
