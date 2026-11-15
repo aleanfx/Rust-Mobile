@@ -56,6 +56,21 @@ namespace Oxfall.Core.Rules
 
         /// <summary>A vending machine: a shop that sells what its owner stocks (see <see cref="Vending"/>).</summary>
         VendingMachine = 18,
+
+        /// <summary>A small generator: burns fuel for power.</summary>
+        Generator = 19,
+
+        /// <summary>A solar panel: power by day.</summary>
+        SolarPanel = 20,
+
+        /// <summary>A battery: stores power and gives it back.</summary>
+        Battery = 21,
+
+        /// <summary>A switch: lets power through when on.</summary>
+        ElectricSwitch = 22,
+
+        /// <summary>A lamp: light, for a little power.</summary>
+        Lamp = 23,
     }
 
     /// <summary>One thing set down: what it is, where it stands, which way it faces, and who put it there.</summary>
@@ -150,6 +165,11 @@ namespace Oxfall.Core.Rules
                 case DeployableKind.BerryPlant: return ItemIds.BerrySeed;
                 case DeployableKind.AutoTurret: return ItemIds.AutoTurret;
                 case DeployableKind.VendingMachine: return ItemIds.VendingMachine;
+                case DeployableKind.Generator: return ItemIds.Generator;
+                case DeployableKind.SolarPanel: return ItemIds.SolarPanel;
+                case DeployableKind.Battery: return ItemIds.Battery;
+                case DeployableKind.ElectricSwitch: return ItemIds.ElectricSwitch;
+                case DeployableKind.Lamp: return ItemIds.Lamp;
                 // Nothing is made into a bag, a recycler or a supply crate, and none is picked up.
                 case DeployableKind.Bag:
                 case DeployableKind.Recycler:
@@ -179,6 +199,11 @@ namespace Oxfall.Core.Rules
                 case ItemIds.BerrySeed: kind = DeployableKind.BerryPlant; return true;
                 case ItemIds.AutoTurret: kind = DeployableKind.AutoTurret; return true;
                 case ItemIds.VendingMachine: kind = DeployableKind.VendingMachine; return true;
+                case ItemIds.Generator: kind = DeployableKind.Generator; return true;
+                case ItemIds.SolarPanel: kind = DeployableKind.SolarPanel; return true;
+                case ItemIds.Battery: kind = DeployableKind.Battery; return true;
+                case ItemIds.ElectricSwitch: kind = DeployableKind.ElectricSwitch; return true;
+                case ItemIds.Lamp: kind = DeployableKind.Lamp; return true;
                 default: kind = default; return false;
             }
         }
@@ -204,6 +229,8 @@ namespace Oxfall.Core.Rules
                 // Bullets to fire.
                 case DeployableKind.AutoTurret: return Turrets.Slots;
                 case DeployableKind.VendingMachine: return Vending.Slots;
+                // Fuel to burn.
+                case DeployableKind.Generator: return Electricity.GeneratorSlots;
                 default: return 0;
             }
         }
@@ -231,6 +258,11 @@ namespace Oxfall.Core.Rules
                 case DeployableKind.LargeBox: return 0.75f;
                 case DeployableKind.AutoTurret: return 0.45f;
                 case DeployableKind.VendingMachine: return 0.6f;
+                case DeployableKind.Generator: return 0.5f;
+                case DeployableKind.SolarPanel: return 0.65f;
+                case DeployableKind.Battery: return 0.35f;
+                case DeployableKind.ElectricSwitch: return 0.15f;
+                case DeployableKind.Lamp: return 0.2f;
                 case DeployableKind.HempPlant:
                 case DeployableKind.BerryPlant:
                     return Crops.Spacing * 0.5f;
@@ -262,6 +294,11 @@ namespace Oxfall.Core.Rules
                 // Three charges.
                 case DeployableKind.AutoTurret: return 400f;
                 case DeployableKind.VendingMachine: return 500f;
+                case DeployableKind.Generator: return 250f;
+                case DeployableKind.SolarPanel: return 150f;
+                case DeployableKind.Battery: return 150f;
+                case DeployableKind.ElectricSwitch: return 60f;
+                case DeployableKind.Lamp: return 60f;
                 case DeployableKind.HempPlant:
                 case DeployableKind.BerryPlant:
                     return 20f;
@@ -290,6 +327,11 @@ namespace Oxfall.Core.Rules
                 case DeployableKind.BerryPlant: return "Moras sembradas";
                 case DeployableKind.AutoTurret: return "Torreta automática";
                 case DeployableKind.VendingMachine: return "Máquina expendedora";
+                case DeployableKind.Generator: return "Generador";
+                case DeployableKind.SolarPanel: return "Panel solar";
+                case DeployableKind.Battery: return "Batería";
+                case DeployableKind.ElectricSwitch: return "Interruptor";
+                case DeployableKind.Lamp: return "Lámpara";
                 default: return "Objeto";
             }
         }

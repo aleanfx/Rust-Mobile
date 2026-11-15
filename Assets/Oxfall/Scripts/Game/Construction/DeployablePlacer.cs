@@ -125,7 +125,12 @@ namespace Oxfall.Game.Construction
                 case DeployableKind.ShotgunTrap: return "Trampa colocada: cárgala con cartuchos; dispara a quien no tenga permiso en tu armario";
                 case DeployableKind.WoodWall:
                 case DeployableKind.StoneWall: return "Muro levantado: rodea tu casa para que nadie entre sin explosivos o escalera";
-                case DeployableKind.AutoTurret: return "Torreta colocada: cárgala con balas. Vigila lo que tiene delante, hasta 30 m";
+                case DeployableKind.AutoTurret: return "Torreta colocada: cárgala con balas y llévale 10 W de energía con el cable (generador, panel o batería)";
+                case DeployableKind.Generator: return "Generador colocado: ponle combustible y conéctale algo con el cable";
+                case DeployableKind.SolarPanel: return "Panel colocado: da energía de día. Con una batería guardas para la noche";
+                case DeployableKind.Battery: return "Batería colocada: conéctale un generador o panel y luego lo que quieras alimentar";
+                case DeployableKind.ElectricSwitch: return "Interruptor colocado: pásale un cable de entrada y uno de salida";
+                case DeployableKind.Lamp: return "Lámpara colocada: llévale energía con el cable";
                 case DeployableKind.VendingMachine: return "Máquina colocada: llénala y pon tus ofertas. Cualquiera podrá comprarte";
                 case DeployableKind.HempPlant: return "Cáñamo sembrado: crece solo en unos minutos (más rápido con lluvia)";
                 case DeployableKind.BerryPlant: return "Moras sembradas: vuelve cuando estén maduras y cosecha";

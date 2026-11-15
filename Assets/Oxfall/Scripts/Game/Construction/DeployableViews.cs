@@ -37,6 +37,9 @@ namespace Oxfall.Game.Construction
         public Transform Head;
         private float _yaw, _pitch, _aimYaw, _aimPitch, _aimedAt = -10f;
 
+        /// <summary>Whether power reaches it: without, its head hangs and it does not look about.</summary>
+        public bool Powered = true;
+
         /// <summary>Turns the head to a point in the world (it holds that aim a while).</summary>
         public void Aim(Vector3 at)
         {
@@ -57,8 +60,8 @@ namespace Oxfall.Game.Construction
         {
             if (Head == null) return;
             bool aiming = Time.time - _aimedAt < 2.5f;
-            float wantYaw = aiming ? _aimYaw : Mathf.Sin(Time.time * 0.45f + transform.position.x) * 60f;
-            float wantPitch = aiming ? _aimPitch : 0f;
+            float wantYaw = aiming ? _aimYaw : Powered ? Mathf.Sin(Time.time * 0.45f + transform.position.x) * 60f : _yaw;
+            float wantPitch = aiming ? _aimPitch : Powered ? 0f : 30f;
             float rate = aiming ? 540f : 40f;
             _yaw = Mathf.MoveTowardsAngle(_yaw, wantYaw, rate * Time.deltaTime);
             _pitch = Mathf.MoveTowardsAngle(_pitch, Mathf.Clamp(wantPitch, -35f, 45f), rate * Time.deltaTime);
@@ -95,6 +98,11 @@ namespace Oxfall.Game.Construction
         private readonly Mesh _wheel;
         private readonly Material[] _wheelMaterials;
         private readonly Material _lampOn, _lampOff;
+        private readonly Material _bulbOn, _bulbOff, _ledDark;
+        private readonly Mesh _switchLever = MeshFactory.SwitchLever();
+        private readonly Dictionary<int, Light> _lamps = new Dictionary<int, Light>();
+        private readonly Dictionary<int, Transform> _levers = new Dictionary<int, Transform>();
+        private readonly Dictionary<int, GameObject> _hums = new Dictionary<int, GameObject>();
 
         /// <summary>Something set down is going (picked up, or destroyed): where it stood and what it was made of.</summary>
         public event Action<Bounds, Material> Fell;
@@ -141,6 +149,14 @@ namespace Oxfall.Game.Construction
             _wheelMaterials = new[] { materials.Steel, materials.BarrelRust };
             _lampOn = materials.LedGreen;
             _lampOff = materials.LedRed;
+            _bulbOn = materials.BulbOn;
+            _bulbOff = materials.BulbOff;
+            _ledDark = materials.Rubber;
+            // The switch in the world is its post, with a lever of its own that turns.
+            if (_models.TryGetValue(DeployableKind.ElectricSwitch, out var whole))
+                _models[DeployableKind.ElectricSwitch] = new ItemModel { Mesh = MeshFactory.ElectricSwitch(), Materials = new[] { whole.Materials[0], whole.Materials[1] } };
+            _switchGrip = whole != null ? new[] { whole.Materials[0], whole.Materials[2] } : null;
+            settlement.Power.Changed += PowerChanged;
             _flame = MeshFactory.Flame();
             _flameMaterial = materials.Flame;
             _root = new GameObject("Deployables").transform;
@@ -154,6 +170,8 @@ namespace Oxfall.Game.Construction
                 BuildingViews.Scorch(go.GetComponent<MeshRenderer>(), health / Mathf.Max(1f, Deployables.MaxHealth(d.Kind)));
             };
         }
+
+        private readonly Material[] _switchGrip;
 
         public ItemModel ModelOf(DeployableKind kind) => _models.TryGetValue(kind, out var m) ? m : null;
 
@@ -202,6 +220,8 @@ namespace Oxfall.Game.Construction
                 Light(d.Id, go, new Vector3(0f, 0.04f, 0f), 1.7f, 5, 14f, 3.4f);
             else if (d.Kind == DeployableKind.Furnace && _settlement.IsLit(d.Id))
                 Changed(d.Id);
+            else if (Electricity.IsElectric(d.Kind))
+                Electrify(d, go);
             else if (d.Kind == DeployableKind.Recycler)
             {
                 var wheel = new GameObject("Flywheel");
@@ -235,6 +255,7 @@ namespace Oxfall.Game.Construction
             tag.Kind = d.Kind;
             go.AddComponent<TurretView>().Head = head.transform;
             _views.Add(d.Id, go);
+            PowerChanged(d.Id);
             float max = Deployables.MaxHealth(d.Kind);
             if (_settlement.DeployableHealth(d.Id) < max)
                 BuildingViews.Scorch(go.GetComponent<MeshRenderer>(), _settlement.DeployableHealth(d.Id) / max);
@@ -290,9 +311,108 @@ namespace Oxfall.Game.Construction
                 : stage == CropStage.Ripe ? _berryMaterials : _greenBerryMaterials;
         }
 
+        /// <summary>The working parts of an electric thing: a lamp's light, a switch's lever.</summary>
+        private void Electrify(Deployable d, GameObject go)
+        {
+            if (d.Kind == DeployableKind.Lamp)
+            {
+                var lightObject = new GameObject("Lamp light");
+                lightObject.transform.SetParent(go.transform, false);
+                lightObject.transform.localPosition = MeshFactory.LampBulb - new Vector3(0f, 0.08f, 0f);
+                var light = lightObject.AddComponent<Light>();
+                light.type = LightType.Point;
+                light.color = new Color(1f, 0.87f, 0.64f);
+                light.range = 11f;
+                light.intensity = 2.6f;
+                light.shadows = LightShadows.None;
+                light.enabled = false;
+                _lamps[d.Id] = light;
+            }
+            else if (d.Kind == DeployableKind.ElectricSwitch && _switchGrip != null)
+            {
+                var lever = new GameObject("Lever");
+                lever.transform.SetParent(go.transform, false);
+                lever.transform.localPosition = MeshFactory.SwitchPivot;
+                lever.AddComponent<MeshFilter>().sharedMesh = _switchLever;
+                lever.AddComponent<MeshRenderer>().sharedMaterials = _switchGrip;
+                _levers[d.Id] = lever.transform;
+            }
+            PowerChanged(d.Id);
+        }
+
+        /// <summary>Power reached or left a device, a switch flipped, a battery filled: show it.</summary>
+        private void PowerChanged(int id)
+        {
+            if (!_views.TryGetValue(id, out var go) || !_settlement.TryGet(id, out var d)) return;
+            var grid = _settlement.Power;
+            bool running = grid.Running(id);
+            switch (d.Kind)
+            {
+                case DeployableKind.Lamp:
+                    SetSlot(go, 2, running ? _bulbOn : _bulbOff);
+                    if (_lamps.TryGetValue(id, out var light)) light.enabled = running;
+                    break;
+                case DeployableKind.ElectricSwitch:
+                    if (_levers.TryGetValue(id, out var lever))
+                        lever.localRotation = Quaternion.Euler(grid.IsOn(id) ? 0f : 120f, 0f, 0f);
+                    break;
+                case DeployableKind.Generator:
+                    SetSlot(go, 3, running ? _lampOn : _lampOff);
+                    Hum(id, go, running);
+                    break;
+                case DeployableKind.Battery:
+                {
+                    float charge = grid.Charge01(id);
+                    SetSlot(go, 3, charge > 0.02f ? _lampOn : _lampOff);
+                    SetSlot(go, 4, charge > 0.4f ? _lampOn : _ledDark);
+                    SetSlot(go, 5, charge > 0.75f ? _lampOn : _ledDark);
+                    break;
+                }
+                case DeployableKind.AutoTurret:
+                {
+                    var turret = go.GetComponent<TurretView>();
+                    if (turret != null) turret.Powered = running;
+                    break;
+                }
+            }
+        }
+
+        private static void SetSlot(GameObject go, int slot, Material material)
+        {
+            var renderer = go.GetComponent<MeshRenderer>();
+            if (renderer == null) return;
+            var materials = renderer.sharedMaterials;
+            if (slot >= materials.Length || materials[slot] == material) return;
+            materials[slot] = material;
+            renderer.sharedMaterials = materials;
+        }
+
+        /// <summary>A generator hums while it runs.</summary>
+        private void Hum(int id, GameObject go, bool on)
+        {
+            bool humming = _hums.TryGetValue(id, out var hum) && hum != null;
+            if (on == humming) return;
+            if (on)
+            {
+                hum = new GameObject("Hum");
+                hum.transform.SetParent(go.transform, false);
+                hum.transform.localPosition = new Vector3(0f, 0.3f, 0f);
+                _hums[id] = hum;
+                MachineStarted?.Invoke(hum);
+            }
+            else
+            {
+                UnityEngine.Object.Destroy(hum);
+                _hums.Remove(id);
+            }
+        }
+
         private void Hide(int id)
         {
             _plants.Remove(id);
+            _lamps.Remove(id);
+            _levers.Remove(id);
+            _hums.Remove(id);
             if (!_views.TryGetValue(id, out var go)) return;
             _views.Remove(id);
             _fires.Remove(id);

@@ -321,6 +321,11 @@ namespace Oxfall.Game.UI
             return Min(body, window, shelf, slot, tray);
         });
 
+        /// <summary>A lightning bolt: power.</summary>
+        public static Sprite Bolt => Get("bolt", p =>
+            Polygon(p, new Vector2(0.18f, 0.82f), new Vector2(-0.42f, -0.06f), new Vector2(-0.02f, -0.06f),
+                new Vector2(-0.2f, -0.82f), new Vector2(0.44f, 0.12f), new Vector2(0.04f, 0.12f)));
+
         /// <summary>Two arrows passing each other: a trade.</summary>
         public static Sprite Swap => Get("swap", p =>
             Min(Segment(p, new Vector2(-0.6f, 0.28f), new Vector2(0.6f, 0.28f), 0.08f),

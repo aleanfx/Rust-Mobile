@@ -167,8 +167,10 @@ namespace Oxfall.Game.UI
             bool cupboard = d.Kind == DeployableKind.ToolCupboard;
             bool trap = d.Kind == DeployableKind.ShotgunTrap, turret = d.Kind == DeployableKind.AutoTurret;
             bool shop = d.Kind == DeployableKind.VendingMachine;
+            bool generator = d.Kind == DeployableKind.Generator;
             _lootTitle.text = furnace ? "HORNO" : d.Kind == DeployableKind.SupplyDrop ? "SUMINISTROS" : bag ? "BOLSA" : fire ? "FOGATA"
-                : recycler ? "RECICLADORA" : cupboard ? "ARMARIO" : trap ? "TRAMPA" : turret ? "TORRETA" : shop ? "MÁQUINA" : "CAJA";
+                : recycler ? "RECICLADORA" : cupboard ? "ARMARIO" : trap ? "TRAMPA" : turret ? "TORRETA" : shop ? "MÁQUINA"
+                : generator ? "GENERADOR" : "CAJA";
             _lootRows = 0;
             _boxPage = 0;
             for (int i = 0; i < _boxSlots.Length; i++) _boxSlots[i].Rect.gameObject.SetActive(i < box.SlotCount);
@@ -397,10 +399,20 @@ namespace Oxfall.Game.UI
             if (_boxKind == DeployableKind.AutoTurret)
             {
                 int rounds = _boxInventory.Count(ItemIds.RifleBullet) + _boxInventory.Count(ItemIds.PistolBullet);
-                _lootStatus.text = rounds > 0
-                    ? $"Armada · {rounds} balas\nDispara a 30 m a quien no tenga permiso en tu armario, y a lobos y bandidos"
-                    : "Sin balas: cárgala con balas de rifle o de pistola";
-                _lootStatus.color = rounds > 0 ? UiTheme.Good : UiTheme.Bad;
+                bool powered = _settlement.Power.Running(_box);
+                _lootStatus.text = rounds <= 0 ? "Sin balas: cárgala con balas de rifle o de pistola"
+                    : !powered ? $"{rounds} balas · SIN ENERGÍA\nLlévale {Electricity.TurretDemand:0} W con el cable desde un generador, panel o batería"
+                    : $"Armada · {rounds} balas · con energía\nDispara a 30 m a quien no tenga permiso en tu armario, y a lobos y bandidos";
+                _lootStatus.color = rounds > 0 && powered ? UiTheme.Good : UiTheme.Bad;
+            }
+            if (_boxKind == DeployableKind.Generator)
+            {
+                int fuel = _boxInventory.Count(ItemIds.LowGradeFuel);
+                bool running = _settlement.Power.Running(_box);
+                _lootStatus.text = running ? $"En marcha · da {Electricity.GeneratorPower:0} W\nQuema 1 combustible por minuto"
+                    : fuel > 0 ? "Con combustible: conéctale algo con el cable para arrancarlo"
+                    : "Sin combustible: pon combustible (grasa animal + tela)";
+                _lootStatus.color = running ? UiTheme.Good : fuel > 0 ? UiTheme.Accent : UiTheme.Bad;
             }
             if (_boxKind == DeployableKind.Campfire)
             {
@@ -419,7 +431,7 @@ namespace Oxfall.Game.UI
                 _lootQuickLabel.text = _pickedInBox ? "AL INVENTARIO" : furnace ? "AL HORNO" : _boxKind == DeployableKind.Campfire ? "AL FUEGO"
                     : _boxKind == DeployableKind.Recycler ? "A RECICLAR" : _boxKind == DeployableKind.ToolCupboard ? "AL ARMARIO"
                     : _boxKind == DeployableKind.ShotgunTrap ? "A LA TRAMPA" : _boxKind == DeployableKind.AutoTurret ? "A LA TORRETA"
-                    : _boxKind == DeployableKind.VendingMachine ? "A LA MÁQUINA" : "A LA CAJA";
+                    : _boxKind == DeployableKind.VendingMachine ? "A LA MÁQUINA" : _boxKind == DeployableKind.Generator ? "AL GENERADOR" : "A LA CAJA";
             if (any && Paged && !_pickedInBox) _lootQuickLabel.text = "A LA CAJA GRANDE";
         }
 

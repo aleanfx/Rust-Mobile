@@ -120,6 +120,7 @@ namespace Oxfall.Game
         private float _gameFog, _gameFar;
         // Who dealt the last blow that killed this player (online), for the death screen.
         private string _killer;
+        private WireViews _wires;
         private float _fellAt = -100f;
 
         /// <summary>How warm the player feels (see <see cref="Temperature"/>), and whether they were told they are freezing.</summary>
@@ -504,6 +505,11 @@ namespace Oxfall.Game
             _interactor = playerObject.AddComponent<Interactor>();
             _interactor.Init(_settlement, player.Head, _hud);
             _interactor.Actions = _actions;
+            // Cables between electric things, and the one being run from the hand.
+            _wires = WireViews.Create(_settlement, materials.Rubber);
+            _wires.Hand = () => player.Head.TransformPoint(new Vector3(0.22f, -0.28f, 0.5f));
+            _interactor.HeldItem = () => _hotbar.Held.ItemId;
+            _interactor.PendingChanged += source => _wires.LooseFrom = source;
             _interactor.BoatInSight = () =>
             {
                 var near = _boats.Boardable(_player.transform.position, _player.Head.forward);
@@ -1241,6 +1247,7 @@ namespace Oxfall.Game
             {
                 var ammo = _settlement.Container(t.Id);
                 if (Turrets.NextRound(ammo) == null) continue;
+                if (!_settlement.Power.Running(t.Id)) continue;
                 bool Sees(float x, float y, float z)
                 {
                     float ex = t.X, ey = t.Y + Turrets.MuzzleHeight, ez = t.Z;
@@ -2018,6 +2025,42 @@ namespace Oxfall.Game
                     ServerWorld.GiveTestKit(_inventory, 10);
                     break;
                 case "turret": HoldItem(ItemIds.AutoTurret); break;
+                case "give-electric" when _actions.Online:
+                    _net.SendAct(ActKind.DevGive, 12);
+                    break;
+                case "give-electric":
+                    ServerWorld.GiveTestKit(_inventory, 12);
+                    break;
+                case "wire-tool": HoldItem(ItemIds.WireTool); break;
+                case "generator": HoldItem(ItemIds.Generator); break;
+                case "solar-panel": HoldItem(ItemIds.SolarPanel); break;
+                case "battery": HoldItem(ItemIds.Battery); break;
+                case "switch": HoldItem(ItemIds.ElectricSwitch); break;
+                case "lamp": HoldItem(ItemIds.Lamp); break;
+                case "fuel-generator":
+                {
+                    // Test: opens the nearest generator and puts the fuel carried in.
+                    int gen = Nearest(DeployableKind.Generator);
+                    if (gen == 0) break;
+                    OpenBox(gen);
+                    for (int i = 0; i < _inventory.CarrySlots; i++)
+                        if (Electricity.Burns(_inventory[i].ItemId)) _actions.Put(i, -1);
+                    break;
+                }
+                case "toggle-switch":
+                {
+                    int sw = Nearest(DeployableKind.ElectricSwitch);
+                    if (sw != 0) Debug.Log($"[Oxfall] Toggle {sw}: {_actions.Build(BuildOp.Toggle(sw, !_settlement.Power.IsOn(sw)))}");
+                    break;
+                }
+                case "power":
+                    foreach (var d in _settlement.Deployables)
+                    {
+                        if (!Electricity.IsElectric(d.Kind)) continue;
+                        var grid = _settlement.Power;
+                        Debug.Log($"[Oxfall] Power {d.Kind} {d.Id} level={grid.Level(d.Id):0.#} running={grid.Running(d.Id)} from={grid.SourceOf(d.Id)} on={grid.IsOn(d.Id)} charge={grid.Charge01(d.Id) * 100f:0}%");
+                    }
+                    break;
                 case "give-vending" when _actions.Online:
                     _net.SendAct(ActKind.DevGive, 11);
                     break;
@@ -2234,6 +2277,18 @@ namespace Oxfall.Game
                     else if (command.StartsWith("time-") && float.TryParse(command.Substring(5),
                                  System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out float hour))
                         _dayNight.SetHour(hour);
+                    // wire:A-B runs a cable from the nearest A to the nearest B (kinds by name, e.g. wire:Generator-Lamp).
+                    else if (command.StartsWith("wire:"))
+                    {
+                        var ends = command.Substring(5).Split('-');
+                        if (ends.Length == 2 && System.Enum.TryParse(ends[0], true, out DeployableKind fromKind) && System.Enum.TryParse(ends[1], true, out DeployableKind toKind))
+                        {
+                            int from = Nearest(fromKind), to = Nearest(toKind);
+                            var result = from == 0 || to == 0 ? ActionResult.NoPiece : _settlement.Power.CanWire(to, from);
+                            if (result == ActionResult.Ok) result = _actions.Build(BuildOp.Wire(to, from));
+                            Debug.Log($"[Oxfall] Wire {fromKind} {from} -> {toKind} {to}: {result}");
+                        }
+                    }
                     // drop-H lifts the player H metres into the air where they stand, to fall.
                     else if (command.StartsWith("drop-") && float.TryParse(command.Substring(5),
                                  System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out float dropHeight))
@@ -3178,6 +3233,9 @@ namespace Oxfall.Game
             {
                 // Crops grow faster in the rain.
                 if (_weather != null) _settlement.GrowthRate = Crops.Rate(_weather.Rain);
+                // Solar panels follow the sun; rain dims them.
+                if (_dayNight != null) _settlement.Power.Sun = _dayNight.Cycle.SunElevation / Oxfall.Core.Environment.DayCycle.SunPeak;
+                _settlement.Power.Rain = _weather != null ? _weather.Rain : 0f;
                 _settlement.Tick(Time.deltaTime);
             }
             _respawnTimer += Time.deltaTime;

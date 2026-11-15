@@ -90,7 +90,11 @@ namespace Oxfall.Core.Rules
                 }
             };
             PlaceRecyclers();
+            Power = new PowerGrid(this);
         }
+
+        /// <summary>The cables and what flows in them.</summary>
+        public PowerGrid Power { get; }
 
         /// <summary>How far below a floor's top something can stand and still be on it (one put on the ground is well below).</summary>
         private const float OnFloorSlack = 0.12f;
@@ -328,6 +332,7 @@ namespace Oxfall.Core.Rules
             _crops.Remove(id);
             _orders.Remove(id);
             _deployableHealth.Remove(id);
+            Power?.Forget(id);
             RemoveLock(LockTarget.On(id));
             DeployableRemoved?.Invoke(id);
             return true;
@@ -640,6 +645,7 @@ namespace Oxfall.Core.Rules
                 }
             }
             Cook(dt);
+            Power.Tick(dt, decayed);
             if (_lit.Count == 0) return;
             _scratch.Clear();
             _scratch.AddRange(_lit.Keys);
@@ -729,6 +735,7 @@ namespace Oxfall.Core.Rules
             _deployableHealth.Clear();
             _crops.Clear();
             _orders.Clear();
+            Power.Clear();
             Upkeep.Clear();
             _nextId = 1;
             _clearing = false;

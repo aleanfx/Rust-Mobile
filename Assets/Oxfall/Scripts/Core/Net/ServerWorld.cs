@@ -470,6 +470,18 @@ namespace Oxfall.Core.Net
         /// </summary>
         public static void GiveTestKit(Inventory inventory, int kit = 0)
         {
+            if (kit == 12)
+            {
+                // Everything electric: power, storage, a switch, lamps, the cable, fuel.
+                inventory.Add(ItemIds.WireTool, 1);
+                inventory.Add(ItemIds.Generator, 1);
+                inventory.Add(ItemIds.SolarPanel, 1);
+                inventory.Add(ItemIds.Battery, 1);
+                inventory.Add(ItemIds.ElectricSwitch, 1);
+                inventory.Add(ItemIds.Lamp, 3);
+                inventory.Add(ItemIds.LowGradeFuel, 20);
+                return;
+            }
             if (kit == 11)
             {
                 // A vending machine and things to stock it with and pay for them.
@@ -627,6 +639,8 @@ namespace Oxfall.Core.Net
             _rotted.Clear();
             Environment.Weather.At(Seed, Time, out float rainNow, out _);
             Settlement.GrowthRate = Crops.Rate(rainNow);
+            Settlement.Power.Sun = Day.SunElevation / Environment.DayCycle.SunPeak;
+            Settlement.Power.Rain = rainNow;
             Settlement.Tick(deltaSeconds, _wentOut, _rotted, Announcements);
             foreach (int id in _wentOut) Announcements.Add(BuildOp.Light(id, false));
             foreach (int id in _rotted) Announcements.Add(BuildOp.Pickup(id));

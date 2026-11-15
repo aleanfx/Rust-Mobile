@@ -44,6 +44,8 @@ namespace Oxfall.Core.Net
             {
                 var ammo = Settlement.Container(turret.Id);
                 if (Turrets.NextRound(ammo) == null) continue;
+                // Without power it sleeps, head down.
+                if (!Settlement.Power.Running(turret.Id)) continue;
                 // The nearest stranger, else the nearest hostile animal.
                 SurvivorRecord target = null;
                 ServerState.Player targetPlayer = null;

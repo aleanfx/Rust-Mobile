@@ -63,6 +63,13 @@ namespace Oxfall.Core.Tests
             var t = world.Settlement.Add(new Deployable(0, DeployableKind.AutoTurret, at.X, at.Y, at.Z, 0f, owner.Owner));
             world.Settlement.Container(t.Id).Add(ItemIds.RifleBullet, 3);
             world.Players.Place(ana.Id, new Pose(at.X, at.Y, at.Z + 2f, 0f), 0f);
+            for (int i = 0; i < 10; i++) world.Tick(0.05f);
+            Assert.IsEmpty(world.TurretShots, "without power it sleeps");
+            float y0 = world.Ground.Height(at.X + 1f, at.Z + 4f);
+            world.Players.Place(beto.Id, new Pose(at.X + 1f, y0, at.Z + 4f, 180f), 0f);
+            for (int i = 0; i < 20; i++) world.Tick(0.05f);
+            Assert.IsEmpty(world.TurretShots, "not even at a stranger");
+            ElectricityTests.Power(world.Settlement, t);
             float y = world.Ground.Height(at.X + 1f, at.Z + 4f);
             world.Players.Place(beto.Id, new Pose(at.X + 1f, y, at.Z + 4f, 180f), 0f);
 

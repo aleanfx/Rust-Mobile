@@ -87,6 +87,12 @@ namespace Oxfall.Core.Items
         public const string HempSeed = "hemp_seed";
         public const string BerrySeed = "berry_seed";
         public const string AutoTurret = "auto_turret";
+        public const string WireTool = "wire_tool";
+        public const string Generator = "small_generator";
+        public const string SolarPanel = "solar_panel";
+        public const string Battery = "small_battery";
+        public const string ElectricSwitch = "electric_switch";
+        public const string Lamp = "electric_lamp";
         public const string VendingMachine = "vending_machine";
     }
 }

@@ -115,6 +115,10 @@ namespace Oxfall.Game.Rendering
         public Material LedGreen { get; }
         /// <summary>The glow of fire (Oxfall/Flame, additive); a plain orange if it isn't in the build.</summary>
         public Material Flame { get; }
+        /// <summary>A lamp's bulb, lit and dark.</summary>
+        public Material BulbOn { get; }
+        public Material BulbOff { get; }
+
         /// <summary>The pale paint of a tree's weak-spot X.</summary>
         public Material WeakSpotPaint { get; }
         public Material Berries { get; }
@@ -299,6 +303,8 @@ namespace Oxfall.Game.Rendering
             LedGreen = Make("Lock green", new Color(0.25f, 1f, 0.38f), 0.9f);
             Flame = Resources.Load<Material>("OxfallFlame") ?? Make("Flame", new Color(1f, 0.55f, 0.15f), 0f);
             WeakSpotPaint = Make("Weak spot paint", new Color(0.95f, 0.88f, 0.6f), 0.05f);
+            BulbOn = Make("Bulb on", new Color(1f, 0.95f, 0.78f), 0.85f);
+            BulbOff = Make("Bulb off", new Color(0.32f, 0.31f, 0.28f), 0.85f);
             Berries = Make("Berries", new Color(0.50f, 0.06f, 0.20f), 0.55f);
             Shirt = Make("Shirt", new Color(0.46f, 0.42f, 0.33f), 0.05f);
             Trousers = Make("Trousers", new Color(0.17f, 0.18f, 0.20f), 0.05f);

@@ -1,6 +1,7 @@
 using System;
 using Oxfall.Core.Building;
 using Oxfall.Core.Gathering;
+using Oxfall.Core.Items;
 using Oxfall.Core.Rules;
 using Oxfall.Game.Net;
 using Oxfall.Game.UI;
@@ -32,6 +33,8 @@ namespace Oxfall.Game.Construction
             Player,
             Boat,
             Crop,
+            /// <summary>Something electric: a switch, a battery, a panel, a lamp; or any of them (generator and turret too) with the cable in hand.</summary>
+            Electric,
         }
 
         private BuildingGrid _grid;
@@ -93,6 +96,19 @@ namespace Oxfall.Game.Construction
         /// <summary>Where opening goes (the shared rules alone, the server online).</summary>
         public GameActions Actions { get; set; }
 
+        /// <summary>The item in hand (null: nothing), to know when the cable is held.</summary>
+        public Func<string> HeldItem { get; set; }
+
+        /// <summary>The device a cable is being run from (0: none).</summary>
+        public int PendingSource { get; private set; }
+
+        /// <summary>A cable was started from a device, or let go (0).</summary>
+        public event Action<int> PendingChanged;
+
+        private bool HoldingWire => HeldItem != null && HeldItem() == ItemIds.WireTool;
+
+        private bool _infoShown;
+
         public bool LookingAtDoor => _target == Target.Door;
 
         /// <summary>The lock on what is in sight, if there is one.</summary>
@@ -145,6 +161,8 @@ namespace Oxfall.Game.Construction
                 return;
             }
             Look();
+            if (PendingSource != 0 && (!HoldingWire || !_settlement.TryGet(PendingSource, out _))) SetPending(0);
+            ShowPowerInfo();
             CodeLockState state = null;
             bool manage = _target != Target.None && _hasLock && _settlement.TryGetLock(_lock, out state) && state.CanManage(Me);
             _hud.SetLockButton(manage, manage && state.Locked);
@@ -193,6 +211,9 @@ namespace Oxfall.Game.Construction
                 }
                 case Target.Player:
                     _hud.SetUseButton("INVITAR", Icons.Team);
+                    break;
+                case Target.Electric:
+                    _hud.SetUseButton(ElectricLabel(), Icons.Bolt);
                     break;
                 case Target.Boat:
                     _hud.SetUseButton(_boat > 2000 ? "MONTAR" : "SUBIR", _boat > 2000 ? Icons.Hand : _boat > 1000 ? Icons.Copter : Icons.Boat);
@@ -247,6 +268,11 @@ namespace Oxfall.Game.Construction
             var tag = hit.collider.GetComponent<DeployableTag>();
             if (tag == null || !_settlement.TryGet(tag.Id, out _)) return;
             _deployable = tag.Id;
+            if (Electricity.IsElectric(tag.Kind) && (HoldingWire || _settlement.Container(tag.Id) == null))
+            {
+                _target = Target.Electric;
+                return;
+            }
             if (Crops.IsCrop(tag.Kind))
             {
                 _target = Target.Crop;
@@ -334,6 +360,148 @@ namespace Oxfall.Game.Construction
                     Board?.Invoke(_boat);
                     _timer = 0f;
                     break;
+                case Target.Electric:
+                    UseElectric();
+                    _timer = 0f;
+                    break;
+            }
+        }
+
+        // ---- Electricity
+
+        private void SetPending(int source)
+        {
+            if (PendingSource == source) return;
+            PendingSource = source;
+            PendingChanged?.Invoke(source);
+        }
+
+        /// <summary>The use button's word for the electric thing in sight.</summary>
+        private string ElectricLabel()
+        {
+            _settlement.TryGet(_deployable, out var d);
+            var grid = _settlement.Power;
+            if (HoldingWire)
+            {
+                if (PendingSource != 0)
+                    return _deployable == PendingSource ? "SOLTAR CABLE" : Electricity.HasInput(d.Kind) ? "CONECTAR" : "SIN ENTRADA";
+                if (Electricity.HasOutput(d.Kind)) return "CABLE DESDE";
+                return grid.SourceOf(d.Id) != 0 ? "QUITAR CABLE" : "SIN CABLE";
+            }
+            switch (d.Kind)
+            {
+                case DeployableKind.ElectricSwitch: return grid.IsOn(d.Id) ? "APAGAR" : "ENCENDER";
+                case DeployableKind.Battery: return $"BATERÍA {Mathf.FloorToInt(grid.Charge01(d.Id) * 100f)}%";
+                case DeployableKind.SolarPanel: return $"PANEL {grid.Level(d.Id):0} W";
+                case DeployableKind.Lamp: return grid.Running(d.Id) ? "LÁMPARA" : "SIN ENERGÍA";
+                default: return Deployables.Name(d.Kind).ToUpperInvariant();
+            }
+        }
+
+        /// <summary>Uses an electric thing: with the cable, runs or pulls cables; without, flips a switch or says how it is.</summary>
+        private void UseElectric()
+        {
+            if (!_settlement.TryGet(_deployable, out var d)) return;
+            var grid = _settlement.Power;
+            if (HoldingWire)
+            {
+                if (PendingSource == 0)
+                {
+                    if (Electricity.HasOutput(d.Kind))
+                    {
+                        SetPending(d.Id);
+                        _hud.ShowToast($"Cable desde {Deployables.Name(d.Kind)}: ahora toca lo que quieres alimentar (hasta {Electricity.WireReach:0} m)");
+                        return;
+                    }
+                    if (grid.SourceOf(d.Id) != 0)
+                    {
+                        var cut = Actions.Build(BuildOp.Wire(d.Id, 0));
+                        _hud.ShowToast(cut == ActionResult.Ok ? "Cable quitado" : GameActions.Explain(cut));
+                        if (cut == ActionResult.Ok) Debug.Log($"[Oxfall] Unwired {d.Kind} {d.Id}");
+                        return;
+                    }
+                    _hud.ShowToast($"{Deployables.Name(d.Kind)} no da energía: empieza el cable en un generador, panel, batería o interruptor");
+                    return;
+                }
+                if (d.Id == PendingSource)
+                {
+                    SetPending(0);
+                    _hud.ShowToast("Cable soltado");
+                    return;
+                }
+                int source = PendingSource;
+                var result = grid.CanWire(d.Id, source);
+                if (result == ActionResult.Ok) result = Actions.Build(BuildOp.Wire(d.Id, source));
+                if (result != ActionResult.Ok)
+                {
+                    _hud.ShowToast(GameActions.Explain(result));
+                    return;
+                }
+                _settlement.TryGet(source, out var from);
+                SetPending(0);
+                Debug.Log($"[Oxfall] Wired {from.Kind} {source} -> {d.Kind} {d.Id}");
+                string need = Electricity.Demand(d.Kind) > 0f ? $" (necesita {Electricity.Demand(d.Kind):0} W)" : "";
+                _hud.ShowToast($"Conectado: {Deployables.Name(from.Kind)} → {Deployables.Name(d.Kind)}{need}");
+                return;
+            }
+            switch (d.Kind)
+            {
+                case DeployableKind.ElectricSwitch:
+                {
+                    bool on = !grid.IsOn(d.Id);
+                    var result = Actions.Build(BuildOp.Toggle(d.Id, on));
+                    if (result != ActionResult.Ok) _hud.ShowToast(GameActions.Explain(result));
+                    else Debug.Log($"[Oxfall] Switch {d.Id} {(on ? "on" : "off")}");
+                    break;
+                }
+                default:
+                    _hud.ShowToast(PowerInfo(d));
+                    break;
+            }
+        }
+
+        /// <summary>A line about an electric thing's state, under the crosshair.</summary>
+        private void ShowPowerInfo()
+        {
+            string info = null;
+            if (_target != Target.None && _settlement.TryGet(_deployable, out var d) && Electricity.IsElectric(d.Kind)
+                && (_target == Target.Electric || _target == Target.Box))
+                info = PowerInfo(d);
+            if (info == null && !_infoShown) return;
+            string held = HeldItem?.Invoke();
+            // The hammer, the rod and the throwables say their own thing there.
+            if (held == ItemIds.Hammer || held == ItemIds.FishingRod || held == ItemIds.SatchelCharge || held == ItemIds.Beancan) return;
+            _hud.SetAimInfo(info);
+            _infoShown = info != null;
+        }
+
+        private string PowerInfo(Deployable d)
+        {
+            var grid = _settlement.Power;
+            string name = Deployables.Name(d.Kind);
+            switch (d.Kind)
+            {
+                case DeployableKind.Generator:
+                {
+                    int fuel = _settlement.Container(d.Id)?.Count(ItemIds.LowGradeFuel) ?? 0;
+                    if (grid.Running(d.Id)) return $"{name}: da {Electricity.GeneratorPower:0} W · combustible {fuel}";
+                    return fuel > 0 ? $"{name}: conéctale algo con el cable · combustible {fuel}" : $"{name}: sin combustible";
+                }
+                case DeployableKind.SolarPanel:
+                    return grid.Level(d.Id) > 0.5f ? $"{name}: da {grid.Level(d.Id):0} W ahora" : $"{name}: sin sol, no da nada";
+                case DeployableKind.Battery:
+                    return $"{name}: {Mathf.FloorToInt(grid.Charge01(d.Id) * 100f)}% · da hasta {Electricity.BatteryOutput:0} W";
+                case DeployableKind.ElectricSwitch:
+                    return $"{name}: {(grid.IsOn(d.Id) ? "encendido" : "apagado")}{(grid.SourceOf(d.Id) == 0 ? " · sin cable de entrada" : "")}";
+                case DeployableKind.Lamp:
+                case DeployableKind.AutoTurret:
+                {
+                    float need = Electricity.Demand(d.Kind);
+                    if (grid.Running(d.Id)) return $"{name}: con energía ({need:0} W)";
+                    return grid.SourceOf(d.Id) == 0 ? $"{name}: sin cable (necesita {need:0} W)" : $"{name}: sin energía suficiente (necesita {need:0} W)";
+                }
+                default:
+                    return null;
             }
         }
     }

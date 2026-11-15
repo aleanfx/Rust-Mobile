@@ -55,6 +55,8 @@ namespace Oxfall.Core.Items
         Crossbow,
         /// <summary>A fishing rod: cast at deep water, reel in when the float dips.</summary>
         FishingRod,
+        /// <summary>The wire tool: runs a cable from something that gives power to something that takes it.</summary>
+        Wire,
     }
 
     /// <summary>

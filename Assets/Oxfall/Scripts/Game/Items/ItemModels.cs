@@ -210,6 +210,46 @@ namespace Oxfall.Game.Items
                     Materials = new[] { m.BarrelPaint[2], m.GunMetal, m.WarnYellow, m.LedRed },
                     IconRotation = Tilt(-14f, 215f),
                 },
+                [ItemIds.WireTool] = new ItemModel
+                {
+                    Mesh = MeshFactory.WireTool(),
+                    Materials = new[] { m.Rubber, m.WarnYellow, m.Steel },
+                    ShowInHand = true,
+                    HandPosition = new Vector3(0.24f, -0.26f, 0.42f),
+                    HandRotation = Quaternion.Euler(-10f, -25f, 0f),
+                    HandScale = 1f,
+                    IconRotation = Tilt(-20f, 230f),
+                },
+                [ItemIds.Generator] = new ItemModel
+                {
+                    Mesh = MeshFactory.Generator(),
+                    Materials = new[] { m.WarnYellow, m.Steel, m.Rubber, m.LedRed },
+                    IconRotation = Tilt(-14f, 215f),
+                },
+                [ItemIds.SolarPanel] = new ItemModel
+                {
+                    Mesh = MeshFactory.SolarPanel(),
+                    Materials = new[] { m.Steel, m.Glass, m.WhitePaint },
+                    IconRotation = Tilt(-10f, 200f),
+                },
+                [ItemIds.Battery] = new ItemModel
+                {
+                    Mesh = MeshFactory.Battery(),
+                    Materials = new[] { m.Rubber, m.Steel, m.WarnYellow, m.LedGreen, m.LedGreen, m.LedGreen },
+                    IconRotation = Tilt(-14f, 210f),
+                },
+                [ItemIds.ElectricSwitch] = new ItemModel
+                {
+                    Mesh = MeshFactory.ElectricSwitchWhole(),
+                    Materials = new[] { m.Steel, m.PlanePaint, m.MedRed },
+                    IconRotation = Tilt(-8f, 205f),
+                },
+                [ItemIds.Lamp] = new ItemModel
+                {
+                    Mesh = MeshFactory.Lamp(),
+                    Materials = new[] { m.Steel, m.PlanePaint, m.BulbOff },
+                    IconRotation = Tilt(-8f, 220f),
+                },
                 [ItemIds.VendingMachine] = new ItemModel
                 {
                     Mesh = MeshFactory.VendingMachine(),

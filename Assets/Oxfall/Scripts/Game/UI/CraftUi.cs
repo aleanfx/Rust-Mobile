@@ -102,6 +102,11 @@ namespace Oxfall.Game.UI
                 case ItemIds.ShotgunTrap:
                 case ItemIds.AutoTurret:
                 case ItemIds.VendingMachine:
+                case ItemIds.Generator:
+                case ItemIds.SolarPanel:
+                case ItemIds.Battery:
+                case ItemIds.ElectricSwitch:
+                case ItemIds.Lamp:
                 case ItemIds.HighWoodWall:
                 case ItemIds.LargeBox:
                 case ItemIds.HighStoneWall:

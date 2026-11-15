@@ -44,6 +44,12 @@ namespace Oxfall.Core.Rules
         SetOrder = 26,
         /// <summary>Buy one offer of a vending machine once (asked for; copies need do nothing: the slots follow).</summary>
         Vend = 27,
+        /// <summary>A cable from <see cref="BuildOp.Code"/> (a device's id; 0: unplug) into a device.</summary>
+        Wire = 28,
+        /// <summary>A switch turned on or off (<see cref="BuildOp.Open"/>).</summary>
+        Toggle = 29,
+        /// <summary>Power at a device now (<see cref="BuildOp.Top"/>; for a battery, what it holds). Told by the server.</summary>
+        Power = 30,
     }
 
     /// <summary>
@@ -167,6 +173,17 @@ namespace Oxfall.Core.Rules
         /// <summary>Harvest a crop.</summary>
         public static BuildOp Harvest(int id) => OnDeployable(BuildOpKind.Harvest, id);
 
+        /// <summary>Plugs a cable from <paramref name="source"/> into <paramref name="device"/> (source 0: unplugs it).</summary>
+        public static BuildOp Wire(int device, int source) =>
+            new BuildOp(BuildOpKind.Wire, PieceType.Foundation, 0, 0, default, deployed: Target(device), code: source);
+
+        /// <summary>Turns a switch on or off.</summary>
+        public static BuildOp Toggle(int id, bool on) =>
+            new BuildOp(BuildOpKind.Toggle, PieceType.Foundation, 0, 0, default, open: on, deployed: Target(id));
+
+        /// <summary>The power at a device (a battery's charge).</summary>
+        public static BuildOp Power(int id, float value) => OnDeployable(BuildOpKind.Power, id).WithTop(value);
+
         /// <summary>Lights a furnace, or puts it out.</summary>
         public static BuildOp Light(int id, bool on) =>
             new BuildOp(BuildOpKind.Light, PieceType.Foundation, 0, 0, default, open: on, deployed: Target(id));
@@ -255,6 +272,9 @@ namespace Oxfall.Core.Rules
                 case BuildOpKind.Harvest: return "Harvest " + Id;
                 case BuildOpKind.SetOrder: return $"SetOrder {Id}#{Code} {Order}";
                 case BuildOpKind.Vend: return $"Vend {Id}#{Code}";
+                case BuildOpKind.Wire: return $"Wire {Code}->{Id}";
+                case BuildOpKind.Toggle: return $"Toggle {Id} {(Open ? "on" : "off")}";
+                case BuildOpKind.Power: return $"Power {Id} {Top:0.#}";
                 default: return $"{Kind} {Type} ({X},{Z}{(PieceRef.IsEdgeType(Type) ? "," + Axis : "")}{(Level > 0 ? "@" + Level : "")})";
             }
         }
@@ -377,6 +397,18 @@ namespace Oxfall.Core.Rules
                 case BuildOpKind.Vend:
                     w.Int(Id);
                     w.Byte((byte)Code);
+                    break;
+                case BuildOpKind.Wire:
+                    w.Int(Id);
+                    w.Int(Code);
+                    break;
+                case BuildOpKind.Toggle:
+                    w.Int(Id);
+                    w.Bool(Open);
+                    break;
+                case BuildOpKind.Power:
+                    w.Int(Id);
+                    w.Float(Top);
                     break;
                 default:
                     throw new InvalidOperationException("Unknown build op " + Kind);
@@ -524,6 +556,21 @@ namespace Oxfall.Core.Rules
                 {
                     int id = r.Int();
                     return Vend(id, ReadOrderSlot(r));
+                }
+                case BuildOpKind.Wire:
+                {
+                    int id = r.Int();
+                    return Wire(id, r.Int());
+                }
+                case BuildOpKind.Toggle:
+                {
+                    int id = r.Int();
+                    return Toggle(id, r.Bool());
+                }
+                case BuildOpKind.Power:
+                {
+                    int id = r.Int();
+                    return Power(id, Finite(r.Float()));
                 }
                 default:
                     throw new ProtocolException("Unknown build op " + (byte)kind + ".");
@@ -692,6 +739,12 @@ namespace Oxfall.Core.Rules
                 case BuildOpKind.Vend:
                     // What changes hands is in the slots, which follow on their own.
                     return settlement.TryGet(op.Id, out _);
+                case BuildOpKind.Wire:
+                    return settlement.Power.Connect(op.Id, op.Code);
+                case BuildOpKind.Toggle:
+                    return settlement.Power.SetOn(op.Id, op.Open);
+                case BuildOpKind.Power:
+                    return settlement.Power.Set(op.Id, op.Top);
                 default:
                     return false;
             }
@@ -759,6 +812,8 @@ namespace Oxfall.Core.Rules
             foreach (var machine in settlement.AllOrders)
                 for (int i = 0; i < machine.Value.Length; i++)
                     if (!machine.Value[i].IsEmpty) ops.Add(BuildOp.SetOrder(machine.Key, i, machine.Value[i]));
+            // Cables, switches, and what each device has.
+            settlement.Power.Describe(ops);
             // Locks, with their codes hidden: who put each on, who knows its code, and whether it is locked.
             foreach (var pair in settlement.Locks)
             {

@@ -170,7 +170,7 @@ namespace Oxfall.Game.Player
             {
                 var def = _hotbar.HeldDefinition;
                 // The hammer builds (HammerTool) instead of gathering.
-                return def == null || (def.Category == ItemCategory.Tool && def.Tool != ToolKind.Hammer && def.Tool != ToolKind.Explosive && def.Tool != ToolKind.FishingRod
+                return def == null || (def.Category == ItemCategory.Tool && def.Tool != ToolKind.Hammer && def.Tool != ToolKind.Explosive && def.Tool != ToolKind.FishingRod && def.Tool != ToolKind.Wire
                                        && !Firearms.IsGun(def.Tool));
             }
         }

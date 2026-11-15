@@ -523,6 +523,8 @@ namespace Oxfall.Game.Net
                 return ActionResult.NotShells;
             if (box.Kind == DeployableKind.AutoTurret && !Turrets.Takes(Inventory[from].ItemId))
                 return ActionResult.NotBullets;
+            if (box.Kind == DeployableKind.Generator && !Electricity.Burns(Inventory[from].ItemId))
+                return ActionResult.NotFuel;
             _net.SendAct(ActKind.Put, from, to);
             return ActionResult.Ok;
         }
@@ -571,6 +573,11 @@ namespace Oxfall.Game.Net
                 case ActionResult.NeedsSoil: return "Las semillas van en tierra, no sobre un piso";
                 case ActionResult.NotRipe: return "Aún no está lista para cosechar";
                 case ActionResult.NotBullets: return "La torreta solo carga balas de rifle o de pistola";
+                case ActionResult.NotFuel: return "El generador solo quema combustible (grasa animal + tela)";
+                case ActionResult.CannotWire: return "Ahí no va ese cable: la energía sale de generadores, paneles, baterías e interruptores";
+                case ActionResult.WireTooLong: return $"Demasiado lejos: un cable llega hasta {Electricity.WireReach:0} m";
+                case ActionResult.OutputsFull: return $"Esa salida ya alimenta {Electricity.MaxOutputs} cosas: usa un interruptor para repartir más";
+                case ActionResult.NoWireTool: return "Necesitas el cable en el inventario";
                 case ActionResult.OutOfStock: return "Agotado: la máquina no tiene más de eso";
                 case ActionResult.ShopFull: return "La máquina está llena: no cabe lo que pagas";
                 case ActionResult.NeedsDoorway: return "Apunta a un marco de puerta vacío";

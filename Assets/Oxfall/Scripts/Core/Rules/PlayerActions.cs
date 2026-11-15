@@ -95,6 +95,16 @@ namespace Oxfall.Core.Rules
         OutOfStock,
         /// <summary>The vending machine has no room left for the price.</summary>
         ShopFull,
+        /// <summary>A generator burns only fuel.</summary>
+        NotFuel,
+        /// <summary>A cable cannot run between those two (power must come out of the first and into the second, with no loop).</summary>
+        CannotWire,
+        /// <summary>The two are further apart than a cable reaches.</summary>
+        WireTooLong,
+        /// <summary>That output already feeds as many things as it can.</summary>
+        OutputsFull,
+        /// <summary>Wiring needs the cable in hand.</summary>
+        NoWireTool,
     }
 
     /// <summary>
@@ -388,6 +398,7 @@ namespace Oxfall.Core.Rules
             if (bag.Kind == DeployableKind.ToolCupboard && !Upkeep.Takes(s.Inventory[from].ItemId)) return ActionResult.NotUpkeep;
             if (bag.Kind == DeployableKind.ShotgunTrap && !GunTraps.Takes(s.Inventory[from].ItemId)) return ActionResult.NotShells;
             if (bag.Kind == DeployableKind.AutoTurret && !Turrets.Takes(s.Inventory[from].ItemId)) return ActionResult.NotBullets;
+            if (bag.Kind == DeployableKind.Generator && !Electricity.Burns(s.Inventory[from].ItemId)) return ActionResult.NotFuel;
             bool moved = to == -1 ? Inventory.TransferAll(s.Inventory, from, box) : Inventory.Transfer(s.Inventory, from, box, to);
             return moved ? ActionResult.Ok : ActionResult.NoSpace;
         }
@@ -634,6 +645,32 @@ namespace Oxfall.Core.Rules
                     var order = settlement.Orders(d.Id)[op.Code];
                     if (order.IsEmpty) return ActionResult.Invalid;
                     return Vending.Buy(settlement.Container(d.Id), s.Inventory, order);
+                }
+                case BuildOpKind.Wire:
+                {
+                    if (!settlement.TryGet(op.Id, out var d)) return ActionResult.NoPiece;
+                    if (!Electricity.HasInput(d.Kind)) return ActionResult.CannotWire;
+                    if (s.Inventory.Count(ItemIds.WireTool) <= 0) return ActionResult.NoWireTool;
+                    if (!Near(x, y, z, d.X, d.Y, d.Z, BuildReach)) return ActionResult.TooFar;
+                    if (!settlement.HasPrivilege(owner, d.X, d.Z)) return ActionResult.BuildingBlocked;
+                    if (op.Code != 0)
+                    {
+                        var can = settlement.Power.CanWire(d.Id, op.Code);
+                        if (can != ActionResult.Ok) return can;
+                        settlement.TryGet(op.Code, out var from);
+                        if (!settlement.HasPrivilege(owner, from.X, from.Z)) return ActionResult.BuildingBlocked;
+                    }
+                    else if (settlement.Power.SourceOf(d.Id) == 0) return ActionResult.Ok;
+                    settlement.Power.Connect(d.Id, op.Code);
+                    return ActionResult.Ok;
+                }
+                case BuildOpKind.Toggle:
+                {
+                    if (!settlement.TryGet(op.Id, out var d)) return ActionResult.NoPiece;
+                    if (d.Kind != DeployableKind.ElectricSwitch) return ActionResult.Invalid;
+                    if (!Near(x, y, z, d.X, d.Y, d.Z, UseReach)) return ActionResult.TooFar;
+                    settlement.Power.SetOn(d.Id, op.Open);
+                    return ActionResult.Ok;
                 }
                 case BuildOpKind.RepairDeployable:
                 {
