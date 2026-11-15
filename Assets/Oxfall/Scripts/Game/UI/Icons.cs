@@ -145,6 +145,16 @@ namespace Oxfall.Game.UI
             Segment(p, new Vector2(-0.45f, 0.62f), new Vector2(0.5f, -0.62f), 0.06f),
             RotatedBox(p, new Vector2(0.52f, -0.66f), new Vector2(0.16f, 0.07f), -53f, 0.03f)));
 
+        /// <summary>A minicopter from the side: the cabin bubble, the tail boom, the skid and the rotor over it.</summary>
+        public static Sprite Copter => Get("copter", p => Min(
+            Circle(p, new Vector2(-0.18f, -0.1f), 0.3f),
+            Segment(p, new Vector2(0f, 0f), new Vector2(0.78f, 0.12f), 0.07f),
+            RoundBox(p, new Vector2(0.8f, 0.22f), new Vector2(0.05f, 0.14f), 0.02f),
+            Segment(p, new Vector2(-0.5f, -0.58f), new Vector2(0.18f, -0.58f), 0.05f),
+            Segment(p, new Vector2(-0.18f, -0.4f), new Vector2(-0.18f, -0.56f), 0.04f),
+            Segment(p, new Vector2(-0.18f, 0.2f), new Vector2(-0.18f, 0.44f), 0.04f),
+            Segment(p, new Vector2(-0.85f, 0.48f), new Vector2(0.5f, 0.48f), 0.045f)));
+
         public static Sprite Gear => Get("gear", p =>
         {
             float ring = Mathf.Max(Circle(p, Vector2.zero, 0.58f), -Circle(p, Vector2.zero, 0.24f));

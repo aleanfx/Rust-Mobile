@@ -1304,6 +1304,11 @@ namespace Oxfall.Game
             // The ruins first, so the player's own pins draw over them.
             foreach (var m in Oxfall.Core.World.Monuments.Find(_world.Shape.Ground))
                 _mapPins.Add(new MapUi.Pin(new Vector3(m.X, m.Y, m.Z), Icons.Ruins, MapUi.RuinsColour, m.Name));
+            // Minicopters waiting for a pilot.
+            if (_copters != null)
+                foreach (var c in _copters.All)
+                    if (!c.Wrecked && c.Driver == 0)
+                        _mapPins.Add(new MapUi.Pin(new Vector3(c.X, c.Y, c.Z), Icons.Copter, new Color(0.95f, 0.8f, 0.3f), "Minicóptero"));
             int owner = _actions.Owner;
             foreach (var d in _settlement.Deployables)
             {

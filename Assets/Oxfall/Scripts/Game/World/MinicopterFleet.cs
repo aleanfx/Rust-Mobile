@@ -21,6 +21,7 @@ namespace Oxfall.Game.World
             public GameObject Root;
             public Transform Rotor;
             public MeshRenderer Body;
+            public Collider Solid;
             public AudioSource Engine;
             public Vector3 Target;
             public float TargetYaw;
@@ -80,7 +81,7 @@ namespace Oxfall.Game.World
             var box = go.AddComponent<BoxCollider>();
             box.center = new Vector3(0f, 0.9f, -0.2f);
             box.size = new Vector3(1.3f, 1.6f, 2.6f);
-            var view = new View { Copter = m, Root = go, Rotor = rotor.transform, Body = body };
+            var view = new View { Copter = m, Root = go, Rotor = rotor.transform, Body = body, Solid = box };
             view.Target = new Vector3(m.X, m.Y, m.Z);
             view.TargetYaw = m.Yaw;
             go.transform.SetPositionAndRotation(view.Target, Quaternion.Euler(0f, m.Yaw, 0f));
@@ -140,8 +141,11 @@ namespace Oxfall.Game.World
             crash = 0f;
             var m = Flying;
             if (m == null) return Vector3.zero;
+            float ox = m.X, oy = m.Y, oz = m.Z;
             crash = Oxfall.Core.Rules.Flying.Step(m, stick.y, stick.x, climb, lookYaw, lookPitch, dt, _ground);
-            if (_views.TryGetValue(m.Id, out var v))
+            _views.TryGetValue(m.Id, out var v);
+            Block(v, ox, oy, oz);
+            if (v != null)
             {
                 v.Target = new Vector3(m.X, m.Y, m.Z);
                 v.TargetYaw = m.Yaw;
@@ -149,6 +153,33 @@ namespace Oxfall.Game.World
             }
             Oxfall.Core.Rules.Flying.Seat(m, out float sx, out float sy, out float sz);
             return new Vector3(sx, sy, sz);
+        }
+
+        /// <summary>
+        /// Walls, roofs, rocks and trees stop it: if the way it just went runs into something solid,
+        /// it stays where it was and bounces a little off it.
+        /// </summary>
+        private void Block(View v, float ox, float oy, float oz)
+        {
+            if (v == null) return;
+            var m = v.Copter;
+            var from = new Vector3(ox, oy + 1.1f, oz);
+            var to = new Vector3(m.X, m.Y + 1.1f, m.Z);
+            var way = to - from;
+            float length = way.magnitude;
+            if (length < 1e-4f) return;
+            if (v.Solid != null) v.Solid.enabled = false;
+            // The ground and the ruins' pads are the rules' floor already: only what stands above them blocks.
+            bool hit = Physics.SphereCast(from, 0.9f, way / length, out var info, length, ~0, QueryTriggerInteraction.Ignore)
+                && info.point.y > Oxfall.Core.Rules.Flying.Floor(_ground, info.point.x, info.point.z) + 0.35f;
+            if (v.Solid != null) v.Solid.enabled = true;
+            if (!hit) return;
+            m.X = ox;
+            m.Z = oz;
+            if (m.Y < oy) m.Y = oy;
+            m.Vx *= -0.2f;
+            m.Vz *= -0.2f;
+            if (m.Vy < 0f) m.Vy = 0f;
         }
 
         /// <summary>Online: the copters as the server sees them.</summary>
