@@ -46,7 +46,8 @@ namespace Oxfall.Core.Tests
             var t = new Deployable(1, DeployableKind.AutoTurret, 0f, 0f, 0f, 0f, 1);
             Assert.IsTrue(Turrets.Covers(t, 0f, 0f, 25f));
             Assert.IsTrue(Turrets.Covers(t, 20f, 0f, 0.5f), "out to its side");
-            Assert.IsFalse(Turrets.Covers(t, 0f, 0f, -5f), "behind");
+            Assert.IsFalse(Turrets.Covers(t, 0f, 0f, -8f), "behind");
+            Assert.IsTrue(Turrets.Covers(t, 0f, 0f, -3f), "right behind it, it swings round (a wolf at its owner's back)");
             Assert.IsFalse(Turrets.Covers(t, 0f, 0f, Turrets.Range + 1f));
             Assert.Greater(Turrets.Range, GunTraps.Range * 3f);
         }

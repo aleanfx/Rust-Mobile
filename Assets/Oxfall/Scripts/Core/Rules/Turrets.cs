@@ -25,7 +25,7 @@ namespace Oxfall.Core.Rules
         public const float Range = 30f;
 
         /// <summary>Within this of it, it turns to a target all the way round (something chewing at its legs).</summary>
-        public const float Close = 2.5f;
+        public const float Close = 5f;
 
         /// <summary>Half the width of what it covers, in degrees either side of where it faces.</summary>
         public const float HalfCone = 90f;
