@@ -133,6 +133,8 @@ namespace Oxfall.Game
         private AnimalViews _animalViews;
         private BoatFleet _boats;
         private MinicopterFleet _copters;
+        private HorseHerd _horses;
+        private float _gallopSend;
         private float _flySend;
         private float _rowSend;
         private SleeperViews _sleeperViews;
@@ -233,6 +235,13 @@ namespace Oxfall.Game
             };
             // Minicopters beside the ruins.
             _copters = new MinicopterFleet(ground, materials, true);
+            // Horses grazing in the meadows.
+            _horses = new HorseHerd(ground, materials, true, (x, z) => obstacles.Blocks(x, z, 3f), s_seed);
+            _horses.RidingChanged += horse =>
+            {
+                if (horse != null) StartRiding(horse);
+                else StopRiding();
+            };
             _copters.FlyingChanged += copter =>
             {
                 if (copter != null) StartFlying(copter);
@@ -493,9 +502,12 @@ namespace Oxfall.Game
                 if (near != null) return near.Id;
                 // A minicopter in reach counts the same, its id past the boats'.
                 var copter = _copters.Mountable(_player.transform.position, _player.Head.forward);
-                return copter != null ? CopterIds + copter.Id : 0;
+                if (copter != null) return CopterIds + copter.Id;
+                // And a horse, past the copters'.
+                var horse = _horses.Mountable(_player.transform.position, _player.Head.forward);
+                return horse != null ? HorseIds + horse.Id : 0;
             };
-            _interactor.Rowing = () => _player.IsRowing || _player.IsFlying;
+            _interactor.Rowing = () => _player.IsRowing || _player.IsFlying || _player.IsRiding;
             _interactor.Board += BoardBoat;
             _interactor.LeaveBoat += LeaveBoat;
             _player.LeaveBoat += LeaveBoat;
@@ -681,6 +693,7 @@ namespace Oxfall.Game
             _net.AnimalsSeen += animals => _animalViews.Apply(animals);
             _net.BoatsSeen += boats => _boats.Apply(boats, _net.PlayerId);
             _net.MinicoptersSeen += copters => _copters.Apply(copters, _net.PlayerId);
+            _net.HorsesSeen += horses => _horses.Apply(horses, _net.PlayerId);
             _net.AirdropSeen += drop => _airdropViews.Add(drop);
             _net.WeatherSeen += (rain, fog) => _weather.SetTarget(rain, fog);
             _net.Broke += ToolBroke;
@@ -1318,6 +1331,11 @@ namespace Oxfall.Game
                 foreach (var c in _copters.All)
                     if (!c.Wrecked && c.Driver == 0)
                         _mapPins.Add(new MapUi.Pin(new Vector3(c.X, c.Y, c.Z), Icons.Copter, new Color(0.95f, 0.8f, 0.3f), "Minicóptero"));
+            // Horses nobody rides.
+            if (_horses != null)
+                foreach (var h in _horses.All)
+                    if (h.Driver == 0)
+                        _mapPins.Add(new MapUi.Pin(new Vector3(h.X, h.Y, h.Z), Icons.Hand, new Color(0.85f, 0.6f, 0.35f), "Caballo"));
             int owner = _actions.Owner;
             foreach (var d in _settlement.Deployables)
             {
@@ -1373,6 +1391,12 @@ namespace Oxfall.Game
                 if (!_actions.Online) _copters.Leave();
                 else _copters.Drop();
                 StopFlying();
+            }
+            if (_player.IsRiding)
+            {
+                if (!_actions.Online) _horses.Leave();
+                else _horses.Drop();
+                StopRiding();
             }
             _map.Close();
             _diedAt = _player.transform.position;
@@ -1850,6 +1874,11 @@ namespace Oxfall.Game
                 case "go-boat": GoToBoat(); break;
                 case "go-motorboat": GoToBoat(BoatKind.Motorboat); break;
                 case "go-copter": GoToCopter(); break;
+                case "go-horse": GoToHorse(); break;
+                case "horses":
+                    foreach (var h in _horses.All)
+                        Debug.Log($"[Oxfall] Horse {h.Id} at ({h.X:0.0}, {h.Y:0.0}, {h.Z:0.0}) yaw={h.Yaw:0} speed={h.Speed:0.0} stamina={h.Stamina:0} food={h.Food:0} driver={h.Driver}");
+                    break;
                 case "give-seeds" when _actions.Online:
                     _net.SendAct(ActKind.DevGive, 9);
                     break;
@@ -2230,10 +2259,90 @@ namespace Oxfall.Game
         /// <summary>Ids past this in the use button's "board" are minicopters.</summary>
         private const int CopterIds = 1000;
 
+        /// <summary>Ids past this are horses.</summary>
+        private const int HorseIds = 2000;
+
+        /// <summary>Gets on a horse: alone at once (it eats berries carried if hungry), online when the server says so.</summary>
+        private void MountHorse(int id)
+        {
+            if (_actions.Online)
+            {
+                _net.SendAct(ActKind.Ride, id);
+                return;
+            }
+            var p = _player.transform.position;
+            foreach (var h in _horses.All)
+                if (h.Id == id && Riding.CanMount(h, p.x, p.y, p.z) && _horses.MountAlone(h, _inventory.Count(ItemIds.Berries), out int ate))
+                {
+                    if (ate > 0) _inventory.Remove(ItemIds.Berries, ate);
+                    StartRiding(h);
+                    return;
+                }
+        }
+
+        private void StartRiding(Horse horse)
+        {
+            _player.Ride = (stick, sprint, yaw, dt) => _horses.Ride(stick, sprint, yaw, dt);
+            _hud.ShowToast("Caballo: el joystick avanza hacia donde miras; empújalo al borde para galopar. BAJAR para desmontar");
+            Debug.Log($"[Oxfall] Mounted horse {horse.Id} (stamina {horse.Stamina:0}, food {horse.Food:0})");
+        }
+
+        private void StopRiding()
+        {
+            if (!_player.IsRiding) return;
+            _player.Ride = null;
+            _hud.SetAimInfo(null);
+            Debug.Log("[Oxfall] Got off the horse");
+        }
+
+        private void GetOffHorse()
+        {
+            if (!_player.IsRiding) return;
+            if (_actions.Online)
+            {
+                _net.SendAct(ActKind.Dismount);
+                _horses.Drop();
+                StopRiding();
+                return;
+            }
+            var at = _horses.Leave();
+            StopRiding();
+            _player.Teleport(at, _player.Yaw, _player.Pitch);
+        }
+
+        /// <summary>The horses graze and move; the one this player rides is sent to the server ten times a second.</summary>
+        private void TickHorses(float dt)
+        {
+            if (_horses == null) return;
+            _horses.Tick(dt, !_actions.Online);
+            var h = _horses.Riding;
+            if (h != null)
+                _hud.SetAimInfo($"Aliento {Mathf.CeilToInt(h.Stamina)} · Comida {Mathf.CeilToInt(h.Food)} · {Mathf.Abs(h.Speed) * 3.6f:0} km/h" +
+                                (h.Food < Riding.Hungry ? " · Tiene hambre: dale moras" : ""));
+            if (!_actions.Online || h == null || (_gallopSend -= dt) > 0f) return;
+            _gallopSend = 0.1f;
+            _net.SendGallop(h.X, h.Z, h.Yaw, h.Speed);
+        }
+
+        /// <summary>Test: stands beside the nearest horse, looking at it.</summary>
+        private void GoToHorse()
+        {
+            var h = _horses.Nearest(_player.transform.position);
+            if (h == null) return;
+            Riding.Landing(h, _world.Shape.Ground, out float x, out float y, out float z);
+            _player.Teleport(new Vector3(x, y, z), Mathf.Atan2(h.X - x, h.Z - z) * Mathf.Rad2Deg, 20f);
+            Debug.Log($"[Oxfall] At horse {h.Id}");
+        }
+
         /// <summary>Gets into a boat: alone at once, online when the server says so (with the boats it sends).</summary>
         private void BoardBoat(int id)
         {
-            if (_player.IsRowing || _player.IsFlying || _vitals.IsDead) return;
+            if (_player.IsRowing || _player.IsFlying || _player.IsRiding || _vitals.IsDead) return;
+            if (id > HorseIds)
+            {
+                MountHorse(id - HorseIds);
+                return;
+            }
             if (id > CopterIds)
             {
                 MountCopter(id - CopterIds);
@@ -2303,6 +2412,11 @@ namespace Oxfall.Game
         /// <summary>Gets out: alone onto the nearest land (or into the water); online the server says where.</summary>
         private void LeaveBoat()
         {
+            if (_player.IsRiding)
+            {
+                GetOffHorse();
+                return;
+            }
             if (_player.IsFlying)
             {
                 LeaveCopter();
@@ -2826,6 +2940,7 @@ namespace Oxfall.Game
             TickAirdrops(Time.deltaTime);
             TickBoats(Time.deltaTime);
             TickCopters(Time.deltaTime);
+            TickHorses(Time.deltaTime);
             // Alone, the weather from the seed and the time (online the server says it).
             if (_weather != null && !_actions.Online && (_weatherCheck -= Time.deltaTime) <= 0f)
             {

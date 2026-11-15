@@ -332,6 +332,13 @@ namespace Oxfall.Server
                         Messages.Minicopters(writer, _world.Minicopters);
                         Broadcast(writer.ToArray());
                     }
+                    // The horses the same way.
+                    if (ticks % (Protocol.TickRate / 10) == 0 && (_world.HorsesChanged || ticks % Protocol.TickRate == 0))
+                    {
+                        _world.HorsesChanged = false;
+                        Messages.Horses(writer, _world.Horses);
+                        Broadcast(writer.ToArray());
+                    }
                     // The animals near each player, five times a second (their phones walk them on in between).
                     if (ticks % (Protocol.TickRate / 5) == 0)
                         foreach (var session in _sessions.Values)
@@ -438,7 +445,7 @@ namespace Oxfall.Server
                     Messages.ReadMove(reader, out var pose, out bool teleport, out float pitch);
                     if (session.Record.Survivor.Vitals.IsDead) break;
                     // At the oars or the controls the vehicle's own messages place them (faster than anyone runs).
-                    if (_world.RowedBy(id) != null || _world.FlownBy(id) != null) break;
+                    if (_world.Aboard(id)) break;
                     if (_state.ApplyMove(id, pose, teleport, now, pitch) || now - session.LastCorrection < CorrectionInterval) break;
                     session.LastCorrection = now;
                     SendPose(session, writer);
@@ -458,6 +465,12 @@ namespace Oxfall.Server
                     if (!_world.Fly(id, fx, fy, fz, fyaw)) _world.MinicoptersChanged = true;
                     // Thrown out of a wreck: told where they now stand.
                     if (flying && _world.FlownBy(id) == null) SendPose(session, writer);
+                    break;
+                }
+                case MessageType.Gallop:
+                {
+                    Messages.ReadGallop(reader, out float gx, out float gz, out float gyaw, out float gspeed);
+                    if (!_world.Gallop(id, gx, gz, gyaw, gspeed)) _world.HorsesChanged = true;
                     break;
                 }
                 case MessageType.Hit:

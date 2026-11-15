@@ -58,6 +58,14 @@ namespace Oxfall.Game.Player
 
         public bool IsFlying => Fly != null;
 
+        /// <summary>
+        /// Riding a horse: given the stick, whether sprinting, where the rider looks (yaw) and the
+        /// frame's seconds, rides it and says where the saddle is now (null: not riding).
+        /// </summary>
+        public System.Func<Vector2, bool, float, float, Vector3> Ride;
+
+        public bool IsRiding => Ride != null;
+
         /// <summary>Eyes this far over the seat while sitting in a boat.</summary>
         public const float SeatedEyeHeight = 0.95f;
 
@@ -119,6 +127,18 @@ namespace Oxfall.Game.Player
             transform.rotation = Quaternion.Euler(0f, _yaw, 0f);
             Head.localRotation = Quaternion.Euler(_pitch, 0f, 0f);
 
+            if (Ride != null)
+            {
+                IsSwimming = false;
+                IsClimbing = false;
+                var saddle = Ride(_input.Move, _input.Sprint, _yaw, dt);
+                _body.enabled = false;
+                transform.position = saddle;
+                _body.enabled = true;
+                _verticalSpeed = 0f;
+                Head.localPosition = new Vector3(0f, SeatedEyeHeight, 0f);
+                return;
+            }
             if (Fly != null)
             {
                 IsSwimming = false;

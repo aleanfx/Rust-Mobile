@@ -47,6 +47,10 @@ namespace Oxfall.Game.Rendering
         public Material Stone { get; }
         public Material MetalOre { get; }
         public Material Hemp { get; }
+        /// <summary>A horse's coat (chestnut) and its mane and tail (near black).</summary>
+        public Material HorseCoat { get; }
+        public Material HorseMane { get; }
+        public Material Saddle { get; }
         /// <summary>A crop left too long: dry, straw brown.</summary>
         public Material Withered { get; }
         /// <summary>Freshly dug earth round a sown crop.</summary>
@@ -225,6 +229,9 @@ namespace Oxfall.Game.Rendering
             Stone = Textured("OxfallStone") ?? Make("Stone", new Color(0.47f, 0.45f, 0.42f), 0.10f);
             MetalOre = Textured("OxfallOre") ?? Make("Metal ore", new Color(0.50f, 0.33f, 0.22f), 0.22f);
             Hemp = Make("Hemp", new Color(0.36f, 0.43f, 0.22f), 0.05f);
+            HorseCoat = Make("Horse coat", new Color(0.42f, 0.24f, 0.13f), 0.12f);
+            HorseMane = Make("Horse mane", new Color(0.09f, 0.07f, 0.06f), 0.08f);
+            Saddle = Make("Saddle", new Color(0.2f, 0.11f, 0.06f), 0.3f);
             Withered = Make("Withered", new Color(0.52f, 0.42f, 0.26f), 0.03f);
             Soil = Make("Soil", new Color(0.24f, 0.17f, 0.11f), 0.02f);
             GreenBerries = Make("Green berries", new Color(0.48f, 0.58f, 0.28f), 0.25f);

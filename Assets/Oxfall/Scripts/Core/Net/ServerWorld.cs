@@ -99,6 +99,7 @@ namespace Oxfall.Core.Net
             CreateAirdrops(seed, obstacles);
             CreateBoats();
             CreateMinicopters();
+            CreateHorses(obstacles);
             // A fallen bandit drops what he had (everyone sees the bag through LootDropped).
             Fauna.Died += a =>
             {
@@ -404,7 +405,8 @@ namespace Oxfall.Core.Net
                 case ActKind.LeaveBoat: return LeaveBoat(playerId);
                 case ActKind.Refuel: return Refuel(playerId, a);
                 case ActKind.Mount: return Mount(playerId, a);
-                case ActKind.Dismount: return Dismount(playerId);
+                case ActKind.Dismount: return RiddenBy(playerId) != null ? GetOff(playerId) : Dismount(playerId);
+                case ActKind.Ride: return Ride(playerId, a);
                 case ActKind.Reel:
                 {
                     if (!record.Angler.Casting) return ActionResult.Ok;
@@ -606,6 +608,7 @@ namespace Oxfall.Core.Net
             TickFauna(deltaSeconds);
             TickBoats(deltaSeconds);
             TickMinicopters(deltaSeconds);
+            TickHorses(deltaSeconds);
             TickTraps();
             TickAirdrops();
             Environment.Weather.At(Seed, Time, out float rain, out _);

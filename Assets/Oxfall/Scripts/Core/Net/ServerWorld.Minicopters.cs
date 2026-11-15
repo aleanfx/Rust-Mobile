@@ -31,7 +31,7 @@ namespace Oxfall.Core.Net
         {
             if (!_online.TryGetValue(playerId, out var record) || !Players.TryGet(playerId, out var player)) return ActionResult.Invalid;
             if (record.Survivor.Vitals.IsDead) return ActionResult.Dead;
-            if (FlownBy(playerId) != null || RowedBy(playerId) != null) return ActionResult.Invalid;
+            if (Aboard(playerId)) return ActionResult.Invalid;
             foreach (var m in Minicopters)
             {
                 if (m.Id != id) continue;

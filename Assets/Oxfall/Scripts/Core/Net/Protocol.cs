@@ -12,7 +12,7 @@ namespace Oxfall.Core.Net
     public static class Protocol
     {
         /// <summary>Raised whenever a message changes shape; a client of another version is turned away.</summary>
-        public const ushort Version = 26;
+        public const ushort Version = 27;
 
         /// <summary>Snapshots per second the server sends.</summary>
         public const int TickRate = 20;
@@ -128,6 +128,8 @@ namespace Oxfall.Core.Net
         Row = 49,
         /// <summary>The pilot's minicopter: where it is now and which way it points.</summary>
         Fly = 50,
+        /// <summary>The rider's horse: where it is now, which way it faces and how fast it goes.</summary>
+        Gallop = 51,
 
         // Server to client
         Welcome = 10,
@@ -195,6 +197,8 @@ namespace Oxfall.Core.Net
         Boats = 67,
         /// <summary>Every minicopter: where, which way, its health, fuel and pilot.</summary>
         Minicopters = 68,
+        /// <summary>Every horse: where, which way, how fast, its wind and food, and its rider.</summary>
+        Horses = 69,
     }
 
     /// <summary>What a player does to their own belongings (inside an <see cref="MessageType.Act"/> message).</summary>
@@ -241,8 +245,31 @@ namespace Oxfall.Core.Net
         Refuel = 24,
         /// <summary>Gets into a minicopter (a: its id), pouring the fuel carried into its tank.</summary>
         Mount = 25,
-        /// <summary>Gets out of the minicopter the player flies.</summary>
+        /// <summary>Gets out of the minicopter the player flies (or off the horse they ride).</summary>
         Dismount = 26,
+        /// <summary>Gets on a horse (a: its id), feeding it berries carried if it is hungry.</summary>
+        Ride = 27,
+    }
+
+    /// <summary>A horse as everyone is told of it.</summary>
+    public readonly struct HorseSnap
+    {
+        public readonly int Id;
+        public readonly float X, Y, Z, Yaw, Speed, Stamina, Food;
+        public readonly ushort Driver;
+
+        public HorseSnap(int id, float x, float y, float z, float yaw, float speed, float stamina, float food, ushort driver)
+        {
+            Id = id;
+            X = x;
+            Y = y;
+            Z = z;
+            Yaw = yaw;
+            Speed = speed;
+            Stamina = stamina;
+            Food = food;
+            Driver = driver;
+        }
     }
 
     /// <summary>A minicopter as everyone is told of it.</summary>
@@ -477,6 +504,7 @@ namespace Oxfall.Core.Net
                 case ActKind.Board:
                 case ActKind.Refuel:
                 case ActKind.Mount:
+                case ActKind.Ride:
                     w.Byte((byte)a);
                     break;
                 case ActKind.Craft:
@@ -539,6 +567,7 @@ namespace Oxfall.Core.Net
                 case ActKind.Board:
                 case ActKind.Refuel:
                 case ActKind.Mount:
+                case ActKind.Ride:
                     a = r.Byte();
                     break;
                 case ActKind.Craft:
@@ -882,6 +911,67 @@ namespace Oxfall.Core.Net
                 ushort driver = r.UShort();
                 into.Add(new MinicopterSnap(id, x, y, z, yaw, health, fuel, driver));
             }
+        }
+
+        /// <summary>Every horse, for everyone (there are only a few).</summary>
+        public static void Horses(NetWriter w, IEnumerable<Rules.Horse> horses)
+        {
+            w.Reset();
+            w.Byte((byte)MessageType.Horses);
+            int countAt = w.Length;
+            w.UShort(0);
+            int count = 0;
+            foreach (var h in horses)
+            {
+                if (count == 255) break;
+                w.Byte((byte)h.Id);
+                w.Float(h.X);
+                w.Float(h.Y);
+                w.Float(h.Z);
+                w.UShort((ushort)((int)Math.Round(h.Yaw / 360f * 65536f) & 0xFFFF));
+                w.UShort((ushort)(short)Math.Max(-32000, Math.Min(32000, (int)Math.Round(h.Speed * 100f))));
+                w.Byte((byte)Math.Min(255, Math.Max(0, (int)Math.Ceiling(h.Stamina))));
+                w.Byte((byte)Math.Min(255, Math.Max(0, (int)Math.Ceiling(h.Food))));
+                w.UShort(h.Driver);
+                count++;
+            }
+            w.PatchUShort(countAt, (ushort)count);
+        }
+
+        public static void ReadHorses(NetReader r, List<HorseSnap> into)
+        {
+            into.Clear();
+            int count = r.UShort();
+            if (count > 255) throw new ProtocolException("Too many horses.");
+            for (int i = 0; i < count; i++)
+            {
+                int id = r.Byte();
+                float x = r.Float(), y = r.Float(), z = r.Float();
+                float yaw = r.UShort() / 65536f * 360f;
+                float speed = (short)r.UShort() / 100f;
+                float stamina = r.Byte(), food = r.Byte();
+                ushort driver = r.UShort();
+                into.Add(new HorseSnap(id, x, y, z, yaw, speed, stamina, food, driver));
+            }
+        }
+
+        /// <summary>The rider's horse as their phone rode it.</summary>
+        public static void Gallop(NetWriter w, float x, float z, float yaw, float speed)
+        {
+            w.Reset();
+            w.Byte((byte)MessageType.Gallop);
+            w.Float(x);
+            w.Float(z);
+            w.Float(yaw);
+            w.Float(speed);
+        }
+
+        public static void ReadGallop(NetReader r, out float x, out float z, out float yaw, out float speed)
+        {
+            x = r.Float();
+            z = r.Float();
+            yaw = r.Float();
+            speed = r.Float();
         }
 
         /// <summary>The pilot's copter as their phone flew it.</summary>

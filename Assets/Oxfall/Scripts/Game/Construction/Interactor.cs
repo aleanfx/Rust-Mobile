@@ -193,7 +193,7 @@ namespace Oxfall.Game.Construction
                     _hud.SetUseButton("INVITAR", Icons.Team);
                     break;
                 case Target.Boat:
-                    _hud.SetUseButton("SUBIR", _boat > 1000 ? Icons.Copter : Icons.Boat);
+                    _hud.SetUseButton(_boat > 2000 ? "MONTAR" : "SUBIR", _boat > 2000 ? Icons.Hand : _boat > 1000 ? Icons.Copter : Icons.Boat);
                     break;
                 default:
                     _hud.SetUseButton(null);

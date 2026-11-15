@@ -757,6 +757,64 @@ namespace Oxfall.Game.World
             return b.Build("Animal " + kind, 55f);
         }
 
+        /// <summary>A horse's hips: front left, front right, back left, back right.</summary>
+        public static readonly Vector3[] HorseHips =
+        {
+            new Vector3(-0.15f, 1.06f, 0.5f), new Vector3(0.15f, 1.06f, 0.5f),
+            new Vector3(-0.15f, 1.06f, -0.55f), new Vector3(0.15f, 1.06f, -0.55f),
+        };
+
+        /// <summary>
+        /// A saddled horse, withers at 1.5 m, facing +Z, feet at the origin (legs apart: see
+        /// <see cref="HorseLeg"/>). Submeshes: coat, dark (mane, tail, eyes, muzzle), saddle.
+        /// </summary>
+        public static Mesh HorseBody()
+        {
+            var b = new FlatMeshBuilder(3) { UvScale = 0.5f };
+            var random = new System.Random(97);
+            // Barrel and chest, rounder at the haunches.
+            b.AddBlob(0, new Vector3(0f, 1.2f, -0.05f), new Vector3(0.3f, 0.31f, 0.72f), random, 0.05f);
+            b.AddBlob(0, new Vector3(0f, 1.22f, 0.42f), new Vector3(0.28f, 0.32f, 0.3f), random, 0.05f);
+            b.AddBlob(0, new Vector3(0f, 1.24f, -0.5f), new Vector3(0.29f, 0.3f, 0.3f), random, 0.05f);
+            // A long arched neck up to a long head, the muzzle darker.
+            b.AddTube(0, new Vector3(0f, 1.32f, 0.55f), new Vector3(0f, 1.78f, 0.88f), 0.2f, 0.11f, 10);
+            b.AddBlob(0, new Vector3(0f, 1.82f, 0.95f), new Vector3(0.1f, 0.11f, 0.14f), random, 0.03f);
+            b.AddTube(0, new Vector3(0f, 1.8f, 1.0f), new Vector3(0f, 1.6f, 1.3f), 0.085f, 0.065f, 9);
+            b.AddBlob(1, new Vector3(0f, 1.58f, 1.31f), new Vector3(0.068f, 0.06f, 0.06f), random, 0.02f);
+            foreach (float x in new[] { -1f, 1f })
+            {
+                b.AddCone(0, new Vector3(x * 0.055f, 1.9f, 0.92f), 0.03f, 0.12f, 5, 0f);
+                b.AddBlob(1, new Vector3(x * 0.085f, 1.83f, 1.02f), new Vector3(0.018f, 0.02f, 0.02f), random, 0f);
+                // Stirrups hanging from the saddle.
+                b.AddTube(2, new Vector3(x * 0.3f, 1.4f, 0.05f), new Vector3(x * 0.33f, 0.98f, 0.05f), 0.015f, 0.015f, 4);
+                b.AddBox(2, new Vector3(x * 0.33f - 0.05f, 0.93f, 0.0f), new Vector3(x * 0.33f + 0.05f, 0.97f, 0.1f));
+            }
+            // Mane down the neck, a forelock, a long tail.
+            for (int i = 0; i < 6; i++)
+            {
+                float t = i / 5f;
+                var at = Vector3.Lerp(new Vector3(0f, 1.48f, 0.5f), new Vector3(0f, 1.92f, 0.86f), t);
+                b.AddBlob(1, at, new Vector3(0.04f, 0.09f, 0.07f), random, 0.2f);
+            }
+            b.AddTube(1, new Vector3(0f, 1.36f, -0.78f), new Vector3(0f, 1.1f, -0.92f), 0.06f, 0.07f, 6);
+            b.AddTube(1, new Vector3(0f, 1.1f, -0.92f), new Vector3(0f, 0.72f, -0.95f), 0.07f, 0.03f, 6);
+            // The saddle and its blanket.
+            b.AddBlob(2, new Vector3(0f, 1.49f, 0.02f), new Vector3(0.24f, 0.07f, 0.28f), random, 0.03f);
+            b.AddBox(2, new Vector3(-0.31f, 1.28f, -0.22f), new Vector3(0.31f, 1.46f, 0.26f));
+            b.AddBlob(2, new Vector3(0f, 1.58f, 0.24f), new Vector3(0.07f, 0.07f, 0.05f), random, 0.03f);
+            return b.Build("Horse", 55f);
+        }
+
+        /// <summary>One horse leg hanging from its hip at the origin, the hoof on the ground 1.06 m below.</summary>
+        public static Mesh HorseLeg()
+        {
+            var b = new FlatMeshBuilder(3) { UvScale = 0.5f };
+            b.AddTube(0, new Vector3(0f, 0.06f, 0f), new Vector3(0f, -0.48f, 0.02f), 0.1f, 0.05f, 7);
+            b.AddTube(0, new Vector3(0f, -0.48f, 0.02f), new Vector3(0f, -0.96f, 0f), 0.045f, 0.04f, 6);
+            b.AddTube(1, new Vector3(0f, -0.96f, 0f), new Vector3(0f, -1.06f, 0.025f), 0.05f, 0.058f, 7, 1);
+            return b.Build("Horse leg", 55f);
+        }
+
         /// <summary>One leg hanging from its hip at the origin, the hoof or paw at the ground.</summary>
         public static Mesh AnimalLeg(Oxfall.Core.Wildlife.AnimalKind kind)
         {
