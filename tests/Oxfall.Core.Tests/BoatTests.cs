@@ -146,5 +146,96 @@ namespace Oxfall.Core.Tests
             Messages.ReadRow(r, out float x, out float z, out float yaw, out float speed);
             Assert.AreEqual(4f, speed);
         }
+            private static Boat Motorboat(List<Boat> boats) => boats.Find(b => b.Kind == BoatKind.Motorboat);
+
+        [Test]
+        public void SomeBoatsAreMotorboatsWithALittleFuel()
+        {
+            var boats = Boating.Spawn(new IslandGround(Seed));
+            int motors = boats.FindAll(b => b.Kind == BoatKind.Motorboat).Count;
+            Assert.That(motors, Is.GreaterThanOrEqualTo(1).And.LessThan(boats.Count));
+            Assert.AreEqual(Boating.StartFuel, Motorboat(boats).Fuel);
+            Assert.AreEqual(0f, boats.Find(b => b.Kind == BoatKind.Rowboat).Fuel);
+        }
+
+        [Test]
+        public void MotorGoesTwiceAsFastAndBurnsFuel()
+        {
+            var g = new IslandGround(Seed);
+            var boats = Boating.Spawn(g);
+            var m = Motorboat(boats);
+            for (int i = 0; i < 40; i++) Boating.Step(m, 1f, 0f, 0.1f, g);
+            Assert.That(m.Speed, Is.GreaterThan(Boating.MaxSpeed + 2f), "faster than oars");
+            Assert.That(m.Fuel, Is.EqualTo(Boating.StartFuel - 4f / Boating.SecondsPerFuel).Within(0.05f));
+            m.Fuel = 0.01f;
+            for (int i = 0; i < 80; i++) Boating.Step(m, 1f, 0f, 0.1f, g);
+            Assert.AreEqual(0f, m.Fuel);
+            Assert.That(m.Speed, Is.LessThanOrEqualTo(Boating.MaxSpeed + 0.01f), "dry, it is rowed like any boat");
+        }
+
+        [Test]
+        public void IdleMotorBurnsNothing()
+        {
+            var g = new IslandGround(Seed);
+            var m = Motorboat(Boating.Spawn(g));
+            for (int i = 0; i < 50; i++) Boating.Step(m, 0f, 0.5f, 0.1f, g);
+            Assert.AreEqual(Boating.StartFuel, m.Fuel);
+        }
+
+        [Test]
+        public void ServerRefuelsFromThePlayersCansAndBurnsByTheWayItWent()
+        {
+            var world = new ServerWorld(Seed);
+            var rec = world.Join(Protocol.Version, "Ale", "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", 0f, out var p, out _, out _);
+            var boat = Motorboat(world.Boats);
+            var row = world.Boats.Find(b => b.Kind == BoatKind.Rowboat);
+            world.Players.Place(p.Id, new Pose(boat.X + 2f, 0f, boat.Z, 0f), 0f);
+            var inv = rec.Survivor.Inventory;
+            Assert.AreEqual(ActionResult.NoFuel, world.Act(p.Id, ActKind.Refuel, boat.Id, 0, null));
+            inv.Add(Items.ItemIds.LowGradeFuel, 500);
+            Assert.AreEqual(ActionResult.Ok, world.Act(p.Id, ActKind.Refuel, boat.Id, 0, null));
+            Assert.AreEqual(Boating.TankSize, boat.Fuel, 0.001f, "filled to the brim");
+            Assert.AreEqual(500 - (Boating.TankSize - Boating.StartFuel), inv.Count(Items.ItemIds.LowGradeFuel));
+            Assert.AreEqual(ActionResult.Invalid, world.Act(p.Id, ActKind.Refuel, row.Id, 0, null), "a rowboat has no tank");
+            Assert.AreEqual(ActionResult.Ok, world.Act(p.Id, ActKind.Board, boat.Id, 0, null));
+            world.Tick(1f);
+            float rad = boat.Yaw * (float)System.Math.PI / 180f;
+            float nx = boat.X + (float)System.Math.Sin(rad) * 14f, nz = boat.Z + (float)System.Math.Cos(rad) * 14f;
+            Assert.That(world.Row(p.Id, nx, nz, boat.Yaw, 14f), Is.True, "14 m in a second at full throttle");
+            Assert.AreEqual(Boating.TankSize - 14f / Boating.MotorSpeed / Boating.SecondsPerFuel, boat.Fuel, 0.01f);
+        }
+
+        [Test]
+        public void ServerDoesNotBelieveMotorSpeedWithADryTank()
+        {
+            var world = new ServerWorld(Seed);
+            world.Join(Protocol.Version, "Ale", "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", 0f, out var p, out _, out _);
+            var boat = Motorboat(world.Boats);
+            boat.Fuel = 0f;
+            world.Players.Place(p.Id, new Pose(boat.X + 2f, 0f, boat.Z, 0f), 0f);
+            Assert.AreEqual(ActionResult.Ok, world.Act(p.Id, ActKind.Board, boat.Id, 0, null));
+            world.Tick(1f);
+            float rad = boat.Yaw * (float)System.Math.PI / 180f;
+            Assert.That(world.Row(p.Id, boat.X + (float)System.Math.Sin(rad) * 14f, boat.Z + (float)System.Math.Cos(rad) * 14f, boat.Yaw, 14f), Is.False);
+        }
+
+        [Test]
+        public void KindAndFuelSurviveTheTrip()
+        {
+            var boats = Boating.Spawn(new IslandGround(Seed));
+            var m = Motorboat(boats);
+            m.Fuel = 123.45f;
+            m.Speed = 14.2f;
+            var w = new NetWriter();
+            Messages.Boats(w, boats);
+            var r = new NetReader(w.Buffer, 0, w.Length);
+            r.Byte();
+            var read = new List<BoatSnap>();
+            Messages.ReadBoats(r, read);
+            var snap = read.Find(s => s.Id == m.Id);
+            Assert.AreEqual(BoatKind.Motorboat, snap.Kind);
+            Assert.AreEqual(123.5f, snap.Fuel, 0.001f, "never more than is left, rounded up to a tenth");
+            Assert.AreEqual(14.2f, snap.Speed, 0.06f);
+        }
     }
 }

@@ -114,7 +114,7 @@ namespace Oxfall.Core.Tests
                 Assert.AreEqual(MessageType.Act, (MessageType)r.Byte());
                 Assert.AreEqual(kind, Messages.ReadAct(r, out int a, out _, out string recipe), kind.ToString());
                 Assert.AreEqual(0, r.Remaining, kind + " left bytes unread");
-                if (kind == ActKind.Wear || kind == ActKind.DevSpawnAnimal || kind == ActKind.DevGive || kind == ActKind.Board) Assert.AreEqual(7, a, kind.ToString());
+                if (kind == ActKind.Wear || kind == ActKind.DevSpawnAnimal || kind == ActKind.DevGive || kind == ActKind.Board || kind == ActKind.Refuel) Assert.AreEqual(7, a, kind.ToString());
                 if (kind == ActKind.Craft || kind == ActKind.Learn) Assert.AreEqual("revolver", recipe, kind.ToString());
             }
         }

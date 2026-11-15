@@ -401,6 +401,7 @@ namespace Oxfall.Core.Net
                 }
                 case ActKind.Board: return Board(playerId, a);
                 case ActKind.LeaveBoat: return LeaveBoat(playerId);
+                case ActKind.Refuel: return Refuel(playerId, a);
                 case ActKind.Reel:
                 {
                     if (!record.Angler.Casting) return ActionResult.Ok;
@@ -457,6 +458,14 @@ namespace Oxfall.Core.Net
         /// </summary>
         public static void GiveTestKit(Inventory inventory, int kit = 0)
         {
+            if (kit == 8)
+            {
+                // Fuel, and what it is made from.
+                inventory.Add(ItemIds.LowGradeFuel, 60);
+                inventory.Add(ItemIds.AnimalFat, 30);
+                inventory.Add(ItemIds.Cloth, 20);
+                return;
+            }
             if (kit == 7)
             {
                 // Blades.

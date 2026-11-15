@@ -358,6 +358,30 @@ namespace Oxfall.Game.World
             return b.Build("Beancan", 45f);
         }
 
+        /// <summary>A jerry can of fuel, 30 cm tall: the body, its handles and a capped spout. Submeshes: paint, metal.</summary>
+        public static Mesh FuelCan()
+        {
+            var b = new FlatMeshBuilder(2) { UvScale = 0.3f };
+            b.AddBox(0, new Vector3(-0.08f, 0f, -0.12f), new Vector3(0.08f, 0.26f, 0.12f));
+            b.AddBox(0, new Vector3(-0.085f, 0.04f, -0.125f), new Vector3(0.085f, 0.06f, 0.125f));
+            b.AddBox(0, new Vector3(-0.085f, 0.2f, -0.125f), new Vector3(0.085f, 0.22f, 0.125f));
+            b.AddTube(1, new Vector3(0f, 0.26f, -0.1f), new Vector3(0f, 0.31f, -0.08f), 0.012f, 0.012f, 5);
+            b.AddTube(1, new Vector3(0f, 0.31f, -0.08f), new Vector3(0f, 0.31f, 0.02f), 0.012f, 0.012f, 5);
+            b.AddTube(1, new Vector3(0f, 0.31f, 0.02f), new Vector3(0f, 0.26f, 0.04f), 0.012f, 0.012f, 5);
+            b.AddCylinder(1, new Vector3(0f, 0.255f, 0.085f), 0.022f, 0.02f, 0.05f, 8, 0f);
+            return b.Build("FuelCan", 45f);
+        }
+
+        /// <summary>A lump of rendered animal fat. One submesh.</summary>
+        public static Mesh FatLump()
+        {
+            var b = new FlatMeshBuilder(1) { UvScale = 0.2f };
+            var random = new System.Random(53);
+            b.AddBlob(0, new Vector3(0f, 0.045f, 0f), new Vector3(0.09f, 0.05f, 0.07f), random, 0.035f);
+            b.AddBlob(0, new Vector3(0.05f, 0.03f, 0.04f), new Vector3(0.05f, 0.035f, 0.045f), random, 0.025f);
+            return b.Build("FatLump");
+        }
+
         public static Mesh SatchelCharge()
         {
             var b = new FlatMeshBuilder(4) { UvScale = 0.3f };
@@ -1619,10 +1643,12 @@ namespace Oxfall.Game.World
         /// A wooden rowboat 4.2 m long, its bow towards +Z and its floor at y = 0: plank sides that
         /// flare out and rise to the bow, a flat bottom, a transom, two thwarts, gunwale rails and a
         /// pair of oars resting in iron rowlocks. Submeshes: planks, dark trim, metal.
+        /// With <paramref name="motor"/>, a launch instead: no oars, an outboard motor clamped on the
+        /// transom with its tiller reaching in (a fourth submesh, the motor's paint).
         /// </summary>
-        public static Mesh Rowboat()
+        public static Mesh Rowboat(bool motor = false)
         {
-            var b = new FlatMeshBuilder(3) { UvScale = 0.9f };
+            var b = new FlatMeshBuilder(motor ? 4 : 3) { UvScale = 0.9f };
             // Stations along the keel: z, half width at the top, side height.
             float[] zs = { -2.1f, -1.2f, -0.2f, 0.8f, 1.5f, 1.95f, 2.15f };
             float[] half = { 0.6f, 0.78f, 0.82f, 0.74f, 0.5f, 0.22f, 0.03f };
@@ -1664,6 +1690,25 @@ namespace Oxfall.Game.World
             b.AddBox(0, new Vector3(-0.5f, 0.36f, -1.95f), new Vector3(0.5f, 0.42f, -1.45f));
             for (int k = -2; k <= 2; k++)
                 b.AddBox(1, new Vector3(k * 0.18f - 0.06f, 0f, -1.6f), new Vector3(k * 0.18f + 0.06f, 0.02f, 1.3f));
+            if (motor)
+            {
+                // The outboard: a clamp bracket on the transom, the shaft down into the sea, the
+                // gearcase and propeller under the water, the painted cowl over the top, a tiller in.
+                b.AddBox(2, new Vector3(-0.12f, 0.48f, -2.2f), new Vector3(0.12f, 0.68f, -2.06f));
+                b.AddBox(2, new Vector3(-0.07f, -0.5f, -2.36f), new Vector3(0.07f, 0.62f, -2.24f));
+                b.AddBox(3, new Vector3(-0.09f, -0.62f, -2.5f), new Vector3(0.09f, -0.46f, -2.12f));
+                b.AddBox(2, new Vector3(-0.015f, -0.72f, -2.36f), new Vector3(0.015f, -0.36f, -2.32f));
+                b.AddBox(2, new Vector3(-0.17f, -0.555f, -2.535f), new Vector3(0.17f, -0.525f, -2.505f));
+                b.AddBox(3, new Vector3(-0.2f, 0.62f, -2.6f), new Vector3(0.2f, 0.9f, -2.12f));
+                b.AddBox(3, new Vector3(-0.17f, 0.9f, -2.56f), new Vector3(0.17f, 0.98f, -2.18f));
+                b.AddBox(1, new Vector3(-0.205f, 0.7f, -2.605f), new Vector3(0.205f, 0.74f, -2.115f));
+                b.AddTube(1, new Vector3(0f, 0.78f, -2.12f), new Vector3(0.12f, 0.74f, -1.55f), 0.03f, 0.028f, 6);
+                b.AddTube(2, new Vector3(0.12f, 0.74f, -1.55f), new Vector3(0.14f, 0.735f, -1.42f), 0.035f, 0.035f, 6);
+                // A fuel can stowed under the stern thwart.
+                b.AddBox(3, new Vector3(0.3f, 0f, -1.85f), new Vector3(0.52f, 0.3f, -1.55f));
+                b.AddBox(2, new Vector3(0.36f, 0.3f, -1.76f), new Vector3(0.46f, 0.34f, -1.64f));
+                return b.Build("Motorboat");
+            }
             // Rowlocks and the oars, blades trailing in the water.
             foreach (float sd in new[] { -1f, 1f })
             {

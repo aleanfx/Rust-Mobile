@@ -19,14 +19,15 @@ namespace Oxfall.Game.World
         {
             public Boat Boat;
             public GameObject Root;
+            public AudioSource Engine;
             public Vector3 Target;
             public float TargetYaw;
         }
 
         private readonly IslandGround _ground;
         private readonly Transform _parent;
-        private readonly Mesh _mesh;
-        private readonly Material[] _materials;
+        private readonly Mesh _rowMesh, _motorMesh;
+        private readonly Material[] _materials, _motorMaterials;
         private readonly Dictionary<int, View> _views = new Dictionary<int, View>();
         private float _bob;
 
@@ -42,12 +43,17 @@ namespace Oxfall.Game.World
         /// </summary>
         public const float FloorDepth = -0.08f;
 
+        /// <summary>The motor's sound; set once the game's sounds are made, then every motorboat has one.</summary>
+        public AudioClip EngineClip { get; set; }
+
         public BoatFleet(IslandGround ground, MaterialLibrary materials, bool alone)
         {
             _ground = ground;
             _parent = new GameObject("Boats").transform;
-            _mesh = MeshFactory.Rowboat();
+            _rowMesh = MeshFactory.Rowboat();
+            _motorMesh = MeshFactory.Rowboat(true);
             _materials = new[] { materials.WoodWall, materials.Planks, materials.Metal };
+            _motorMaterials = new[] { materials.WoodWall, materials.Planks, materials.Metal, materials.BarrelPaint[1] };
             if (alone)
                 foreach (var b in Boating.Spawn(ground)) Add(b);
         }
@@ -61,11 +67,12 @@ namespace Oxfall.Game.World
 
         private View Add(Boat boat)
         {
-            var go = new GameObject("Rowboat " + boat.Id);
+            bool motor = boat.Kind == BoatKind.Motorboat;
+            var go = new GameObject((motor ? "Motorboat " : "Rowboat ") + boat.Id);
             go.transform.SetParent(_parent, false);
-            go.AddComponent<MeshFilter>().sharedMesh = _mesh;
+            go.AddComponent<MeshFilter>().sharedMesh = motor ? _motorMesh : _rowMesh;
             var r = go.AddComponent<MeshRenderer>();
-            r.sharedMaterials = _materials;
+            r.sharedMaterials = motor ? _motorMaterials : _materials;
             var view = new View { Boat = boat, Root = go };
             view.Target = new Vector3(boat.X, IslandGround.WaterLevel - FloorDepth, boat.Z);
             view.TargetYaw = boat.Yaw;
@@ -141,9 +148,15 @@ namespace Oxfall.Game.World
         {
             foreach (var snap in boats)
             {
-                if (!_views.TryGetValue(snap.Id, out var v)) v = Add(new Boat(snap.Id, snap.X, snap.Z, snap.Yaw));
+                if (!_views.TryGetValue(snap.Id, out var v) || v.Boat.Kind != snap.Kind)
+                {
+                    if (v != null) UnityEngine.Object.Destroy(v.Root);
+                    v = Add(new Boat(snap.Id, snap.X, snap.Z, snap.Yaw, snap.Kind));
+                }
                 var b = v.Boat;
                 b.Driver = snap.Driver;
+                // The server keeps the tank; between its updates the driver's motor burns it here too.
+                b.Fuel = snap.Fuel;
                 bool mine = me != 0 && snap.Driver == me;
                 if (mine && Rowing != b)
                 {
@@ -176,6 +189,7 @@ namespace Oxfall.Game.World
             _bob += dt;
             foreach (var v in _views.Values)
             {
+                Sound(v, dt);
                 if (v.Boat == Rowing) continue;
                 if (alone && v.Boat.Speed != 0f)
                 {
@@ -198,18 +212,40 @@ namespace Oxfall.Game.World
             }
         }
 
+        /// <summary>A motorboat's engine: idling while someone sits at the tiller, louder and higher with speed, quiet dry or empty.</summary>
+        private void Sound(View v, float dt)
+        {
+            if (v.Boat.Kind != BoatKind.Motorboat || EngineClip == null) return;
+            if (v.Engine == null) v.Engine = Audio.GameAudio.Attach(v.Root, EngineClip, 0f, 70f);
+            bool running = v.Boat.Driver != 0 && v.Boat.Fuel > 0f;
+            float share = Mathf.Clamp01(Mathf.Abs(v.Boat.Speed) / Boating.MotorSpeed);
+            float volume = running ? 0.35f + 0.4f * share : 0f;
+            v.Engine.volume = Mathf.MoveTowards(v.Engine.volume, volume, dt * 1.5f);
+            v.Engine.pitch = Mathf.Lerp(v.Engine.pitch, 0.75f + 0.75f * share, Mathf.Min(1f, dt * 3f));
+        }
+
         private float Bob(int id) => Mathf.Sin(_bob * 1.3f + id * 1.7f) * 0.05f;
         private float Roll(int id) => Mathf.Sin(_bob * 0.9f + id * 2.3f) * 2.2f;
         // The bow lifts a little when it goes fast.
-        private static float Pitch(Boat b) => -Mathf.Clamp(b.Speed, 0f, Boating.MaxSpeed) * 0.45f;
+        private static float Pitch(Boat b) => -Mathf.Clamp(b.Speed, 0f, Boating.MotorSpeed) * 0.4f;
+
+        /// <summary>Alone: pours fuel into the motorboat this player drives; how many cans went in.</summary>
+        public int RefuelAlone(Boat boat, int cans)
+        {
+            if (boat == null) return 0;
+            int pour = Mathf.Min(cans, Boating.TankSpace(boat));
+            if (pour > 0) boat.Fuel += pour;
+            return pour;
+        }
 
         /// <summary>For tests: the nearest boat to a point, or null.</summary>
-        public Boat Nearest(Vector3 at)
+        public Boat Nearest(Vector3 at, BoatKind? kind = null)
         {
             Boat best = null;
             float bestD = float.MaxValue;
             foreach (var v in _views.Values)
             {
+                if (kind.HasValue && v.Boat.Kind != kind.Value) continue;
                 float d = (v.Boat.X - at.x) * (v.Boat.X - at.x) + (v.Boat.Z - at.z) * (v.Boat.Z - at.z);
                 if (d < bestD) { bestD = d; best = v.Boat; }
             }

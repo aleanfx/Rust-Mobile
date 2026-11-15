@@ -32,6 +32,7 @@ namespace Oxfall.Core.Gathering
             if (random.NextDouble() < 0.55) loot.Add(new Yield(ItemIds.Cloth, 5 + random.Next(11)));
             if (random.NextDouble() < 0.35) loot.Add(new Yield(ItemIds.Arrow, 3 + random.Next(6)));
             if (random.NextDouble() < 0.2) loot.Add(new Yield(ItemIds.Leather, 2 + random.Next(4)));
+            if (random.NextDouble() < 0.3) loot.Add(new Yield(ItemIds.LowGradeFuel, 5 + random.Next(8)));
             if (random.NextDouble() < 0.12) loot.Add(new Yield(Finds[random.Next(Finds.Length)], 1));
             if (random.NextDouble() < 0.15) loot.Add(new Yield(Components[random.Next(Components.Length)], 1));
             return loot;

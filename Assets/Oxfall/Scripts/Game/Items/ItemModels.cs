@@ -477,6 +477,19 @@ namespace Oxfall.Game.Items
                 [ItemIds.CookedMeat] = Meat(MeshFactory.MeatCut(), new[] { m.CookedMeat, m.Bone }),
                 [ItemIds.RawFish] = Meat(MeshFactory.Fish(), new[] { m.RawFish, m.RawFish }),
                 [ItemIds.CookedFish] = Meat(MeshFactory.Fish(), new[] { m.CookedFish, m.CookedMeat }),
+                [ItemIds.AnimalFat] = new ItemModel
+                {
+                    Mesh = MeshFactory.FatLump(),
+                    Materials = new[] { m.AnimalFat },
+                    IconRotation = Tilt(-34f, 30f),
+                    IconZoom = 1.2f,
+                },
+                [ItemIds.LowGradeFuel] = new ItemModel
+                {
+                    Mesh = MeshFactory.FuelCan(),
+                    Materials = new[] { m.BarrelPaint[1], m.Metal },
+                    IconRotation = Tilt(-20f, 35f),
+                },
             };
             return models;
         }

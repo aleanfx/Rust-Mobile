@@ -67,6 +67,10 @@ namespace Oxfall.Core.Items
                 description: "Componente: sale de cajas y barriles. El cañón de un arma."),
             new ItemDefinition(ItemIds.Gunpowder, "Pólvora", ItemCategory.Resource, 1000,
                 description: "Carbón y azufre molidos juntos. Para las cargas explosivas y la munición."),
+            new ItemDefinition(ItemIds.AnimalFat, "Grasa animal", ItemCategory.Resource, 1000,
+                description: "Sale de los animales que cazas. Con tela se hace combustible."),
+            new ItemDefinition(ItemIds.LowGradeFuel, "Combustible", ItemCategory.Resource, 500,
+                description: "Grasa y tela. Llena el depósito de la lancha: cada lata da unos segundos de motor."),
 
             new ItemDefinition(ItemIds.Berries, "Moras", ItemCategory.Food, 20,
                 description: "Llévalas en la mano y toca COMER: algo de comida y de agua.",

@@ -127,6 +127,7 @@ namespace Oxfall.Game.Rendering
         public Material RawFish { get; }
         public Material CookedFish { get; }
         public Material Bone { get; }
+        public Material AnimalFat { get; }
         public Material Leather { get; }
 
         /// <summary>Sulfur rocks: grey stone with a sickly yellow cast, and the bright crystals crusted on them.</summary>
@@ -293,6 +294,7 @@ namespace Oxfall.Game.Rendering
             RawFish = Make("Raw fish", new Color(0.55f, 0.62f, 0.66f), 0.7f);
             CookedFish = Make("Cooked fish", new Color(0.62f, 0.42f, 0.18f), 0.4f);
             Bone = Make("Bone", new Color(0.88f, 0.84f, 0.74f), 0.25f);
+            AnimalFat = Make("Animal fat", new Color(0.86f, 0.79f, 0.58f), 0.6f);
             Leather = Make("Leather", new Color(0.47f, 0.31f, 0.18f), 0.22f);
             SulfurRock = Tinted(Stone, "Sulfur rock", Stone.HasProperty(BaseMap) && Stone.GetTexture(BaseMap) != null
                 ? new Color(1.02f, 0.95f, 0.62f) : new Color(0.52f, 0.49f, 0.36f));

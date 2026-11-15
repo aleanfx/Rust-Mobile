@@ -62,6 +62,9 @@ namespace Oxfall.Game.Audio
         /// <summary>A cargo plane's four engines droning, heard from far off (loops).</summary>
         public AudioClip PlaneLoop { get; }
 
+        /// <summary>An outboard motor's two-stroke putter (a loop; its pitch rises with the boat's speed).</summary>
+        public AudioClip EngineLoop { get; }
+
         /// <summary>Rain falling all round (a loop) and a roll of thunder far off.</summary>
         public AudioClip RainLoop { get; }
         public AudioClip Thunder { get; }
@@ -199,6 +202,7 @@ namespace Oxfall.Game.Audio
             WavesLoop = MakeLoop("waves", 8f, WavesSample);
             MachineLoop = MakeLoop("machine", 2f, MachineSample);
             PlaneLoop = MakeLoop("plane", 4f, PlaneSample);
+            EngineLoop = MakeLoop("engine", 2f, EngineSample);
             RainLoop = MakeLoop("rain", 5f, RainSample);
             Thunder = Make("thunder", 7f, ThunderSample);
         }
@@ -303,6 +307,18 @@ namespace Oxfall.Game.Audio
             _drone += (Noise() - _drone) * 0.05f;
             float beat = 0.8f + 0.2f * Mathf.Sin(t * Mathf.PI * 2f * 1.5f);
             return (props + _drone * 0.9f) * beat;
+        }
+
+        private float _exhaust;
+        private float EngineSample(float t, int i)
+        {
+            // Twenty-five firings a second (whole cycles in the loop's two seconds), each a short
+            // knock of tone and exhaust noise, over the hum of the crank and its first overtone.
+            float fire = t % 0.04f;
+            _exhaust += (Noise() - _exhaust) * 0.5f;
+            float knock = (Tone(fire, 190f) * 0.35f + _exhaust * 0.6f) * Env(fire, 0.0008f, 0.011f);
+            float hum = Tone(t, 50f) * 0.22f + Tone(t, 100f) * 0.12f + Tone(t, 25f) * 0.1f;
+            return knock + hum;
         }
 
         private float _hiss, _patter;

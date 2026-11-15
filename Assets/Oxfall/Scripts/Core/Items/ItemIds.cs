@@ -82,5 +82,7 @@ namespace Oxfall.Core.Items
         public const string FishingRod = "fishing_rod";
         public const string RawFish = "raw_fish";
         public const string CookedFish = "cooked_fish";
+        public const string AnimalFat = "animal_fat";
+        public const string LowGradeFuel = "low_grade_fuel";
     }
 }

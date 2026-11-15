@@ -116,10 +116,12 @@ namespace Oxfall.Core.Wildlife
             }
             int meat = kind == AnimalKind.Boar ? 2 : 1;
             int leather = kind == AnimalKind.Deer ? 4 : 3;
+            int fat = kind == AnimalKind.Boar ? 3 : 2;
             return new[]
             {
                 (ItemIds.RawMeat, (int)Math.Round(meat * cut)),
                 (ItemIds.Leather, (int)Math.Round(leather * cut)),
+                (ItemIds.AnimalFat, (int)Math.Round(fat * cut)),
             };
         }
 

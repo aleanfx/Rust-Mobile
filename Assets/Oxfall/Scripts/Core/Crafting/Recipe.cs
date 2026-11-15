@@ -120,6 +120,8 @@ namespace Oxfall.Core.Crafting
                 new Ingredient(ItemIds.Wood, 100)),
             new Recipe("wooden_spear", ItemIds.WoodenSpear, 1, 15f,
                 new Ingredient(ItemIds.Wood, 300)),
+            new Recipe("low_grade_fuel", ItemIds.LowGradeFuel, 4, 3f,
+                new Ingredient(ItemIds.AnimalFat, 3), new Ingredient(ItemIds.Cloth, 1)),
             new Recipe("fishing_rod", ItemIds.FishingRod, 1, 10f,
                 new Ingredient(ItemIds.Wood, 50), new Ingredient(ItemIds.Cloth, 15)),
             new Recipe("wooden_bow", ItemIds.WoodenBow, 1, 20f,

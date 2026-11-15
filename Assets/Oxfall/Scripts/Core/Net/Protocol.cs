@@ -12,7 +12,7 @@ namespace Oxfall.Core.Net
     public static class Protocol
     {
         /// <summary>Raised whenever a message changes shape; a client of another version is turned away.</summary>
-        public const ushort Version = 23;
+        public const ushort Version = 24;
 
         /// <summary>Snapshots per second the server sends.</summary>
         public const int TickRate = 20;
@@ -233,17 +233,22 @@ namespace Oxfall.Core.Net
         Board = 22,
         /// <summary>Gets out of the rowboat the player is in.</summary>
         LeaveBoat = 23,
+        /// <summary>Pours the player's fuel into a motorboat's tank (a: its id).</summary>
+        Refuel = 24,
     }
 
-    /// <summary>A rowboat as everyone is told of it.</summary>
+    /// <summary>A boat as everyone is told of it.</summary>
     public readonly struct BoatSnap
     {
         public readonly int Id;
-        public readonly float X, Z, Yaw, Speed;
+        public readonly Rules.BoatKind Kind;
+        public readonly float X, Z, Yaw, Speed, Fuel;
         public readonly ushort Driver;
 
-        public BoatSnap(int id, float x, float z, float yaw, float speed, ushort driver)
+        public BoatSnap(int id, float x, float z, float yaw, float speed, ushort driver, Rules.BoatKind kind = Rules.BoatKind.Rowboat, float fuel = 0f)
         {
+            Kind = kind;
+            Fuel = fuel;
             Id = id;
             X = x;
             Z = z;
@@ -442,6 +447,7 @@ namespace Oxfall.Core.Net
                 case ActKind.DevSpawnAnimal:
                 case ActKind.DevGive:
                 case ActKind.Board:
+                case ActKind.Refuel:
                     w.Byte((byte)a);
                     break;
                 case ActKind.Craft:
@@ -502,6 +508,7 @@ namespace Oxfall.Core.Net
                 case ActKind.DevSpawnAnimal:
                 case ActKind.DevGive:
                 case ActKind.Board:
+                case ActKind.Refuel:
                     a = r.Byte();
                     break;
                 case ActKind.Craft:
@@ -773,11 +780,14 @@ namespace Oxfall.Core.Net
             {
                 if (count == 255) break;
                 w.Byte((byte)b.Id);
+                w.Byte((byte)b.Kind);
                 w.Float(b.X);
                 w.Float(b.Z);
                 w.UShort((ushort)((int)Math.Round(b.Yaw / 360f * 65536f) & 0xFFFF));
-                w.Byte((byte)Math.Min(255, Math.Max(0, (int)Math.Round((b.Speed + 4f) * 20f))));
+                w.Byte((byte)Math.Min(255, Math.Max(0, (int)Math.Round((b.Speed + 5f) * 10f))));
                 w.UShort(b.Driver);
+                // Fuel in tenths of a can.
+                w.UShort((ushort)Math.Min(65535, Math.Max(0, (int)Math.Ceiling(b.Fuel * 10f - 1e-3f))));
                 count++;
             }
             w.PatchUShort(countAt, (ushort)count);
@@ -791,11 +801,14 @@ namespace Oxfall.Core.Net
             for (int i = 0; i < count; i++)
             {
                 int id = r.Byte();
+                byte kind = r.Byte();
+                if (kind > (byte)Rules.BoatKind.Motorboat) throw new ProtocolException("Unknown boat kind.");
                 float x = r.Float(), z = r.Float();
                 float yaw = r.UShort() / 65536f * 360f;
-                float speed = r.Byte() / 20f - 4f;
+                float speed = r.Byte() / 10f - 5f;
                 ushort driver = r.UShort();
-                into.Add(new BoatSnap(id, x, z, yaw, speed, driver));
+                float fuel = r.UShort() / 10f;
+                into.Add(new BoatSnap(id, x, z, yaw, speed, driver, (Rules.BoatKind)kind, fuel));
             }
         }
 

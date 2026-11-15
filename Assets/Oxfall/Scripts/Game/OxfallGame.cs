@@ -278,6 +278,7 @@ namespace Oxfall.Game
             // Sounds, all made at start-up.
             var audio = GameAudio.Create(playerObject.transform, _world.Shape);
             _audio = audio;
+            _boats.EngineClip = audio.Bank.EngineLoop;
             gatherer.Sound += audio.Play;
             _animalViews.Called += audio.PlayAnimal;
             _animalViews.BanditFired += (muzzle, forward) =>
@@ -1813,11 +1814,19 @@ namespace Oxfall.Game
                 case "fishing-rod": HoldItem(ItemIds.FishingRod); break;
                 case "go-shore": GoToShore(); break;
                 case "go-boat": GoToBoat(); break;
+                case "go-motorboat": GoToBoat(BoatKind.Motorboat); break;
+                case "refuel": RefuelBoat(); break;
+                case "give-fuel" when _actions.Online:
+                    _net.SendAct(ActKind.DevGive, 8);
+                    break;
+                case "give-fuel":
+                    ServerWorld.GiveTestKit(_inventory, 8);
+                    break;
                 case "board": _interactor.Use(); break;
                 case "leave-boat": LeaveBoat(); break;
                 case "boats":
                     foreach (var boat in _boats.All)
-                        Debug.Log($"[Oxfall] Boat {boat.Id} at ({boat.X:0.0}, {boat.Z:0.0}) yaw={boat.Yaw:0} speed={boat.Speed:0.0} driver={boat.Driver}");
+                        Debug.Log($"[Oxfall] Boat {boat.Id} {boat.Kind} at ({boat.X:0.0}, {boat.Z:0.0}) yaw={boat.Yaw:0} speed={boat.Speed:0.0} driver={boat.Driver} fuel={boat.Fuel:0.0}");
                     break;
                 case "cast": _rod.Cast(); break;
                 case "reel": _rod.Reel(); break;
@@ -2182,14 +2191,43 @@ namespace Oxfall.Game
                 var seat = _boats.Row(throttle, steer, dt, out float turned);
                 return (seat, turned);
             };
-            _hud.ShowToast("Adelante para remar, atrás para frenar, a los lados para girar. BAJAR para salir");
-            Debug.Log($"[Oxfall] Boarded boat {boat.Id}");
+            if (boat.Kind == BoatKind.Motorboat)
+            {
+                // Getting in pours the fuel carried into the tank, as much as it takes: no menu to fiddle with at sea.
+                RefuelBoat();
+                _hud.ShowToast(boat.Fuel > 0f || _inventory.Count(ItemIds.LowGradeFuel) > 0
+                    ? "Lancha: adelante para acelerar, a los lados para girar. BAJAR para salir"
+                    : "Lancha sin combustible: se rema. Haz combustible con grasa animal y tela");
+            }
+            else _hud.ShowToast("Adelante para remar, atrás para frenar, a los lados para girar. BAJAR para salir");
+            Debug.Log($"[Oxfall] Boarded boat {boat.Id} ({boat.Kind}, fuel {boat.Fuel:0.0})");
+        }
+
+        /// <summary>Pours the fuel carried into the motorboat this player drives (online the server pours it).</summary>
+        private void RefuelBoat()
+        {
+            var boat = _boats?.Rowing;
+            if (boat == null || boat.Kind != BoatKind.Motorboat) return;
+            int cans = _inventory.Count(ItemIds.LowGradeFuel);
+            if (cans <= 0 || Boating.TankSpace(boat) <= 0) return;
+            if (_actions.Online)
+            {
+                _net.SendAct(ActKind.Refuel, boat.Id);
+                Debug.Log($"[Oxfall] Refuel asked for boat {boat.Id}");
+                return;
+            }
+            int poured = _boats.RefuelAlone(boat, cans);
+            if (poured <= 0) return;
+            _inventory.Remove(ItemIds.LowGradeFuel, poured);
+            _hud.ShowToast($"Depósito: +{poured} de combustible");
+            Debug.Log($"[Oxfall] Refuelled boat {boat.Id}: +{poured} (fuel {boat.Fuel:0.0})");
         }
 
         private void StopRowing()
         {
             if (!_player.IsRowing) return;
             _player.Row = null;
+            _hud.SetAimInfo(null);
             Debug.Log("[Oxfall] Left the boat");
         }
 
@@ -2214,6 +2252,11 @@ namespace Oxfall.Game
         {
             if (_boats == null) return;
             _boats.Tick(dt, !_actions.Online);
+            var driving = _boats.Rowing;
+            if (driving != null && driving.Kind == BoatKind.Motorboat)
+                _hud.SetAimInfo(driving.Fuel > 0f
+                    ? $"Combustible {Mathf.CeilToInt(driving.Fuel)} · {Mathf.Abs(driving.Speed) * 3.6f:0} km/h"
+                    : "Sin combustible: a remo");
             if (!_actions.Online || _boats.Rowing == null || (_rowSend -= dt) > 0f) return;
             _rowSend = 0.1f;
             var b = _boats.Rowing;
@@ -2221,9 +2264,9 @@ namespace Oxfall.Game
         }
 
         /// <summary>Test: stands on the land nearest a boat, looking at it.</summary>
-        private void GoToBoat()
+        private void GoToBoat(BoatKind? kind = null)
         {
-            var boat = _boats.Nearest(_player.transform.position);
+            var boat = _boats.Nearest(_player.transform.position, kind);
             if (boat == null) return;
             Boating.Landing(boat, _world.Shape.Ground, out float x, out float y, out float z);
             var to = new Vector3(boat.X - x, 0f, boat.Z - z);
