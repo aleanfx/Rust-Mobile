@@ -1669,7 +1669,7 @@ namespace Oxfall.Game.World
             b.AddTube(1, new Vector3(0f, 0.6f, 0.62f), new Vector3(0f, 1.0f, 0.5f), 0.02f, 0.02f, 5);
             // The cage: corner posts to a roof ring, the windscreen hoop curving over the front.
             Vector3[] floor = { new Vector3(-0.52f, 0.6f, -0.72f), new Vector3(0.52f, 0.6f, -0.72f), new Vector3(0.48f, 0.84f, 1.1f), new Vector3(-0.48f, 0.84f, 1.1f) };
-            Vector3[] roof = { new Vector3(-0.42f, 1.75f, -0.62f), new Vector3(0.42f, 1.75f, -0.62f), new Vector3(0.36f, 1.7f, 0.45f), new Vector3(-0.36f, 1.7f, 0.45f) };
+            Vector3[] roof = { new Vector3(-0.42f, 2.08f, -0.62f), new Vector3(0.42f, 2.08f, -0.62f), new Vector3(0.36f, 2.02f, 0.3f), new Vector3(-0.36f, 2.02f, 0.3f) };
             for (int i = 0; i < 4; i++)
             {
                 b.AddTube(1, floor[i], roof[i], 0.03f, 0.03f, 5);
@@ -1691,16 +1691,16 @@ namespace Oxfall.Game.World
         }
 
         /// <summary>Where the main rotor's hub sits on <see cref="Minicopter"/>.</summary>
-        public static readonly Vector3 MinicopterRotorHub = new Vector3(0f, 2.1f, -0.55f);
+        public static readonly Vector3 MinicopterRotorHub = new Vector3(0f, 2.4f, -0.55f);
 
         /// <summary>The main rotor, two long blades about its hub at the origin. Submeshes: frame, warning yellow tips.</summary>
         public static Mesh MinicopterRotor()
         {
             var b = new FlatMeshBuilder(2) { UvScale = 0.6f };
             b.AddCylinder(0, new Vector3(0f, -0.08f, 0f), 0.11f, 0.08f, 0.16f, 10, 0f);
-            b.AddBox(0, new Vector3(-0.12f, 0f, -3.3f), new Vector3(0.12f, 0.035f, 3.3f));
-            b.AddBox(1, new Vector3(-0.121f, 0f, -3.6f), new Vector3(0.121f, 0.036f, -3.3f));
-            b.AddBox(1, new Vector3(-0.121f, 0f, 3.3f), new Vector3(0.121f, 0.036f, 3.6f));
+            b.AddBox(0, new Vector3(-0.09f, 0f, -3.3f), new Vector3(0.09f, 0.03f, 3.3f));
+            b.AddBox(1, new Vector3(-0.091f, 0f, -3.6f), new Vector3(0.091f, 0.031f, -3.3f));
+            b.AddBox(1, new Vector3(-0.091f, 0f, 3.3f), new Vector3(0.091f, 0.031f, 3.6f));
             return b.Build("MinicopterRotor");
         }
 

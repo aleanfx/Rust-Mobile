@@ -51,8 +51,8 @@ namespace Oxfall.Game.World
             _parent = new GameObject("Minicopters").transform;
             _body = MeshFactory.Minicopter();
             _rotor = MeshFactory.MinicopterRotor();
-            _bodyMaterials = new[] { materials.BarrelPaint[2], materials.GunMetal, materials.Rubber, materials.WarnYellow };
-            _rotorMaterials = new[] { materials.GunMetal, materials.WarnYellow };
+            _bodyMaterials = new[] { materials.BarrelPaint[2], materials.Metal, materials.Rubber, materials.WarnYellow };
+            _rotorMaterials = new[] { materials.Metal, materials.WarnYellow };
             _wreckMaterials = new[] { materials.Char, materials.Char, materials.Rubber, materials.Char };
             if (alone)
                 foreach (var m in Oxfall.Core.Rules.Flying.Spawn(ground)) Add(m);
