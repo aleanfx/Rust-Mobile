@@ -132,6 +132,8 @@ namespace Oxfall.Game
         private Fauna _fauna;
         private AnimalViews _animalViews;
         private BoatFleet _boats;
+        private MinicopterFleet _copters;
+        private float _flySend;
         private float _rowSend;
         private SleeperViews _sleeperViews;
         // Supply drops: alone the game sends the planes, online the server does and says so.
@@ -229,6 +231,13 @@ namespace Oxfall.Game
                 if (boat != null) StartRowing(boat);
                 else StopRowing();
             };
+            // Minicopters beside the ruins.
+            _copters = new MinicopterFleet(ground, materials, true);
+            _copters.FlyingChanged += copter =>
+            {
+                if (copter != null) StartFlying(copter);
+                else StopFlying();
+            };
             gatherer.StrikeAnimal = _actions.StrikeAnimal;
 
             // Arrows in flight, this player's and everyone else's.
@@ -279,6 +288,7 @@ namespace Oxfall.Game
             var audio = GameAudio.Create(playerObject.transform, _world.Shape);
             _audio = audio;
             _boats.EngineClip = audio.Bank.EngineLoop;
+            _copters.EngineClip = audio.Bank.EngineLoop;
             gatherer.Sound += audio.Play;
             _animalViews.Called += audio.PlayAnimal;
             _animalViews.BanditFired += (muzzle, forward) =>
@@ -480,9 +490,12 @@ namespace Oxfall.Game
             _interactor.BoatInSight = () =>
             {
                 var near = _boats.Boardable(_player.transform.position, _player.Head.forward);
-                return near != null ? near.Id : 0;
+                if (near != null) return near.Id;
+                // A minicopter in reach counts the same, its id past the boats'.
+                var copter = _copters.Mountable(_player.transform.position, _player.Head.forward);
+                return copter != null ? CopterIds + copter.Id : 0;
             };
-            _interactor.Rowing = () => _player.IsRowing;
+            _interactor.Rowing = () => _player.IsRowing || _player.IsFlying;
             _interactor.Board += BoardBoat;
             _interactor.LeaveBoat += LeaveBoat;
             _player.LeaveBoat += LeaveBoat;
@@ -658,6 +671,7 @@ namespace Oxfall.Game
             _net.AnimalHit += _actions.OnServerAnimalHit;
             _net.AnimalsSeen += animals => _animalViews.Apply(animals);
             _net.BoatsSeen += boats => _boats.Apply(boats, _net.PlayerId);
+            _net.MinicoptersSeen += copters => _copters.Apply(copters, _net.PlayerId);
             _net.AirdropSeen += drop => _airdropViews.Add(drop);
             _net.WeatherSeen += (rain, fog) => _weather.SetTarget(rain, fog);
             _net.Broke += ToolBroke;
@@ -1340,6 +1354,12 @@ namespace Oxfall.Game
                 else _boats.Drop();
                 StopRowing();
             }
+            if (_player.IsFlying)
+            {
+                if (!_actions.Online) _copters.Leave();
+                else _copters.Drop();
+                StopFlying();
+            }
             _map.Close();
             _diedAt = _player.transform.position;
             _inventoryUi.Close();
@@ -1815,6 +1835,13 @@ namespace Oxfall.Game
                 case "go-shore": GoToShore(); break;
                 case "go-boat": GoToBoat(); break;
                 case "go-motorboat": GoToBoat(BoatKind.Motorboat); break;
+                case "go-copter": GoToCopter(); break;
+                case "copters":
+                    foreach (var c in _copters.All)
+                        Debug.Log($"[Oxfall] Copter {c.Id} at ({c.X:0.0}, {c.Y:0.0}, {c.Z:0.0}) yaw={c.Yaw:0} " +
+                                  $"vel=({c.Vx:0.0}, {c.Vy:0.0}, {c.Vz:0.0}) fuel={c.Fuel:0.0} health={c.Health:0} driver={c.Driver} " +
+                                  $"above={c.Y - Flying.Floor(_world.Shape.Ground, c.X, c.Z):0.0}");
+                    break;
                 case "refuel": RefuelBoat(); break;
                 case "give-fuel" when _actions.Online:
                     _net.SendAct(ActKind.DevGive, 8);
@@ -1900,7 +1927,7 @@ namespace Oxfall.Game
                               $"meat={_inventory.Count(ItemIds.RawMeat)} cooked={_inventory.Count(ItemIds.CookedMeat)} leather={_inventory.Count(ItemIds.Leather)} " +
                               $"pos={_player.transform.position} climbing={_player.IsClimbing} walls={_settlement.WallCount} ladders={_settlement.LadderCount} quality={GraphicsQuality.Name(_quality.Tier)} " +
                               $"screen={Screen.width}x{Screen.height} grass={_grass.BladeCount} " +
-                              $"warmth={_warmth:0.00} dose={_dose:0.00} rads={_rads:0} boat={(_boats?.Rowing != null ? _boats.Rowing.Id : 0)} " +
+                              $"warmth={_warmth:0.00} dose={_dose:0.00} rads={_rads:0} boat={(_boats?.Rowing != null ? _boats.Rowing.Id : 0)} copter={(_copters?.Flying != null ? _copters.Flying.Id : 0)} " +
                               $"net={_net.State} id={_net.PlayerId} online={_net.OnlineCount} " +
                               $"others={string.Join(";", System.Linq.Enumerable.Select(_net.Players.Values, p => p.Name + "@" + p.Root.position + (p.Held.Length > 0 ? "+" + p.Held : "")))}");
                     break;
@@ -2166,10 +2193,18 @@ namespace Oxfall.Game
             Debug.Log("[Oxfall] Shore not found");
         }
 
+        /// <summary>Ids past this in the use button's "board" are minicopters.</summary>
+        private const int CopterIds = 1000;
+
         /// <summary>Gets into a boat: alone at once, online when the server says so (with the boats it sends).</summary>
         private void BoardBoat(int id)
         {
-            if (_player.IsRowing || _vitals.IsDead) return;
+            if (_player.IsRowing || _player.IsFlying || _vitals.IsDead) return;
+            if (id > CopterIds)
+            {
+                MountCopter(id - CopterIds);
+                return;
+            }
             if (_actions.Online)
             {
                 _net.SendAct(ActKind.Board, id);
@@ -2234,6 +2269,11 @@ namespace Oxfall.Game
         /// <summary>Gets out: alone onto the nearest land (or into the water); online the server says where.</summary>
         private void LeaveBoat()
         {
+            if (_player.IsFlying)
+            {
+                LeaveCopter();
+                return;
+            }
             if (!_player.IsRowing) return;
             if (_actions.Online)
             {
@@ -2245,6 +2285,102 @@ namespace Oxfall.Game
             var at = _boats.Leave();
             StopRowing();
             _player.Teleport(at, _player.Yaw, _player.Pitch);
+        }
+
+        /// <summary>Gets into a minicopter: alone at once (the fuel carried goes in), online when the server says so.</summary>
+        private void MountCopter(int id)
+        {
+            if (_actions.Online)
+            {
+                _net.SendAct(ActKind.Mount, id);
+                return;
+            }
+            foreach (var c in _copters.All)
+                if (c.Id == id && Flying.CanMount(c, _player.transform.position.x, _player.transform.position.y, _player.transform.position.z)
+                    && _copters.MountAlone(c, _inventory.Count(ItemIds.LowGradeFuel), out int poured))
+                {
+                    if (poured > 0) _inventory.Remove(ItemIds.LowGradeFuel, poured);
+                    StartFlying(c);
+                    return;
+                }
+        }
+
+        private void StartFlying(Minicopter copter)
+        {
+            _player.Fly = (stick, climb, yaw, pitch, dt) =>
+            {
+                var seat = _copters.Fly(stick, climb, yaw, pitch, dt, out float crash);
+                if (crash > 0f && !_actions.Online) OnCrash(crash);
+                return seat;
+            };
+            _hud.ShowToast(copter.Fuel > 0f
+                ? "Minicóptero: mantén SALTAR para subir. Vuela hacia donde miras; suelta para quedarte quieto. BAJAR para salir"
+                : "Sin combustible: haz combustible con grasa animal y tela");
+            Debug.Log($"[Oxfall] Mounted copter {copter.Id} (fuel {copter.Fuel:0.0})");
+        }
+
+        /// <summary>Alone: a hard landing hurts the pilot (the copter took it already); a wreck throws them out.</summary>
+        private void OnCrash(float overSafe)
+        {
+            float damage = overSafe * Flying.CrashDamage / 3f;
+            _killer = "un choque en minicóptero";
+            _vitals.Damage(damage);
+            _audio.Play(SoundCue.Hurt);
+            _hud.ShowHurt(damage);
+            Debug.Log($"[Oxfall] Crashed: {overSafe:0.0} m/s too fast, -{damage:0} health");
+            var c = _copters.Flying;
+            if (c != null && c.Wrecked) LeaveCopter();
+        }
+
+        private void StopFlying()
+        {
+            if (!_player.IsFlying) return;
+            _player.Fly = null;
+            _hud.SetAimInfo(null);
+            Debug.Log("[Oxfall] Left the copter");
+        }
+
+        private void LeaveCopter()
+        {
+            if (!_player.IsFlying) return;
+            if (_actions.Online)
+            {
+                _net.SendAct(ActKind.Dismount);
+                _copters.Drop();
+                StopFlying();
+                return;
+            }
+            var at = _copters.Leave();
+            StopFlying();
+            _player.Teleport(at, _player.Yaw, _player.Pitch);
+        }
+
+        /// <summary>The copters fly and fall; the one this player flies is sent to the server ten times a second.</summary>
+        private void TickCopters(float dt)
+        {
+            if (_copters == null) return;
+            _copters.Tick(dt, !_actions.Online);
+            var c = _copters.Flying;
+            if (c != null)
+            {
+                float above = c.Y - Flying.Floor(_world.Shape.Ground, c.X, c.Z);
+                _hud.SetAimInfo(c.Fuel > 0f
+                    ? $"Combustible {Mathf.CeilToInt(c.Fuel)} · Altura {above:0} m · Casco {Mathf.CeilToInt(c.Health)}"
+                    : "¡Sin combustible!");
+            }
+            if (!_actions.Online || c == null || (_flySend -= dt) > 0f) return;
+            _flySend = 0.1f;
+            _net.SendFly(c.X, c.Y, c.Z, c.Yaw);
+        }
+
+        /// <summary>Test: stands beside the nearest minicopter, looking at it.</summary>
+        private void GoToCopter()
+        {
+            var c = _copters.Nearest(_player.transform.position);
+            if (c == null) return;
+            Flying.Landing(c, _world.Shape.Ground, out float x, out float y, out float z);
+            _player.Teleport(new Vector3(x, y, z), Mathf.Atan2(c.X - x, c.Z - z) * Mathf.Rad2Deg, 20f);
+            Debug.Log($"[Oxfall] At copter {c.Id}");
         }
 
         /// <summary>The boats bob and drift; the one this player rows is sent to the server ten times a second.</summary>
@@ -2635,6 +2771,7 @@ namespace Oxfall.Game
             TickAnimals(Time.deltaTime);
             TickAirdrops(Time.deltaTime);
             TickBoats(Time.deltaTime);
+            TickCopters(Time.deltaTime);
             // Alone, the weather from the seed and the time (online the server says it).
             if (_weather != null && !_actions.Online && (_weatherCheck -= Time.deltaTime) <= 0f)
             {

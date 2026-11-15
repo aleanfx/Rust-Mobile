@@ -1640,6 +1640,71 @@ namespace Oxfall.Game.World
         }
 
         /// <summary>
+        /// A minicopter's body, nose towards +Z and its skids at y = 0: two skids on struts, an open
+        /// tube cage over a floor with two seats one behind the other, the engine and tank behind
+        /// them, the mast up to the rotor (its hub at <see cref="MinicopterRotorHub"/>, the blades a
+        /// mesh of their own) and a tail boom with its fin. Submeshes: paint, frame, rubber, warning yellow.
+        /// </summary>
+        public static Mesh Minicopter()
+        {
+            var b = new FlatMeshBuilder(4) { UvScale = 0.6f };
+            // Skids, turned up at the front, and the struts up to the floor.
+            foreach (float sd in new[] { -1f, 1f })
+            {
+                float x = sd * 0.78f;
+                b.AddTube(2, new Vector3(x, 0.05f, -1.05f), new Vector3(x, 0.05f, 1.0f), 0.05f, 0.05f, 6);
+                b.AddTube(2, new Vector3(x, 0.05f, 1.0f), new Vector3(x, 0.22f, 1.28f), 0.05f, 0.045f, 6);
+                b.AddTube(1, new Vector3(x, 0.07f, -0.6f), new Vector3(sd * 0.5f, 0.52f, -0.5f), 0.035f, 0.035f, 5);
+                b.AddTube(1, new Vector3(x, 0.07f, 0.6f), new Vector3(sd * 0.5f, 0.52f, 0.55f), 0.035f, 0.035f, 5);
+            }
+            // The floor, and a nose fairing under the windscreen.
+            b.AddBox(0, new Vector3(-0.55f, 0.48f, -0.75f), new Vector3(0.55f, 0.6f, 0.95f));
+            b.AddBox(0, new Vector3(-0.5f, 0.6f, 0.75f), new Vector3(0.5f, 0.85f, 1.15f));
+            b.AddBox(3, new Vector3(-0.51f, 0.62f, 1.1f), new Vector3(0.51f, 0.7f, 1.16f));
+            // Seats: the pilot's in front, a passenger's behind and a little higher.
+            b.AddBox(2, new Vector3(-0.28f, 0.6f, -0.05f), new Vector3(0.28f, 0.75f, 0.42f));
+            b.AddBox(2, new Vector3(-0.28f, 0.75f, -0.12f), new Vector3(0.28f, 1.25f, -0.02f));
+            b.AddBox(2, new Vector3(-0.28f, 0.75f, -0.7f), new Vector3(0.28f, 0.9f, -0.3f));
+            // The control stick.
+            b.AddTube(1, new Vector3(0f, 0.6f, 0.62f), new Vector3(0f, 1.0f, 0.5f), 0.02f, 0.02f, 5);
+            // The cage: corner posts to a roof ring, the windscreen hoop curving over the front.
+            Vector3[] floor = { new Vector3(-0.52f, 0.6f, -0.72f), new Vector3(0.52f, 0.6f, -0.72f), new Vector3(0.48f, 0.84f, 1.1f), new Vector3(-0.48f, 0.84f, 1.1f) };
+            Vector3[] roof = { new Vector3(-0.42f, 1.75f, -0.62f), new Vector3(0.42f, 1.75f, -0.62f), new Vector3(0.36f, 1.7f, 0.45f), new Vector3(-0.36f, 1.7f, 0.45f) };
+            for (int i = 0; i < 4; i++)
+            {
+                b.AddTube(1, floor[i], roof[i], 0.03f, 0.03f, 5);
+                b.AddTube(1, roof[i], roof[(i + 1) % 4], 0.03f, 0.03f, 5);
+            }
+            // The engine and the fuel tank, boxed in behind the seats.
+            b.AddBox(0, new Vector3(-0.45f, 0.6f, -1.35f), new Vector3(0.45f, 1.5f, -0.72f));
+            b.AddBox(1, new Vector3(-0.3f, 1.5f, -1.2f), new Vector3(0.3f, 1.72f, -0.8f));
+            b.AddCylinder(1, new Vector3(0.46f, 0.75f, -1.05f), 0.12f, 0.12f, 0.08f, 10, 0f);
+            // The mast up to the hub.
+            b.AddTube(1, new Vector3(0f, 1.72f, -1.0f), MinicopterRotorHub - new Vector3(0f, 0.08f, 0f), 0.07f, 0.06f, 8);
+            // The tail boom, its fin and the tail rotor's housing (the blades turn with the main ones).
+            b.AddTube(0, new Vector3(0f, 1.05f, -1.3f), new Vector3(0f, 1.35f, -4.2f), 0.14f, 0.07f, 8);
+            b.AddBox(0, new Vector3(-0.02f, 1.25f, -4.35f), new Vector3(0.02f, 2.0f, -3.95f));
+            b.AddBox(3, new Vector3(-0.025f, 1.85f, -4.36f), new Vector3(0.025f, 2.01f, -3.94f));
+            b.AddBox(0, new Vector3(-0.35f, 1.3f, -4.0f), new Vector3(0.35f, 1.34f, -3.75f));
+            b.AddCylinder(1, new Vector3(0.03f, 1.45f, -4.15f), 0.05f, 0.05f, 0.12f, 8, 0f);
+            return b.Build("Minicopter");
+        }
+
+        /// <summary>Where the main rotor's hub sits on <see cref="Minicopter"/>.</summary>
+        public static readonly Vector3 MinicopterRotorHub = new Vector3(0f, 2.1f, -0.55f);
+
+        /// <summary>The main rotor, two long blades about its hub at the origin. Submeshes: frame, warning yellow tips.</summary>
+        public static Mesh MinicopterRotor()
+        {
+            var b = new FlatMeshBuilder(2) { UvScale = 0.6f };
+            b.AddCylinder(0, new Vector3(0f, -0.08f, 0f), 0.11f, 0.08f, 0.16f, 10, 0f);
+            b.AddBox(0, new Vector3(-0.12f, 0f, -3.3f), new Vector3(0.12f, 0.035f, 3.3f));
+            b.AddBox(1, new Vector3(-0.121f, 0f, -3.6f), new Vector3(0.121f, 0.036f, -3.3f));
+            b.AddBox(1, new Vector3(-0.121f, 0f, 3.3f), new Vector3(0.121f, 0.036f, 3.6f));
+            return b.Build("MinicopterRotor");
+        }
+
+        /// <summary>
         /// A wooden rowboat 4.2 m long, its bow towards +Z and its floor at y = 0: plank sides that
         /// flare out and rise to the bow, a flat bottom, a transom, two thwarts, gunwale rails and a
         /// pair of oars resting in iron rowlocks. Submeshes: planks, dark trim, metal.

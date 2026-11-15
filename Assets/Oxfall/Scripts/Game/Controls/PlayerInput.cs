@@ -19,6 +19,9 @@ namespace Oxfall.Game.Controls
         /// <summary>True for the one frame the jump button went down.</summary>
         public bool Jump;
 
+        /// <summary>True while the jump button is held (a minicopter climbs).</summary>
+        public bool JumpHeld;
+
         /// <summary>True while the attack button is held.</summary>
         public bool Attack;
 

@@ -118,6 +118,11 @@ namespace Oxfall.Game.Net
 
         /// <summary>Every rowboat, as the server last told.</summary>
         public event Action<List<BoatSnap>> BoatsSeen;
+
+        private readonly List<MinicopterSnap> _copters = new List<MinicopterSnap>();
+
+        /// <summary>Every minicopter, as the server last told.</summary>
+        public event Action<List<MinicopterSnap>> MinicoptersSeen;
         private readonly List<SleeperSnap> _sleepers = new List<SleeperSnap>();
 
         private readonly string[] _outfit = new string[Inventory.WearSlots];
@@ -274,6 +279,14 @@ namespace Oxfall.Game.Net
         public string NameOf(ushort id) => id == PlayerId ? "tú" : _players.TryGetValue(id, out var p) ? p.Name : null;
 
         /// <summary>Something done to the player's own belongings; the server answers with the change.</summary>
+        /// <summary>Where the minicopter this player flies is now.</summary>
+        public void SendFly(float x, float y, float z, float yaw)
+        {
+            if (State != Status.Online || _socket == null) return;
+            Messages.Fly(_writer, x, y, z, yaw);
+            _socket.Send(_writer.Buffer, _writer.Length);
+        }
+
         /// <summary>Where the boat this player rows is now.</summary>
         public void SendRow(float x, float z, float yaw, float speed)
         {
@@ -619,6 +632,10 @@ namespace Oxfall.Game.Net
                 case MessageType.Boats:
                     Messages.ReadBoats(reader, _boats);
                     BoatsSeen?.Invoke(_boats);
+                    break;
+                case MessageType.Minicopters:
+                    Messages.ReadMinicopters(reader, _copters);
+                    MinicoptersSeen?.Invoke(_copters);
                     break;
                 case MessageType.Fish:
                     Fish?.Invoke(Messages.ReadFish(reader));

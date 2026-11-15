@@ -50,6 +50,14 @@ namespace Oxfall.Game.Player
 
         public bool IsRowing => Row != null;
 
+        /// <summary>
+        /// Flying a minicopter: given the stick, whether jump is held, where the pilot looks (yaw,
+        /// pitch) and the frame's seconds, flies it and says where the seat is now (null: not flying).
+        /// </summary>
+        public System.Func<Vector2, bool, float, float, float, Vector3> Fly;
+
+        public bool IsFlying => Fly != null;
+
         /// <summary>Eyes this far over the seat while sitting in a boat.</summary>
         public const float SeatedEyeHeight = 0.95f;
 
@@ -111,6 +119,18 @@ namespace Oxfall.Game.Player
             transform.rotation = Quaternion.Euler(0f, _yaw, 0f);
             Head.localRotation = Quaternion.Euler(_pitch, 0f, 0f);
 
+            if (Fly != null)
+            {
+                IsSwimming = false;
+                IsClimbing = false;
+                var seat = Fly(_input.Move, _input.JumpHeld, _yaw, _pitch, dt);
+                _body.enabled = false;
+                transform.position = seat;
+                _body.enabled = true;
+                _verticalSpeed = 0f;
+                Head.localPosition = new Vector3(0f, SeatedEyeHeight, 0f);
+                return;
+            }
             if (Row != null)
             {
                 IsSwimming = false;

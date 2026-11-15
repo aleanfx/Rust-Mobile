@@ -133,6 +133,7 @@ namespace Oxfall.Game.Controls
             {
                 _jumpFinger = id;
                 _input.Jump = true;
+                _input.JumpHeld = true;
                 return;
             }
             bool leftSide = pos.x < Screen.width * 0.42f && pos.y < Screen.height * 0.8f;
@@ -165,7 +166,7 @@ namespace Oxfall.Game.Controls
             }
             if (id == _lookFinger) _lookFinger = None;
             if (id == _attackFinger) _attackFinger = None;
-            if (id == _jumpFinger) _jumpFinger = None;
+            if (id == _jumpFinger) { _jumpFinger = None; _input.JumpHeld = false; }
         }
 
         private void UpdateStick(Vector2 pos)
@@ -196,6 +197,7 @@ namespace Oxfall.Game.Controls
                 _input.Sprint = UnityEngine.Input.GetKey(KeyCode.LeftShift) && move.y > 0f;
             }
             if (UnityEngine.Input.GetKeyDown(KeyCode.Space)) _input.Jump = true;
+            if (_jumpFinger == None) _input.JumpHeld = UnityEngine.Input.GetKey(KeyCode.Space);
             if (UnityEngine.Input.GetMouseButton(1))
                 _input.Look += new Vector2(UnityEngine.Input.GetAxisRaw("Mouse X"), UnityEngine.Input.GetAxisRaw("Mouse Y")) * 3f;
 

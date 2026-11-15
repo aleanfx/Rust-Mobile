@@ -325,6 +325,13 @@ namespace Oxfall.Server
                         Messages.Boats(writer, _world.Boats);
                         Broadcast(writer.ToArray());
                     }
+                    // The minicopters the same way.
+                    if (ticks % (Protocol.TickRate / 10) == 0 && (_world.MinicoptersChanged || ticks % Protocol.TickRate == 0))
+                    {
+                        _world.MinicoptersChanged = false;
+                        Messages.Minicopters(writer, _world.Minicopters);
+                        Broadcast(writer.ToArray());
+                    }
                     // The animals near each player, five times a second (their phones walk them on in between).
                     if (ticks % (Protocol.TickRate / 5) == 0)
                         foreach (var session in _sessions.Values)
@@ -430,6 +437,8 @@ namespace Oxfall.Server
                 {
                     Messages.ReadMove(reader, out var pose, out bool teleport, out float pitch);
                     if (session.Record.Survivor.Vitals.IsDead) break;
+                    // At the oars or the controls the vehicle's own messages place them (faster than anyone runs).
+                    if (_world.RowedBy(id) != null || _world.FlownBy(id) != null) break;
                     if (_state.ApplyMove(id, pose, teleport, now, pitch) || now - session.LastCorrection < CorrectionInterval) break;
                     session.LastCorrection = now;
                     SendPose(session, writer);
@@ -440,6 +449,15 @@ namespace Oxfall.Server
                     Messages.ReadRow(reader, out float bx, out float bz, out float byaw, out float bspeed);
                     // Not believed: everyone (the rower too) is sent where the boat really is.
                     if (!_world.Row(id, bx, bz, byaw, bspeed)) _world.BoatsChanged = true;
+                    break;
+                }
+                case MessageType.Fly:
+                {
+                    Messages.ReadFly(reader, out float fx, out float fy, out float fz, out float fyaw);
+                    bool flying = _world.FlownBy(id) != null;
+                    if (!_world.Fly(id, fx, fy, fz, fyaw)) _world.MinicoptersChanged = true;
+                    // Thrown out of a wreck: told where they now stand.
+                    if (flying && _world.FlownBy(id) == null) SendPose(session, writer);
                     break;
                 }
                 case MessageType.Hit:
@@ -614,7 +632,7 @@ namespace Oxfall.Server
                     var kind = Messages.ReadAct(reader, out int a, out int b, out string recipe);
                     var result = _world.Act(id, kind, a, b, recipe);
                     if (result != ActionResult.Ok) Fail(session, writer, result);
-                    else if (kind == ActKind.Respawn || kind == ActKind.LeaveBoat) SendPose(session, writer);
+                    else if (kind == ActKind.Respawn || kind == ActKind.LeaveBoat || kind == ActKind.Dismount) SendPose(session, writer);
                     else if (kind == ActKind.Learn)
                     {
                         // What they know now (the scrap it cost goes with their slots).

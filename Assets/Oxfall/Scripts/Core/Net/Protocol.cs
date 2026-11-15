@@ -12,7 +12,7 @@ namespace Oxfall.Core.Net
     public static class Protocol
     {
         /// <summary>Raised whenever a message changes shape; a client of another version is turned away.</summary>
-        public const ushort Version = 24;
+        public const ushort Version = 25;
 
         /// <summary>Snapshots per second the server sends.</summary>
         public const int TickRate = 20;
@@ -126,6 +126,8 @@ namespace Oxfall.Core.Net
         Shop = 48,
         /// <summary>The rower's boat: where it is now, which way it points and how fast it goes.</summary>
         Row = 49,
+        /// <summary>The pilot's minicopter: where it is now and which way it points.</summary>
+        Fly = 50,
 
         // Server to client
         Welcome = 10,
@@ -191,6 +193,8 @@ namespace Oxfall.Core.Net
         Fish = 66,
         /// <summary>Every rowboat: where it floats, which way, how fast and who rows it.</summary>
         Boats = 67,
+        /// <summary>Every minicopter: where, which way, its health, fuel and pilot.</summary>
+        Minicopters = 68,
     }
 
     /// <summary>What a player does to their own belongings (inside an <see cref="MessageType.Act"/> message).</summary>
@@ -235,6 +239,30 @@ namespace Oxfall.Core.Net
         LeaveBoat = 23,
         /// <summary>Pours the player's fuel into a motorboat's tank (a: its id).</summary>
         Refuel = 24,
+        /// <summary>Gets into a minicopter (a: its id), pouring the fuel carried into its tank.</summary>
+        Mount = 25,
+        /// <summary>Gets out of the minicopter the player flies.</summary>
+        Dismount = 26,
+    }
+
+    /// <summary>A minicopter as everyone is told of it.</summary>
+    public readonly struct MinicopterSnap
+    {
+        public readonly int Id;
+        public readonly float X, Y, Z, Yaw, Health, Fuel;
+        public readonly ushort Driver;
+
+        public MinicopterSnap(int id, float x, float y, float z, float yaw, float health, float fuel, ushort driver)
+        {
+            Id = id;
+            X = x;
+            Y = y;
+            Z = z;
+            Yaw = yaw;
+            Health = health;
+            Fuel = fuel;
+            Driver = driver;
+        }
     }
 
     /// <summary>A boat as everyone is told of it.</summary>
@@ -448,6 +476,7 @@ namespace Oxfall.Core.Net
                 case ActKind.DevGive:
                 case ActKind.Board:
                 case ActKind.Refuel:
+                case ActKind.Mount:
                     w.Byte((byte)a);
                     break;
                 case ActKind.Craft:
@@ -509,6 +538,7 @@ namespace Oxfall.Core.Net
                 case ActKind.DevGive:
                 case ActKind.Board:
                 case ActKind.Refuel:
+                case ActKind.Mount:
                     a = r.Byte();
                     break;
                 case ActKind.Craft:
@@ -521,6 +551,7 @@ namespace Oxfall.Core.Net
                 case ActKind.DevAirdrop:
                 case ActKind.Reel:
                 case ActKind.LeaveBoat:
+                case ActKind.Dismount:
                     break;
                 default:
                     throw new ProtocolException("Unknown action " + (byte)kind + ".");
@@ -810,6 +841,66 @@ namespace Oxfall.Core.Net
                 float fuel = r.UShort() / 10f;
                 into.Add(new BoatSnap(id, x, z, yaw, speed, driver, (Rules.BoatKind)kind, fuel));
             }
+        }
+
+        /// <summary>Every minicopter, for everyone (there are only a few).</summary>
+        public static void Minicopters(NetWriter w, IEnumerable<Rules.Minicopter> copters)
+        {
+            w.Reset();
+            w.Byte((byte)MessageType.Minicopters);
+            int countAt = w.Length;
+            w.UShort(0);
+            int count = 0;
+            foreach (var m in copters)
+            {
+                if (count == 255) break;
+                w.Byte((byte)m.Id);
+                w.Float(m.X);
+                w.Float(m.Y);
+                w.Float(m.Z);
+                w.UShort((ushort)((int)Math.Round(m.Yaw / 360f * 65536f) & 0xFFFF));
+                w.Byte((byte)Math.Min(255, Math.Max(0, (int)Math.Ceiling(m.Health))));
+                w.UShort((ushort)Math.Min(65535, Math.Max(0, (int)Math.Ceiling(m.Fuel * 10f - 1e-3f))));
+                w.UShort(m.Driver);
+                count++;
+            }
+            w.PatchUShort(countAt, (ushort)count);
+        }
+
+        public static void ReadMinicopters(NetReader r, List<MinicopterSnap> into)
+        {
+            into.Clear();
+            int count = r.UShort();
+            if (count > 255) throw new ProtocolException("Too many minicopters.");
+            for (int i = 0; i < count; i++)
+            {
+                int id = r.Byte();
+                float x = r.Float(), y = r.Float(), z = r.Float();
+                float yaw = r.UShort() / 65536f * 360f;
+                float health = r.Byte();
+                float fuel = r.UShort() / 10f;
+                ushort driver = r.UShort();
+                into.Add(new MinicopterSnap(id, x, y, z, yaw, health, fuel, driver));
+            }
+        }
+
+        /// <summary>The pilot's copter as their phone flew it.</summary>
+        public static void Fly(NetWriter w, float x, float y, float z, float yaw)
+        {
+            w.Reset();
+            w.Byte((byte)MessageType.Fly);
+            w.Float(x);
+            w.Float(y);
+            w.Float(z);
+            w.Float(yaw);
+        }
+
+        public static void ReadFly(NetReader r, out float x, out float y, out float z, out float yaw)
+        {
+            x = r.Float();
+            y = r.Float();
+            z = r.Float();
+            yaw = r.Float();
         }
 
         /// <summary>The rower's boat as their phone moved it.</summary>
