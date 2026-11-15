@@ -156,6 +156,8 @@ namespace Oxfall.Core.Crafting
                 new Ingredient(ItemIds.Wood, 150)),
             new Recipe("storage_box", ItemIds.StorageBox, 1, 10f,
                 new Ingredient(ItemIds.Wood, 100)),
+            new Recipe("large_wood_box", ItemIds.LargeBox, 1, 15f,
+                new Ingredient(ItemIds.Wood, 250), new Ingredient(ItemIds.MetalFragments, 50)),
             new Recipe("sleeping_bag", ItemIds.SleepingBag, 1, 10f,
                 new Ingredient(ItemIds.Cloth, 30)),
             new Recipe("furnace", ItemIds.Furnace, 1, 20f,

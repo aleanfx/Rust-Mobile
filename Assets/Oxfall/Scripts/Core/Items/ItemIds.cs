@@ -78,5 +78,6 @@ namespace Oxfall.Core.Items
         public const string Machete = "machete";
         public const string Sword = "salvaged_sword";
         public const string Crossbow = "crossbow";
+        public const string LargeBox = "large_wood_box";
     }
 }

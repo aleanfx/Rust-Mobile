@@ -1577,6 +1577,36 @@ namespace Oxfall.Game.World
         }
 
         /// <summary>
+        /// A large wooden box, 1.5 m long and waist high, its front towards +Z: planks banded with
+        /// metal at the corners and across, a heavy lid, a hasp and handles at the ends. Submeshes: planks, bark trim, metal.
+        /// </summary>
+        public static Mesh LargeBox()
+        {
+            var b = new FlatMeshBuilder(3) { UvScale = 0.8f };
+            const float x = 0.75f, z = 0.36f, h = 0.7f;
+            b.AddBox(0, new Vector3(-x + 0.02f, 0.02f, -z + 0.02f), new Vector3(x - 0.02f, h, z - 0.02f));
+            b.AddBox(0, new Vector3(-x, h, -z), new Vector3(x, h + 0.09f, z));
+            // Planks showing on the front and back.
+            for (int i = 1; i < 4; i++)
+            {
+                float y = h * i / 4f;
+                b.AddBox(1, new Vector3(-x + 0.03f, y - 0.008f, z - 0.025f), new Vector3(x - 0.03f, y + 0.008f, z - 0.005f));
+                b.AddBox(1, new Vector3(-x + 0.03f, y - 0.008f, -z + 0.005f), new Vector3(x - 0.03f, y + 0.008f, -z + 0.025f));
+            }
+            foreach (float sx in new[] { -1f, 1f })
+            foreach (float sz in new[] { -1f, 1f })
+                b.AddBox(2, new Vector3(sx * x - (sx > 0 ? 0.06f : 0f), 0f, sz * z - (sz > 0 ? 0.06f : 0f)),
+                    new Vector3(sx * x + (sx < 0 ? 0.06f : 0f), h + 0.09f, sz * z + (sz < 0 ? 0.06f : 0f)));
+            foreach (float bx in new[] { -0.3f, 0.3f })
+                b.AddBox(2, new Vector3(bx - 0.04f, 0f, -z - 0.012f), new Vector3(bx + 0.04f, h + 0.1f, z + 0.012f));
+            b.AddBox(2, new Vector3(-0.06f, h - 0.14f, z), new Vector3(0.06f, h + 0.06f, z + 0.03f));
+            b.AddBox(2, new Vector3(-0.03f, h - 0.1f, z + 0.03f), new Vector3(0.03f, h - 0.05f, z + 0.045f));
+            foreach (float sx in new[] { -1f, 1f })
+                b.AddTube(2, new Vector3(sx * (x + 0.02f), 0.45f, -0.12f), new Vector3(sx * (x + 0.02f), 0.45f, 0.12f), 0.02f, 0.02f, 5);
+            return b.Build("LargeBox");
+        }
+
+        /// <summary>
         /// A small stone furnace about a metre tall, its mouth towards +Z: a tapering stone body
         /// under a dome, a chimney, and an iron-framed opening. Submeshes: stone, char, metal.
         /// </summary>

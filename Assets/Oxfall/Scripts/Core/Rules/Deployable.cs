@@ -41,6 +41,9 @@ namespace Oxfall.Core.Rules
 
         /// <summary>A ladder leaned on a wall, to climb over it.</summary>
         Ladder = 13,
+
+        /// <summary>A large wooden box: twice the room of a small one.</summary>
+        LargeBox = 14,
     }
 
     /// <summary>One thing set down: what it is, where it stands, which way it faces, and who put it there.</summary>
@@ -130,6 +133,7 @@ namespace Oxfall.Core.Rules
                 case DeployableKind.WoodWall: return ItemIds.HighWoodWall;
                 case DeployableKind.StoneWall: return ItemIds.HighStoneWall;
                 case DeployableKind.Ladder: return ItemIds.Ladder;
+                case DeployableKind.LargeBox: return ItemIds.LargeBox;
                 // Nothing is made into a bag, a recycler or a supply crate, and none is picked up.
                 case DeployableKind.Bag:
                 case DeployableKind.Recycler:
@@ -154,6 +158,7 @@ namespace Oxfall.Core.Rules
                 case ItemIds.HighWoodWall: kind = DeployableKind.WoodWall; return true;
                 case ItemIds.HighStoneWall: kind = DeployableKind.StoneWall; return true;
                 case ItemIds.Ladder: kind = DeployableKind.Ladder; return true;
+                case ItemIds.LargeBox: kind = DeployableKind.LargeBox; return true;
                 default: kind = default; return false;
             }
         }
@@ -164,6 +169,7 @@ namespace Oxfall.Core.Rules
             switch (kind)
             {
                 case DeployableKind.StorageBox: return 12;
+                case DeployableKind.LargeBox: return 24;
                 case DeployableKind.Furnace: return 6;
                 // Meat to roast.
                 case DeployableKind.Campfire: return 4;
@@ -199,6 +205,7 @@ namespace Oxfall.Core.Rules
                 case DeployableKind.StoneWall:
                     return HighWalls.Thickness * 0.5f;
                 case DeployableKind.Ladder: return 0.12f;
+                case DeployableKind.LargeBox: return 0.75f;
                 default: return 0.5f;
             }
         }
@@ -223,6 +230,7 @@ namespace Oxfall.Core.Rules
                 case DeployableKind.WoodWall: return 250f;
                 case DeployableKind.StoneWall: return 500f;
                 case DeployableKind.Ladder: return 60f;
+                case DeployableKind.LargeBox: return 225f;
                 default: return 0f;
             }
         }
@@ -243,6 +251,7 @@ namespace Oxfall.Core.Rules
                 case DeployableKind.WoodWall: return "Muro alto de madera";
                 case DeployableKind.StoneWall: return "Muro alto de piedra";
                 case DeployableKind.Ladder: return "Escalera";
+                case DeployableKind.LargeBox: return "Caja grande";
                 default: return "Objeto";
             }
         }

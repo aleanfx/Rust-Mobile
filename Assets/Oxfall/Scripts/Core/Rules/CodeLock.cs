@@ -69,6 +69,6 @@ namespace Oxfall.Core.Rules
         public static string Digits(int code) => IsValidCode(code) ? code.ToString("0000") : "····";
 
         /// <summary>Whether a lock can go on this kind of thing (doors aside): boxes and tool cupboards.</summary>
-        public static bool Lockable(DeployableKind kind) => kind == DeployableKind.StorageBox || kind == DeployableKind.ToolCupboard;
+        public static bool Lockable(DeployableKind kind) => kind == DeployableKind.StorageBox || kind == DeployableKind.LargeBox || kind == DeployableKind.ToolCupboard;
     }
 }

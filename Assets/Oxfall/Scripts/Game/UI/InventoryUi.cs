@@ -52,6 +52,10 @@ namespace Oxfall.Game.UI
         // The open box or furnace.
         private const int MaxBoxSlots = 12;
         private const int BoxColumns = 3;
+        /// <summary>A box bigger than the slots shown (the large box) shows them a page at a time.</summary>
+        private int _boxPage;
+        private int PageOffset => _boxPage * MaxBoxSlots;
+        private bool Paged => _boxInventory != null && _boxInventory.SlotCount > MaxBoxSlots && !Deployables.IsLoot(_boxKind);
         private readonly Settlement _settlement;
         private readonly SlotView[] _boxSlots = new SlotView[MaxBoxSlots];
         private RectTransform _loot;
@@ -162,7 +166,10 @@ namespace Oxfall.Game.UI
             _lootTitle.text = furnace ? "HORNO" : d.Kind == DeployableKind.SupplyDrop ? "SUMINISTROS" : bag ? "BOLSA" : fire ? "FOGATA"
                 : recycler ? "RECICLADORA" : cupboard ? "ARMARIO" : trap ? "TRAMPA" : "CAJA";
             _lootRows = 0;
+            _boxPage = 0;
             for (int i = 0; i < _boxSlots.Length; i++) _boxSlots[i].Rect.gameObject.SetActive(i < box.SlotCount);
+            bool paged = Paged;
+            if (paged) _lootTitle.text = "CAJA GRANDE";
             // A furnace's two rows leave room under them for how it burns and its switch (a bag or a
             // crate sets its own when it is drawn).
             float under = _gridTop - 2 * Pitch - 6f;
@@ -170,7 +177,9 @@ namespace Oxfall.Game.UI
             _lightButton.anchoredPosition = new Vector2(_lootX, under - 78f);
             // A furnace's or a recycler's switch; on a dead player's bag the same button takes everything.
             // A cupboard's goes back to who may build round it.
-            _lightButton.gameObject.SetActive(furnace || bag || recycler || cupboard);
+            _lightButton.gameObject.SetActive(furnace || bag || recycler || cupboard || paged);
+            // The large box's pages turn with the same button, in the bottom spot (its four rows fill the space above).
+            if (paged) _lightButton.anchoredPosition = new Vector2(_lootX, _barTop - 14f);
             _lootStatus.gameObject.SetActive(furnace || bag || fire || recycler || cupboard || trap);
             _details.gameObject.SetActive(false);
             _loot.gameObject.SetActive(true);
@@ -224,6 +233,7 @@ namespace Oxfall.Game.UI
         /// <summary>Taps a slot of the open box: picks an item, or moves the picked one there.</summary>
         public void TapBoxSlot(int slot)
         {
+            if (Paged) slot += PageOffset;
             if (_boxInventory == null || slot >= _boxInventory.SlotCount) return;
             if (_picked < 0)
             {
@@ -255,6 +265,13 @@ namespace Oxfall.Game.UI
         public void ToggleFurnace()
         {
             if (_box == 0) return;
+            if (Paged)
+            {
+                int pages = (_boxInventory.SlotCount + MaxBoxSlots - 1) / MaxBoxSlots;
+                _boxPage = (_boxPage + 1) % pages;
+                Refresh();
+                return;
+            }
             if (_boxKind == DeployableKind.ToolCupboard)
             {
                 CupboardRequested?.Invoke(_box);
@@ -301,6 +318,19 @@ namespace Oxfall.Game.UI
 
         private void DrawBox()
         {
+            if (Paged)
+            {
+                int pages = (_boxInventory.SlotCount + MaxBoxSlots - 1) / MaxBoxSlots;
+                for (int i = 0; i < _boxSlots.Length; i++)
+                {
+                    int at = PageOffset + i;
+                    _boxSlots[i].Rect.gameObject.SetActive(at < _boxInventory.SlotCount);
+                    if (at < _boxInventory.SlotCount) Draw(_boxSlots[i], _boxInventory[at], at == _picked && _pickedInBox ? Picked : Color.clear);
+                }
+                _lightLabel.text = $"PÁGINA {_boxPage + 1}/{pages}  ›";
+                _lightFill.color = UiTheme.Slot;
+            }
+            else
             for (int i = 0; i < _boxInventory.SlotCount && i < _boxSlots.Length; i++)
                 Draw(_boxSlots[i], _boxInventory[i], i == _picked && _pickedInBox ? Picked : Color.clear);
             bool furnace = _boxKind == DeployableKind.Furnace;
@@ -360,11 +390,12 @@ namespace Oxfall.Game.UI
             bool any = _picked >= 0 && (_pickedInBox || !Deployables.IsLoot(_boxKind));
             _lootQuick.gameObject.SetActive(any);
             // A full crate's TOMAR TODO shares the bottom spot with the button that moves one stack.
-            if (Deployables.IsLoot(_boxKind) && _lootRows > 3) _lightButton.gameObject.SetActive(!any);
+            if ((Deployables.IsLoot(_boxKind) && _lootRows > 3) || Paged) _lightButton.gameObject.SetActive(!any);
             if (any)
                 _lootQuickLabel.text = _pickedInBox ? "AL INVENTARIO" : furnace ? "AL HORNO" : _boxKind == DeployableKind.Campfire ? "AL FUEGO"
                     : _boxKind == DeployableKind.Recycler ? "A RECICLAR" : _boxKind == DeployableKind.ToolCupboard ? "AL ARMARIO"
                     : _boxKind == DeployableKind.ShotgunTrap ? "A LA TRAMPA" : "A LA CAJA";
+            if (any && Paged && !_pickedInBox) _lootQuickLabel.text = "A LA CAJA GRANDE";
         }
 
         /// <summary>

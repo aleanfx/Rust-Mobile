@@ -410,6 +410,7 @@ namespace Oxfall.Core.Net
                 inventory.Add(ItemIds.Machete, 1);
                 inventory.Add(ItemIds.Sword, 1);
                 inventory.Add(ItemIds.Crossbow, 1);
+                inventory.Add(ItemIds.LargeBox, 1);
                 inventory.Add(ItemIds.Arrow, 20);
                 return;
             }

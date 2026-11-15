@@ -1643,6 +1643,9 @@ namespace Oxfall.Game
                         if (!_inventory[i].IsEmpty) _actions.Wear(i);
                     break;
                 case "box": HoldItem(ItemIds.StorageBox); break;
+                case "large-box": HoldItem(ItemIds.LargeBox); break;
+                case "open-large-box": OpenBox(Nearest(DeployableKind.LargeBox)); break;
+                case "box-page": _inventoryUi.ToggleFurnace(); break;
                 case "furnace": HoldItem(ItemIds.Furnace); break;
                 case "sleeping-bag": HoldItem(ItemIds.SleepingBag); break;
                 case "cupboard": HoldItem(ItemIds.ToolCupboard); break;

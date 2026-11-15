@@ -166,6 +166,8 @@ namespace Oxfall.Core.Items
                 description: "Da luz y calor, y cocina."),
             new ItemDefinition(ItemIds.WoodenDoor, "Puerta de madera", ItemCategory.Placeable, 1,
                 description: "Va en un marco de puerta. Tócala con ABRIR para abrirla o cerrarla."),
+            new ItemDefinition(ItemIds.LargeBox, "Caja grande de madera", ItemCategory.Placeable, 1,
+                description: "Guarda 24 casillas, el doble que la pequeña. Se le puede poner candado."),
             new ItemDefinition(ItemIds.StorageBox, "Caja de almacenaje", ItemCategory.Placeable, 1,
                 description: "Guarda 12 casillas de lo que quieras. Ponla dentro de tu casa."),
             new ItemDefinition(ItemIds.Furnace, "Horno", ItemCategory.Placeable, 1,
