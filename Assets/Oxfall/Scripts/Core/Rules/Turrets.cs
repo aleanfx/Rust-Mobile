@@ -24,6 +24,9 @@ namespace Oxfall.Core.Rules
         /// <summary>How far it sees and fires, in metres.</summary>
         public const float Range = 30f;
 
+        /// <summary>Within this of it, it turns to a target all the way round (something chewing at its legs).</summary>
+        public const float Close = 2.5f;
+
         /// <summary>Half the width of what it covers, in degrees either side of where it faces.</summary>
         public const float HalfCone = 90f;
 
@@ -60,7 +63,8 @@ namespace Oxfall.Core.Rules
             float dx = x - turret.X, dz = z - turret.Z;
             float d2 = dx * dx + dz * dz;
             if (d2 > Range * Range || Math.Abs(y - turret.Y) > 12f) return false;
-            if (d2 < 0.04f) return true;
+            // Right beside it the head swings to anything, whichever way it faces.
+            if (d2 < Close * Close) return true;
             double yaw = turret.Yaw * Math.PI / 180.0;
             double along = (dx * Math.Sin(yaw) + dz * Math.Cos(yaw)) / Math.Sqrt(d2);
             return along >= Math.Cos(HalfCone * Math.PI / 180.0) - 1e-6;

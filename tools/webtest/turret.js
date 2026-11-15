@@ -75,7 +75,7 @@ const stamp = () => ((Date.now() - t0) / 1000).toFixed(1).padStart(6);
   await shot('03-wolf');
   const fired = await waitForLog('[Oxfall] Turret', 20000) && await waitForLog('fired at Animal', 20000);
   await shot('04-firing');
-  await wait(3000);
+  await waitForLog(', killed', 40000);
   check('it fires at the wolf', fired, (log.filter(l => l.includes('fired at')).slice(0, 4).map(l => l.replace(/.*Turret/, 'Turret')).join(' | ')));
   check('the wolf dies', has(', killed'), '');
   await cmd('turrets', 700);
