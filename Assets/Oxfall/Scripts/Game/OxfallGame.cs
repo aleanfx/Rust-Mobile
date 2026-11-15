@@ -1985,7 +1985,7 @@ namespace Oxfall.Game
                 case "across": _inventoryUi.MoveAcross(); break;
                 case "light": _inventoryUi.ToggleFurnace(); break;
                 case "authorize": _cupboard.Authorize(); break;
-                case "close-box": _inventoryUi.CloseBox(true); break;
+                case "close-box": _inventoryUi.CloseBox(true); _inventoryUi.Close(); break;
                 case "store": _store.Toggle(); break;
                 case "store-act": _store.Act(); break;
                 case "give-coins" when _actions.Online:

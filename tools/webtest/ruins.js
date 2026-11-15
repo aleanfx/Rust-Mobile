@@ -109,7 +109,6 @@ const stamp = () => ((Date.now() - t0) / 1000).toFixed(1).padStart(6);
   await shot('14-recycler-scrap');
   await cmd('stats', 800);
   await cmd('close-box', 800);
-  await cmd('inventory', 800);
   await shot('15-recycler-machine');
 
   fs.writeFileSync(path.join(out, 'console.log'), log.join('\n'));
