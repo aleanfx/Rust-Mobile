@@ -114,7 +114,7 @@ namespace Oxfall.Game.Player
             if (_glint.activeSelf)
             {
                 _pulse += dt;
-                float s = 0.2f + 0.05f * Mathf.Sin(_pulse * 7f);
+                float s = 0.36f + 0.08f * Mathf.Sin(_pulse * 7f);
                 _glint.transform.localScale = new Vector3(s, s * 1.1f, s);
             }
         }
@@ -132,7 +132,7 @@ namespace Oxfall.Game.Player
             float turn = Random.Range(-50f, 50f);
             var dir = Quaternion.Euler(0f, turn, 0f) * away;
             float scale = t.lossyScale.y;
-            float height = tree ? Random.Range(0.75f, 1.75f) : Random.Range(0.3f, 0.75f) * Mathf.Max(0.6f, scale);
+            float height = tree ? Random.Range(0.75f, 1.75f) : Random.Range(0.4f, 0.8f) * Mathf.Max(0.6f, scale);
             var target = centre + Vector3.up * height;
             var from = target + dir * 4f;
             var mesh = node.GetComponent<MeshFilter>()?.sharedMesh;
@@ -162,7 +162,7 @@ namespace Oxfall.Game.Player
         }
     }
 
-    /// <summary>A ray against one submesh of a mesh as drawn by a transform (the meshes are built in code, so readable).</summary>
+    /// <summary>A ray against one submesh of a mesh as drawn by a transform (the shells kept by Remember, or a readable mesh).</summary>
     public static class MeshRay
     {
         private static readonly Dictionary<(Mesh, int), (Vector3[] Vertices, int[] Triangles)> Cache =
