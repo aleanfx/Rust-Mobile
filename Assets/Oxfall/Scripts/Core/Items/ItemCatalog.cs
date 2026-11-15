@@ -105,6 +105,9 @@ namespace Oxfall.Core.Items
             new ItemDefinition(ItemIds.SatchelCharge, "Carga explosiva", ItemCategory.Tool, 10, ToolKind.Explosive,
                 description: "Lánzala a una pared o una puerta: explota a los 5 segundos. Madera: 2 cargas; piedra: 4; metal: 8. "
                     + "Puerta de madera: 1; de chapa: 2. Rompe también cajas y armarios cercanos si no hay pared en medio. Aléjate."),
+            new ItemDefinition(ItemIds.Beancan, "Granada de lata", ItemCategory.Tool, 10, ToolKind.Explosive,
+                description: "Lánzala lejos (hasta 14 m): explota a los 3,5 segundos. Hace mucho daño a la gente cerca; a las paredes, poco. "
+                    + "Para sacar a alguien de detrás de una roca o rematar un asalto."),
             new ItemDefinition(ItemIds.Blunderbuss, "Trabuco", ItemCategory.Tool, 1, ToolKind.Shotgun, skinnable: true,
                 description: "Un tubo de metal sobre una culata: un tiro de perdigones que tumba a cualquiera de cerca y poco hace de lejos. Usa cartuchos."),
             new ItemDefinition(ItemIds.Revolver, "Revólver", ItemCategory.Tool, 1, ToolKind.Revolver, skinnable: true,

@@ -59,7 +59,7 @@ namespace Oxfall.Core.Gathering
         private static readonly (string Id, int Min, int Max)[] DropFinds =
         {
             (ItemIds.Revolver, 1, 1), (ItemIds.Blunderbuss, 1, 1), (ItemIds.MedicalSyringe, 2, 3), (ItemIds.SatchelCharge, 1, 2),
-            (ItemIds.HideVest, 1, 1), (ItemIds.MetalHatchet, 1, 1), (ItemIds.MetalPickaxe, 1, 1), (ItemIds.SheetMetalDoor, 1, 1),
+            (ItemIds.Beancan, 2, 4), (ItemIds.HideVest, 1, 1), (ItemIds.MetalHatchet, 1, 1), (ItemIds.MetalPickaxe, 1, 1), (ItemIds.SheetMetalDoor, 1, 1),
             (ItemIds.SemiRifle, 1, 1), (ItemIds.RifleBullet, 30, 60), (ItemIds.MetalFacemask, 1, 1), (ItemIds.MetalChestPlate, 1, 1),
         };
 

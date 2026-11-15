@@ -253,6 +253,18 @@ namespace Oxfall.Game.Items
                     IconRotation = Tilt(-34f, 70f),
                     IconZoom = 1.1f,
                 },
+                [ItemIds.Beancan] = new ItemModel
+                {
+                    Mesh = MeshFactory.Beancan(),
+                    Materials = new[] { m.BarrelPaint[0], m.Metal, m.Char },
+                    ShowInHand = true,
+                    // Held low on the right, the fuse up, ready to throw.
+                    HandPosition = new Vector3(0.3f, -0.34f, 0.5f),
+                    HandRotation = Quaternion.Euler(6f, 200f, -8f),
+                    HandScale = 1.3f,
+                    IconRotation = Tilt(-14f, 20f),
+                    IconZoom = 1.2f,
+                },
                 [ItemIds.SatchelCharge] = new ItemModel
                 {
                     Mesh = MeshFactory.SatchelCharge(),

@@ -447,6 +447,7 @@ namespace Oxfall.Core.Net
             if (kit == 1)
             {
                 inventory.Add(ItemIds.SatchelCharge, 8);
+                inventory.Add(ItemIds.Beancan, 6);
                 inventory.Add(ItemIds.Gunpowder, 80);
                 inventory.Add(ItemIds.Sulfur, 40);
                 inventory.Add(ItemIds.SulfurOre, 60);

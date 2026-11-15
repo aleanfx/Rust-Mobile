@@ -539,8 +539,8 @@ namespace Oxfall.Server
                 }
                 case MessageType.Throw:
                 {
-                    Messages.ReadThrow(reader, out var target, out float x, out float y, out float z, out float nx, out float ny, out float nz);
-                    if (!_world.Throw(id, target, x, y, z, nx, ny, nz, now, out var charge)) break;
+                    Messages.ReadThrow(reader, out var target, out float x, out float y, out float z, out float nx, out float ny, out float nz, out var kind);
+                    if (!_world.Throw(id, target, x, y, z, nx, ny, nz, now, out var charge, kind)) break;
                     // Everyone sees it stuck there and fizzing, the thrower too (their throw only flew it there).
                     Messages.ChargeArmed(writer, charge, Explosives.FuseSeconds);
                     Broadcast(writer.ToArray());

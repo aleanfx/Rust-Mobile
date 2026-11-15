@@ -37,26 +37,27 @@ namespace Oxfall.Core.Net
         /// throw of their eyes and stuck to something that is there. The charge is spent. False if refused.
         /// </summary>
         public bool Throw(ushort playerId, ChargeTarget target, float x, float y, float z, float nx, float ny, float nz,
-            float now, out LiveCharge charge)
+            float now, out LiveCharge charge, ChargeKind kind = ChargeKind.Satchel)
         {
             charge = default;
             if (!Players.TryGet(playerId, out var player) || !player.Placed) return false;
             if (!_online.TryGetValue(playerId, out var record) || record.Survivor.Vitals.IsDead) return false;
             if (!IsFinite(x) || !IsFinite(y) || !IsFinite(z) || !IsFinite(nx) || !IsFinite(ny) || !IsFinite(nz)) return false;
             var s = record.Survivor;
-            if (!s.Inventory.Has(ItemIds.SatchelCharge, 1)) return false;
+            string item = Explosives.ItemFor(kind);
+            if (!s.Inventory.Has(item, 1)) return false;
             if (_lastThrow.TryGetValue(playerId, out float last) && now - last < Explosives.ThrowSeconds * 0.75f) return false;
             var p = player.Pose;
-            float dx = x - p.X, dy = y - (p.Y + 1.6f), dz = z - p.Z, reach = Explosives.ThrowReach + Combat.ReachSlack;
+            float dx = x - p.X, dy = y - (p.Y + 1.6f), dz = z - p.Z, reach = Explosives.ReachFor(kind) + Combat.ReachSlack;
             if (dx * dx + dy * dy + dz * dz > reach * reach) return false;
             if (!Explosives.CanStick(Settlement.Grid, target, x, y, z)) return false;
 
-            s.Inventory.Remove(ItemIds.SatchelCharge, 1);
+            s.Inventory.Remove(item, 1);
             _lastThrow[playerId] = now;
             float length = (float)Math.Sqrt(nx * nx + ny * ny + nz * nz);
             if (length < 1e-3f) (nx, ny, nz, length) = (0f, 1f, 0f, 1f);
             charge = new LiveCharge(_nextCharge++, playerId, x, y, z, nx / length, ny / length, nz / length, target,
-                Time + Explosives.FuseSeconds);
+                Time + Explosives.FuseFor(kind), kind);
             _charges.Add(charge);
             return true;
         }
@@ -82,14 +83,14 @@ namespace Oxfall.Core.Net
             Blasts.Add(c);
             // The building first: what falls is announced with the rest of this tick's changes. Then
             // what is set down near it, unless a wall still stands between.
-            Explosives.Blast(Settlement.Grid, c.Target, Announcements);
-            Explosives.Splash(Settlement, c.X, c.Y, c.Z, Announcements);
+            Explosives.Blast(Settlement.Grid, c.Target, Announcements, Explosives.BuildingDamageFor(c.Kind));
+            Explosives.Splash(Settlement, c.X, c.Y, c.Z, Announcements, Explosives.SplashShareFor(c.Kind));
 
             string byName = _online.TryGetValue(c.Thrower, out var thrower) ? thrower.Name : null;
             foreach (var record in _online.Values)
             {
                 if (record.Survivor.Vitals.IsDead || !Players.TryGet(record.PlayerId, out var p) || !p.Placed) continue;
-                float amount = Explosives.DamageToPlayer(Distance3(c, p.Pose.X, p.Pose.Y + 0.9f, p.Pose.Z));
+                float amount = Explosives.DamageToPlayer(Distance3(c, p.Pose.X, p.Pose.Y + 0.9f, p.Pose.Z), c.Kind);
                 if (amount <= 0f || Explosives.Shielded(Settlement.Grid, c.X, c.Y, c.Z, p.Pose.X, p.Pose.Y + 0.9f, p.Pose.Z)) continue;
                 float done = record.Survivor.TakeHit(amount);
                 BlastHurts.Add((record.PlayerId, c.Thrower, done, record.Survivor.Vitals.IsDead));
@@ -97,11 +98,11 @@ namespace Oxfall.Core.Net
             // Sleepers lie on the ground; hurting one may change the list, so it is copied first.
             _near.Clear();
             foreach (var sleeper in Sleepers)
-                if (Explosives.DamageToPlayer(Distance3(c, sleeper.Pose.X, sleeper.Pose.Y + 0.3f, sleeper.Pose.Z)) > 0f
+                if (Explosives.DamageToPlayer(Distance3(c, sleeper.Pose.X, sleeper.Pose.Y + 0.3f, sleeper.Pose.Z), c.Kind) > 0f
                     && !Explosives.Shielded(Settlement.Grid, c.X, c.Y, c.Z, sleeper.Pose.X, sleeper.Pose.Y + 0.3f, sleeper.Pose.Z)) _near.Add(sleeper);
             foreach (var sleeper in _near)
             {
-                float amount = Explosives.DamageToPlayer(Distance3(c, sleeper.Pose.X, sleeper.Pose.Y + 0.3f, sleeper.Pose.Z));
+                float amount = Explosives.DamageToPlayer(Distance3(c, sleeper.Pose.X, sleeper.Pose.Y + 0.3f, sleeper.Pose.Z), c.Kind);
                 HurtSleeper(sleeper, amount, byName, out float damage, out bool killed);
                 BlastSleeperHits.Add((sleeper.Owner, c.Thrower, byName, damage, killed));
             }

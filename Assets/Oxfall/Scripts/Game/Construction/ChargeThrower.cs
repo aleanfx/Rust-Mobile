@@ -46,13 +46,20 @@ namespace Oxfall.Game.Construction
             _explosions = explosions;
         }
 
-        public void SetActive(bool on)
+        /// <summary>What is thrown: a satchel charge or a beancan grenade.</summary>
+        public ChargeKind Kind { get; private set; }
+
+        public void SetActive(bool on, ChargeKind kind = ChargeKind.Satchel)
         {
-            if (on == Active) return;
+            if (on == Active && (!on || kind == Kind)) return;
             Active = on;
+            Kind = kind;
             _info = null;
             _hud.SetAimInfo(null);
-            if (on) _hud.ShowToast("Apunta a una pared o una puerta cercana y toca LANZAR: explota a los 5 segundos. ¡Aléjate!");
+            if (!on) return;
+            _hud.ShowToast(kind == ChargeKind.Beancan
+                ? "Apunta y toca LANZAR: la granada vuela hasta 14 m y explota a los 3,5 segundos"
+                : "Apunta a una pared o una puerta cercana y toca LANZAR: explota a los 5 segundos. ¡Aléjate!");
         }
 
         private void Update()
@@ -67,24 +74,24 @@ namespace Oxfall.Game.Construction
         public void Throw()
         {
             if (!Active || _cooldown > 0f) return;
-            if (_inventory.Count(ItemIds.SatchelCharge) < 1)
+            if (_inventory.Count(Explosives.ItemFor(Kind)) < 1)
             {
-                _hud.ShowToast("No te quedan cargas");
+                _hud.ShowToast(Kind == ChargeKind.Beancan ? "No te quedan granadas" : "No te quedan cargas");
                 return;
             }
             if (!Aim(out var target, out var point, out var normal))
             {
-                _hud.ShowToast("Muy lejos: acércate a menos de 5 m");
+                _hud.ShowToast(Kind == ChargeKind.Beancan ? "Ahí no cae: apunta al suelo o a una pared" : "Muy lejos: acércate a menos de 5 m");
                 return;
             }
             var from = _head.position + _head.right * 0.25f - _head.up * 0.2f + _head.forward * 0.3f;
-            if (!Actions.Throw(target, point, normal))
+            if (!Actions.Throw(target, point, normal, Kind))
             {
                 _hud.ShowToast("Ahí no se pega");
                 return;
             }
             _cooldown = Explosives.ThrowSeconds;
-            _explosions.Throw(from, point, normal);
+            _explosions.Throw(from, point, normal, Kind);
             Thrown?.Invoke();
             Debug.Log($"[Oxfall] Threw a charge at {target} ({point.x:0.0}, {point.y:0.0}, {point.z:0.0})");
         }
@@ -97,8 +104,19 @@ namespace Oxfall.Game.Construction
             normal = Vector3.up;
             _aimedAt = null;
             var ray = new Ray(_head.position, _head.forward);
-            if (!Physics.Raycast(ray, out var hit, Explosives.ThrowReach, Physics.DefaultRaycastLayers, QueryTriggerInteraction.Ignore))
-                return false;
+            float reach = Explosives.ReachFor(Kind);
+            if (!Physics.Raycast(ray, out var hit, reach, Physics.DefaultRaycastLayers, QueryTriggerInteraction.Ignore))
+            {
+                // A grenade thrown at the open: it lands on the ground below the end of its throw.
+                if (Kind != ChargeKind.Beancan) return false;
+                var end = ray.GetPoint(reach - 0.5f);
+                if (!Physics.Raycast(end + Vector3.up * 2f, Vector3.down, out hit, 40f, Physics.DefaultRaycastLayers, QueryTriggerInteraction.Ignore))
+                    return false;
+                if (Vector3.Distance(_head.position, hit.point) > reach) return false;
+                point = hit.point;
+                normal = hit.normal;
+                return true;
+            }
             point = hit.point;
             normal = hit.normal;
             _aimedAt = hit.collider.GetComponent<DeployableTag>();
@@ -115,7 +133,7 @@ namespace Oxfall.Game.Construction
         private void ShowAim()
         {
             string info = "";
-            if (Aim(out var target, out _, out _))
+            if (Kind == ChargeKind.Satchel && Aim(out var target, out _, out _))
             {
                 if (target.Surface == ChargeSurface.Door)
                 {

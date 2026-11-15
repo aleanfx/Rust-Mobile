@@ -195,23 +195,25 @@ namespace Oxfall.Game.Net
         /// Throws a charge that sticks at <paramref name="at"/> to <paramref name="target"/>. Online the
         /// server judges it; alone it is checked here, spent, and its fuse lit. False if refused at once.
         /// </summary>
-        public bool Throw(ChargeTarget target, Vector3 at, Vector3 normal)
+        public bool Throw(ChargeTarget target, Vector3 at, Vector3 normal, ChargeKind kind = ChargeKind.Satchel)
         {
-            if (_survivor.Vitals.IsDead || Inventory.Count(ItemIds.SatchelCharge) < 1) return false;
+            string item = Explosives.ItemFor(kind);
+            if (_survivor.Vitals.IsDead || Inventory.Count(item) < 1) return false;
             if (Online)
             {
-                _net.SendThrow(target, at, normal);
+                _net.SendThrow(target, at, normal, kind);
                 return true;
             }
             float now = Time.time;
             if (now - _lastThrow < Explosives.ThrowSeconds * 0.75f) return false;
             if (!Explosives.CanStick(_settlement.Grid, target, at.x, at.y, at.z)) return false;
-            Inventory.Remove(ItemIds.SatchelCharge, 1);
+            Inventory.Remove(item, 1);
             _lastThrow = now;
             var n = normal.sqrMagnitude > 1e-4f ? normal.normalized : Vector3.up;
-            var charge = new LiveCharge(_nextCharge++, 0, at.x, at.y, at.z, n.x, n.y, n.z, target, now + Explosives.FuseSeconds);
+            float fuse = Explosives.FuseFor(kind);
+            var charge = new LiveCharge(_nextCharge++, 0, at.x, at.y, at.z, n.x, n.y, n.z, target, now + fuse, kind);
             _charges.Add(charge);
-            ChargeArmed?.Invoke(charge, Explosives.FuseSeconds);
+            ChargeArmed?.Invoke(charge, fuse);
             return true;
         }
 
@@ -235,8 +237,8 @@ namespace Oxfall.Game.Net
                 }
                 _charges.RemoveAt(i);
                 ChargeBlast?.Invoke(c);
-                Explosives.Blast(_settlement.Grid, c.Target, null);
-                Explosives.Splash(_settlement, c.X, c.Y, c.Z, null);
+                Explosives.Blast(_settlement.Grid, c.Target, null, Explosives.BuildingDamageFor(c.Kind));
+                Explosives.Splash(_settlement, c.X, c.Y, c.Z, null, Explosives.SplashShareFor(c.Kind));
             }
         }
 

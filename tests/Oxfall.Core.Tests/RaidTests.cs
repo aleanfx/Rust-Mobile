@@ -242,6 +242,33 @@ namespace Oxfall.Core.Tests
         }
 
         [Test]
+        public void ABeancanFliesFarHurtsPeopleHardAndScratchesWalls()
+        {
+            var (world, ale, pa, bea, pb, cell) = Base();
+            ale.Survivor.Inventory.Add(ItemIds.Beancan, 3);
+            var wall = PieceRef.OnEdge(cell.South, PieceType.Wall);
+            float before = world.Settlement.Grid.Health(wall);
+            var (x, y, z) = WallFace(world, cell);
+            // Too far for a satchel, near enough for a grenade (from 5 m back, 8 m more).
+            Assert.IsFalse(world.Throw(pa.Id, ChargeTarget.Ground, pa.Pose.X, pa.Pose.Y, pa.Pose.Z - 9f, 0f, 1f, 0f, 1f, out _), "a satchel does not reach");
+            Assert.IsTrue(world.Throw(pa.Id, ChargeTarget.Ground, pa.Pose.X, pa.Pose.Y, pa.Pose.Z - 9f, 0f, 1f, 0f, 1f, out var can, ChargeKind.Beancan));
+            Assert.AreEqual(ChargeKind.Beancan, can.Kind);
+            Assert.AreEqual(world.Time + Explosives.BeancanFuse, can.GoesOffAt, 1e-3f);
+            Assert.AreEqual(2, ale.Survivor.Inventory.Count(ItemIds.Beancan));
+            Assert.AreEqual(6, ale.Survivor.Inventory.Count(ItemIds.SatchelCharge), "satchels untouched");
+            Assert.IsFalse(world.Throw(pa.Id, ChargeTarget.Ground, pa.Pose.X, pa.Pose.Y, pa.Pose.Z - 20f, 0f, 1f, 0f, 5f, out _, ChargeKind.Beancan), "beyond 14 m");
+
+            // On the wall: a small bite.
+            Assert.IsTrue(world.Throw(pa.Id, ChargeTarget.OnPiece(wall), x, y, z, 0f, 0f, -1f, 10f, out _, ChargeKind.Beancan));
+            Burn(world, Explosives.BeancanFuse + 0.5f);
+            Assert.AreEqual(before - Explosives.BeancanBuildingDamage, world.Settlement.Grid.Health(wall), 0.01f);
+
+            // Up close it hurts far more than a satchel's share at the same distance would suggest for a wall.
+            Assert.Greater(Explosives.DamageToPlayer(1f, ChargeKind.Beancan), 55f);
+            Assert.AreEqual(0f, Explosives.DamageToPlayer(Explosives.BeancanRadius + 0.1f, ChargeKind.Beancan));
+        }
+
+        [Test]
         public void AThrownChargeSticksFizzesAndBringsAStoneWallDownAtFour()
         {
             var (world, ale, pa, bea, pb, cell) = Base();
@@ -499,7 +526,7 @@ namespace Oxfall.Core.Tests
                 Messages.Throw(w, t, 1.5f, 2.5f, -3.5f, 0f, 0.6f, -0.8f);
                 var r = new NetReader(w.ToArray());
                 Assert.AreEqual(MessageType.Throw, (MessageType)r.Byte());
-                Messages.ReadThrow(r, out var back, out float x, out float y, out float z, out float nx, out float ny, out float nz);
+                Messages.ReadThrow(r, out var back, out float x, out float y, out float z, out float nx, out float ny, out float nz, out _);
                 Assert.AreEqual(t, back, t.ToString());
                 Assert.AreEqual(-3.5f, z);
                 Assert.AreEqual(0.6f, ny, 0.01f);

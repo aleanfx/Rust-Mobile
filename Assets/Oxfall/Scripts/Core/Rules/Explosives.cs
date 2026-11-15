@@ -63,6 +63,9 @@ namespace Oxfall.Core.Rules
         public override string ToString() => Surface == ChargeSurface.Ground ? "ground" : Surface == ChargeSurface.Door ? "door " + Piece.Edge : Piece.ToString();
     }
 
+    /// <summary>What was thrown: a satchel charge (sticks, for raiding) or a beancan grenade (thrown far, for fights).</summary>
+    public enum ChargeKind : byte { Satchel = 0, Beancan = 1 }
+
     /// <summary>A charge stuck somewhere, its fuse burning.</summary>
     public readonly struct LiveCharge
     {
@@ -75,9 +78,13 @@ namespace Oxfall.Core.Rules
         public readonly ChargeTarget Target;
         /// <summary>When it goes off, on the clock of whoever keeps it.</summary>
         public readonly float GoesOffAt;
+        /// <summary>A satchel charge or a beancan grenade.</summary>
+        public readonly ChargeKind Kind;
 
-        public LiveCharge(int id, ushort thrower, float x, float y, float z, float nx, float ny, float nz, ChargeTarget target, float goesOffAt)
+        public LiveCharge(int id, ushort thrower, float x, float y, float z, float nx, float ny, float nz, ChargeTarget target, float goesOffAt,
+            ChargeKind kind = ChargeKind.Satchel)
         {
+            Kind = kind;
             Id = id;
             Thrower = thrower;
             X = x;
@@ -139,6 +146,35 @@ namespace Oxfall.Core.Rules
             return PlayerDamage * (1f - t) * (1f - t * 0.35f);
         }
 
+        // ---- Beancan grenades: a tin of gunpowder thrown far; a short fuse, a fierce blast for people,
+        // a scratch on buildings (a dozen bring down a wooden wall).
+
+        public const float BeancanFuse = 3.5f;
+        public const float BeancanReach = 14f;
+        public const float BeancanBuildingDamage = 25f;
+        public const float BeancanPlayerDamage = 70f;
+        public const float BeancanRadius = 4f;
+
+        public static float FuseFor(ChargeKind kind) => kind == ChargeKind.Beancan ? BeancanFuse : FuseSeconds;
+
+        public static float ReachFor(ChargeKind kind) => kind == ChargeKind.Beancan ? BeancanReach : ThrowReach;
+
+        public static string ItemFor(ChargeKind kind) => kind == ChargeKind.Beancan ? ItemIds.Beancan : ItemIds.SatchelCharge;
+
+        /// <summary>The share of a satchel's harm to what is set down near the blast.</summary>
+        public static float SplashShareFor(ChargeKind kind) => kind == ChargeKind.Beancan ? 0.3f : 1f;
+
+        public static float BuildingDamageFor(ChargeKind kind) => kind == ChargeKind.Beancan ? BeancanBuildingDamage : BlastDamage;
+
+        /// <summary>Health taken from someone this far from a blast of this kind.</summary>
+        public static float DamageToPlayer(float distance, ChargeKind kind)
+        {
+            if (kind != ChargeKind.Beancan) return DamageToPlayer(distance);
+            if (distance >= BeancanRadius) return 0f;
+            float t = Math.Max(0f, distance - 0.5f) / (BeancanRadius - 0.5f);
+            return BeancanPlayerDamage * (1f - t) * (1f - t * 0.35f);
+        }
+
         /// <summary>How many charges bring down something with this much health.</summary>
         public static int ChargesFor(float health) => health <= 0f ? 0 : (int)Math.Ceiling(health / BlastDamage - 1e-4);
 
@@ -170,8 +206,12 @@ namespace Oxfall.Core.Rules
         /// health ops (a piece or door at 0 has fallen, with whatever stood on it). False if the
         /// target is gone (a charge on the ground, or on something an earlier charge already brought down).
         /// </summary>
-        public static bool Blast(BuildingGrid grid, ChargeTarget target, List<BuildOp> changes)
+        public static bool Blast(BuildingGrid grid, ChargeTarget target, List<BuildOp> changes) => Blast(grid, target, changes, BlastDamage);
+
+        /// <summary>A blast of the given strength on what the charge stuck to.</summary>
+        public static bool Blast(BuildingGrid grid, ChargeTarget target, List<BuildOp> changes, float damage)
         {
+            float BlastDamage = damage;
             switch (target.Surface)
             {
                 case ChargeSurface.Door:
@@ -204,14 +244,14 @@ namespace Oxfall.Core.Rules
         /// where the settlement decides that). A dead player's bag is not hurt. What changed goes into
         /// <paramref name="changes"/> as health ops.
         /// </summary>
-        public static void Splash(Settlement settlement, float x, float y, float z, List<BuildOp> changes)
+        public static void Splash(Settlement settlement, float x, float y, float z, List<BuildOp> changes, float share = 1f)
         {
             var near = new List<(int Id, float Amount)>();
             foreach (var d in settlement.Deployables)
             {
                 if (Deployables.MaxHealth(d.Kind) <= 0f) continue;
                 float dy = d.Y + 0.4f;
-                float amount = DamageToDeployable(Distance(x, y, z, d.X, dy, d.Z));
+                float amount = DamageToDeployable(Distance(x, y, z, d.X, dy, d.Z)) * share;
                 if (amount > 0f && !Shielded(settlement.Grid, x, y, z, d.X, dy, d.Z)) near.Add((d.Id, amount));
             }
             foreach (var (id, amount) in near)

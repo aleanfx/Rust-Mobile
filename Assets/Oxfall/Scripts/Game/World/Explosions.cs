@@ -70,6 +70,8 @@ namespace Oxfall.Game.World
 
         private Mesh _satchel;
         private Material[] _satchelMaterials;
+        private Mesh _beancan;
+        private Material[] _beancanMaterials;
         private Material _fireball, _smoke, _char;
         private bool _puffsReal;
         private Mesh _card;
@@ -94,6 +96,8 @@ namespace Oxfall.Game.World
             var e = go.AddComponent<Explosions>();
             e._satchel = MeshFactory.SatchelCharge();
             e._satchelMaterials = new[] { materials.Satchel, materials.Rope, materials.Metal, materials.Char };
+            e._beancan = MeshFactory.Beancan();
+            e._beancanMaterials = new[] { materials.BarrelPaint[0], materials.Metal, materials.Char };
             e._fireball = materials.Fireball;
             e._smoke = materials.Smoke;
             e._char = materials.Char;
@@ -110,9 +114,9 @@ namespace Oxfall.Game.World
         // ---- The throw and the charge
 
         /// <summary>This player's throw: the charge flies from the hand to where it will stick.</summary>
-        public void Throw(Vector3 from, Vector3 to, Vector3 normal)
+        public void Throw(Vector3 from, Vector3 to, Vector3 normal, ChargeKind kind = ChargeKind.Satchel)
         {
-            var go = NewSatchel("Thrown charge");
+            var go = NewSatchel("Thrown charge", kind);
             go.transform.position = from;
             float distance = Vector3.Distance(from, to);
             _arcs.Add(new Arc
@@ -122,7 +126,7 @@ namespace Oxfall.Game.World
                 To = to,
                 Landed = Facing(normal),
                 Start = Time.time,
-                End = Time.time + Mathf.Lerp(0.18f, 0.42f, Mathf.Clamp01(distance / Explosives.ThrowReach)),
+                End = Time.time + Mathf.Lerp(0.18f, kind == ChargeKind.Beancan ? 0.9f : 0.42f, Mathf.Clamp01(distance / Explosives.ReachFor(kind))),
             });
         }
 
@@ -133,7 +137,7 @@ namespace Oxfall.Game.World
         public void Arm(LiveCharge c, float secondsLeft, bool mine)
         {
             if (_charges.ContainsKey(c.Id)) return;
-            var root = NewSatchel("Charge " + c.Id);
+            var root = NewSatchel("Charge " + c.Id, c.Kind);
             var normal = new Vector3(c.NX, c.NY, c.NZ);
             root.transform.SetPositionAndRotation(new Vector3(c.X, c.Y, c.Z) + normal * 0.01f, Facing(normal));
             var view = new ChargeView { Root = root, GoesOffAt = Time.time + secondsLeft, ShowAt = Time.time };
@@ -152,7 +156,7 @@ namespace Oxfall.Game.World
             // The fuse: a spark at its end, a little orange light, and its hiss.
             var spark = new GameObject("Spark");
             spark.transform.SetParent(root.transform, false);
-            spark.transform.localPosition = MeshFactory.SatchelFuseTip;
+            spark.transform.localPosition = c.Kind == ChargeKind.Beancan ? MeshFactory.BeancanFuseTip : MeshFactory.SatchelFuseTip;
             spark.transform.localScale = Vector3.one * 0.09f;
             spark.AddComponent<MeshFilter>().sharedMesh = _card;
             var sparkRenderer = spark.AddComponent<MeshRenderer>();
@@ -614,12 +618,13 @@ namespace Oxfall.Game.World
             _chunks.Add(c);
         }
 
-        private GameObject NewSatchel(string name)
+        private GameObject NewSatchel(string name, ChargeKind kind = ChargeKind.Satchel)
         {
             var go = new GameObject(name);
-            go.AddComponent<MeshFilter>().sharedMesh = _satchel;
+            bool can = kind == ChargeKind.Beancan;
+            go.AddComponent<MeshFilter>().sharedMesh = can ? _beancan : _satchel;
             var r = go.AddComponent<MeshRenderer>();
-            r.sharedMaterials = _satchelMaterials;
+            r.sharedMaterials = can ? _beancanMaterials : _satchelMaterials;
             r.shadowCastingMode = ShadowCastingMode.Off;
             return go;
         }

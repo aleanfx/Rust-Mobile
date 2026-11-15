@@ -12,7 +12,7 @@ namespace Oxfall.Core.Net
     public static class Protocol
     {
         /// <summary>Raised whenever a message changes shape; a client of another version is turned away.</summary>
-        public const ushort Version = 20;
+        public const ushort Version = 21;
 
         /// <summary>Snapshots per second the server sends.</summary>
         public const int TickRate = 20;
@@ -1111,10 +1111,12 @@ namespace Oxfall.Core.Net
 
         // ---- Satchel charges
 
-        public static void Throw(NetWriter w, Rules.ChargeTarget target, float x, float y, float z, float nx, float ny, float nz)
+        public static void Throw(NetWriter w, Rules.ChargeTarget target, float x, float y, float z, float nx, float ny, float nz,
+            Rules.ChargeKind kind = Rules.ChargeKind.Satchel)
         {
             w.Reset();
             w.Byte((byte)MessageType.Throw);
+            w.Byte((byte)kind);
             target.Write(w);
             w.Float(x);
             w.Float(y);
@@ -1123,8 +1125,10 @@ namespace Oxfall.Core.Net
         }
 
         public static void ReadThrow(NetReader r, out Rules.ChargeTarget target, out float x, out float y, out float z,
-            out float nx, out float ny, out float nz)
+            out float nx, out float ny, out float nz, out Rules.ChargeKind kind)
         {
+            kind = (Rules.ChargeKind)r.Byte();
+            if (kind != Rules.ChargeKind.Satchel && kind != Rules.ChargeKind.Beancan) throw new ProtocolException("Unknown charge kind.");
             target = Rules.ChargeTarget.Read(r);
             x = r.Float();
             y = r.Float();
@@ -1136,6 +1140,7 @@ namespace Oxfall.Core.Net
         {
             w.Reset();
             w.Byte((byte)MessageType.ChargeArmed);
+            w.Byte((byte)c.Kind);
             w.Int(c.Id);
             w.UShort(c.Thrower);
             w.Float(c.X);
@@ -1147,12 +1152,13 @@ namespace Oxfall.Core.Net
 
         public static Rules.LiveCharge ReadChargeArmed(NetReader r, out float secondsLeft)
         {
+            var kind = (Rules.ChargeKind)r.Byte();
             int id = r.Int();
             ushort thrower = r.UShort();
             float x = r.Float(), y = r.Float(), z = r.Float();
             ReadDirection(r, out float nx, out float ny, out float nz);
             secondsLeft = r.Float();
-            return new Rules.LiveCharge(id, thrower, x, y, z, nx, ny, nz, Rules.ChargeTarget.Ground, secondsLeft);
+            return new Rules.LiveCharge(id, thrower, x, y, z, nx, ny, nz, Rules.ChargeTarget.Ground, secondsLeft, kind);
         }
 
         public static void Blast(NetWriter w, int id, float x, float y, float z)

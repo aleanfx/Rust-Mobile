@@ -221,10 +221,10 @@ namespace Oxfall.Game.Net
             _socket.Send(_writer.Buffer, _writer.Length);
         }
 
-        public void SendThrow(ChargeTarget target, Vector3 at, Vector3 normal)
+        public void SendThrow(ChargeTarget target, Vector3 at, Vector3 normal, ChargeKind kind = ChargeKind.Satchel)
         {
             if (State != Status.Online || _socket == null) return;
-            Messages.Throw(_writer, target, at.x, at.y, at.z, normal.x, normal.y, normal.z);
+            Messages.Throw(_writer, target, at.x, at.y, at.z, normal.x, normal.y, normal.z, kind);
             _socket.Send(_writer.Buffer, _writer.Length);
         }
 

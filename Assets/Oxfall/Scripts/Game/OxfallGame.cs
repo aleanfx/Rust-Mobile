@@ -791,7 +791,7 @@ namespace Oxfall.Game
             if (hammer) { _hammer.SetActive(true); _hammer.Refresh(); }
             if (door) _doorPlacer.SetActive(true, doorKind);
             if (codeLock) _lockPlacer.SetActive(true);
-            if (satchel) _thrower.SetActive(true);
+            if (satchel) _thrower.SetActive(true, held.Id == ItemIds.Beancan ? ChargeKind.Beancan : ChargeKind.Satchel);
             bool food = held?.Category == ItemCategory.Food;
             bool medical = held?.Category == ItemCategory.Medical;
             bool bow = held?.Tool == ToolKind.Bow;
@@ -800,7 +800,7 @@ namespace Oxfall.Game
             _hud.SetAttackLabel(plan || deploy || door || codeLock ? "COLOCAR" : hammer ? "MEJORAR" : food ? "COMER" : medical ? "CURAR"
                 : bow ? (arrows > 0 ? $"FLECHAS {arrows}" : "SIN FLECHAS")
                 : Firearms.TryGet(held?.Tool ?? ToolKind.None, out var gun) ? GunLabel(gun)
-                : satchel ? $"LANZAR {_inventory.Count(ItemIds.SatchelCharge)}" : "GOLPEAR");
+                : satchel ? $"LANZAR {_inventory.Count(held.Id)}" : "GOLPEAR");
             _hud.SetAttackIcon(held != null ? ItemIcons.Get(held.Id) : null);
         }
 
@@ -1022,10 +1022,10 @@ namespace Oxfall.Game
             Debug.Log($"[Oxfall] Blast {charge.Id} at ({at.x:0.0}, {at.y:0.0}, {at.z:0.0}) on {charge.Target}");
             if (_vitals.IsDead) return;
             var middle = _player.transform.position + Vector3.up * 0.9f;
-            float amount = Explosives.DamageToPlayer(Vector3.Distance(at, middle));
+            float amount = Explosives.DamageToPlayer(Vector3.Distance(at, middle), charge.Kind);
             if (amount <= 0f || Explosives.Shielded(_settlement.Grid, at.x, at.y, at.z, middle.x, middle.y, middle.z)) return;
             // Named before the blow lands, in case it is the last.
-            _killer = "tu propia carga explosiva";
+            _killer = charge.Kind == ChargeKind.Beancan ? "tu propia granada" : "tu propia carga explosiva";
             int damage = Mathf.RoundToInt(_survivor.TakeHit(amount));
             _hud.ShowHurt(damage);
             _audio.Play(SoundCue.Hurt);
@@ -1514,6 +1514,7 @@ namespace Oxfall.Game
                 case "to-ruins": ToRuins(); break;
                 case "nearest-sulfur": FaceNearest(ResourceNodeType.Sulfur); break;
                 case "satchel": HoldItem(ItemIds.SatchelCharge); break;
+                case "beancan": HoldItem(ItemIds.Beancan); break;
                 case "revolver": HoldItem(ItemIds.Revolver); break;
                 case "rifle": HoldItem(ItemIds.SemiRifle); break;
                 case "blunderbuss": HoldItem(ItemIds.Blunderbuss); break;

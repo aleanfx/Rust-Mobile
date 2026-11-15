@@ -342,6 +342,22 @@ namespace Oxfall.Game.World
         /// short fuse out of a metal cap. Its back lies on the plane z = 0, its front towards +Z, up +Y
         /// (so it can be set against a wall facing out). Submeshes: canvas, strap and rope, metal, fuse.
         /// </summary>
+        /// <summary>Where a beancan's fuse ends, in its model's space (for the spark).</summary>
+        public static readonly Vector3 BeancanFuseTip = new Vector3(0.012f, 0.165f, 0f);
+
+        /// <summary>A beancan grenade: a tin with a rolled rim, a strip of tape round it and a fuse out of the lid.</summary>
+        public static Mesh Beancan()
+        {
+            var b = new FlatMeshBuilder(3) { UvScale = 0.3f };
+            b.AddCylinder(0, new Vector3(0f, 0f, 0f), 0.042f, 0.042f, 0.11f, 12, 0f);
+            b.AddCylinder(1, new Vector3(0f, -0.004f, 0f), 0.045f, 0.045f, 0.01f, 12, 0f);
+            b.AddCylinder(1, new Vector3(0f, 0.106f, 0f), 0.045f, 0.044f, 0.01f, 12, 0f);
+            b.AddCylinder(1, new Vector3(0f, 0.045f, 0f), 0.0435f, 0.0435f, 0.022f, 12, 0f);
+            b.AddTube(2, new Vector3(0f, 0.114f, 0f), new Vector3(0.006f, 0.14f, 0f), 0.005f, 0.005f, 5);
+            b.AddTube(2, new Vector3(0.006f, 0.14f, 0f), BeancanFuseTip, 0.005f, 0.004f, 5);
+            return b.Build("Beancan", 45f);
+        }
+
         public static Mesh SatchelCharge()
         {
             var b = new FlatMeshBuilder(4) { UvScale = 0.3f };
