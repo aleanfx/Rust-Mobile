@@ -27,6 +27,11 @@ namespace Oxfall.Game.UI
         private readonly Image _coldBack, _coldIcon;
         private readonly Text _coldText;
         private int _shownWarmth = int.MinValue;
+        private readonly RectTransform _rad;
+        private readonly Image _radBack;
+        private readonly Text _radText;
+        private int _shownRads = int.MinValue;
+        private bool _radHurts;
         private bool _freezing;
         private int _shownHealth = -1, _shownFood = -1, _shownWater = -1;
 
@@ -83,6 +88,15 @@ namespace Oxfall.Game.UI
             var coldText = UiFactory.NewRect("Text", _cold, new Vector2(0f, 0.5f), new Vector2(0f, 0.5f), new Vector2(48f, 0f), new Vector2(RowWidth - 60f, RowHeight));
             _coldText = UiFactory.AddText(coldText, "", 24, TextAnchor.MiddleLeft, UiTheme.Text, true);
             _cold.gameObject.SetActive(false);
+
+            _rad = UiFactory.NewRect("Radiation", hud.SafeArea, topLeft, topLeft, Vector2.zero, new Vector2(RowWidth, RowHeight));
+            _radBack = UiFactory.AddImage(_rad, UiFactory.Soft, RadBack);
+            _rad.gameObject.AddComponent<Canvas>();
+            UiFactory.AddIcon(_rad, Icons.Radiation, new Vector2(24f, 0f), 28f, RadColour, new Vector2(0f, 0.5f));
+            var radText = UiFactory.NewRect("Text", _rad, new Vector2(0f, 0.5f), new Vector2(0f, 0.5f), new Vector2(48f, 0f), new Vector2(RowWidth - 60f, RowHeight));
+            _radText = UiFactory.AddText(radText, "", 24, TextAnchor.MiddleLeft, UiTheme.Text, true);
+            _rad.gameObject.SetActive(false);
+            Layout();
 
             // Death: a dark veil over everything, a title, a line and one button.
             var half = new Vector2(0.5f, 0.5f);
@@ -143,12 +157,50 @@ namespace Oxfall.Game.UI
             bool chilly = degrees < Temperature.Chilly;
             _freezing = degrees < Temperature.Freezing;
             bool warmed = !chilly && byFire && coldOut;
-            _cold.gameObject.SetActive(chilly || warmed);
+            if (_cold.gameObject.activeSelf != (chilly || warmed))
+            {
+                _cold.gameObject.SetActive(chilly || warmed);
+                Layout();
+            }
             if (!chilly && !warmed) return;
             string value = $"{Mathf.RoundToInt(degrees)}°";
             _coldText.text = _freezing ? $"CONGELÁNDOTE  {value}" : chilly ? $"FRÍO  {value}  ·  sin curarte" : $"AL CALOR  {value}";
             _coldBack.color = _freezing ? FreezingBack : chilly ? ColdBack : FireBack;
             _coldIcon.color = warmed ? UiTheme.Food : Cold;
+        }
+
+        private static readonly Color RadColour = new Color(0.86f, 0.95f, 0.3f);
+        private static readonly Color RadBack = new Color(0.3f, 0.34f, 0.08f, 0.84f);
+        private static readonly Color RadHurtBack = new Color(0.5f, 0.14f, 0.16f, 0.86f);
+
+        /// <summary>Radiation held, and whether the player is soaking up more: shown while either is so; red and pulsing once it hurts.</summary>
+        public void SetRadiation(float held, bool exposed)
+        {
+            int shown = Mathf.CeilToInt(held) * 2 + (exposed ? 1 : 0);
+            if (shown == _shownRads) return;
+            _shownRads = shown;
+            bool show = exposed || held >= 1f;
+            if (_rad.gameObject.activeSelf != show)
+            {
+                _rad.gameObject.SetActive(show);
+                Layout();
+            }
+            if (!show) return;
+            _radHurts = Radiation.Hurt(held) > 0f;
+            _radText.text = $"RADIACIÓN  {Mathf.CeilToInt(held)}" + (_radHurts ? "  ·  te daña" : exposed ? "  ·  sal pronto" : "");
+            _radBack.color = _radHurts ? RadHurtBack : RadBack;
+        }
+
+        /// <summary>The status chips in a column under the vitals, the shown ones only.</summary>
+        private void Layout()
+        {
+            int row = 3;
+            foreach (var chip in new[] { _cold, _rad })
+            {
+                if (chip == null || !chip.gameObject.activeSelf) continue;
+                chip.anchoredPosition = new Vector2(24f, -80f - row * (RowHeight + 6f));
+                row++;
+            }
         }
 
         public void ShowDeath(bool dead) => _death.gameObject.SetActive(dead);
@@ -226,6 +278,7 @@ namespace Oxfall.Game.UI
             Pulse(_food, pulse);
             Pulse(_water, pulse);
             if (_freezing && _cold.gameObject.activeSelf) _coldBack.color = FreezingBack.WithAlpha(0.55f + 0.4f * pulse);
+            if (_radHurts && _rad.gameObject.activeSelf) _radBack.color = RadHurtBack.WithAlpha(0.55f + 0.4f * pulse);
         }
 
         private static void Pulse(Row row, float pulse)

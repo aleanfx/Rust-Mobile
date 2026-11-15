@@ -78,7 +78,7 @@ namespace Oxfall.Core.Items
 
         public ItemDefinition(string id, string displayName, ItemCategory category, int maxStack,
             ToolKind tool = ToolKind.None, bool skinnable = false, string description = "",
-            Nourishment nourishment = default, WearSlot wear = WearSlot.None, float protection = 0f, float warmth = 0f)
+            Nourishment nourishment = default, WearSlot wear = WearSlot.None, float protection = 0f, float warmth = 0f, float radiation = 0f)
         {
             if (string.IsNullOrWhiteSpace(id)) throw new ArgumentException("Item id is required.", nameof(id));
             if (maxStack < 1) throw new ArgumentOutOfRangeException(nameof(maxStack), "Max stack must be at least 1.");
@@ -93,7 +93,11 @@ namespace Oxfall.Core.Items
             Wear = wear;
             Protection = protection;
             Warmth = warmth;
+            RadiationResist = radiation;
         }
+
+        /// <summary>Clothing: the share of the ruins' radiation it keeps off (see <see cref="Survival.Radiation"/>).</summary>
+        public float RadiationResist { get; }
 
         /// <summary>Clothing: how many degrees it keeps in against the cold (see <see cref="Survival.Temperature"/>).</summary>
         public float Warmth { get; }

@@ -74,13 +74,17 @@ namespace Oxfall.Core.Survival
         /// <summary>How warm the player felt at the last tick, in degrees (see <see cref="Temperature"/>).</summary>
         public float Warmth { get; private set; } = Temperature.DayAir;
 
+        /// <summary>Radiation held (see <see cref="Survival.Radiation"/>): above its safe level it hurts.</summary>
+        public float Rads { get; private set; }
+
         /// <summary>Whether the cold is hurting now.</summary>
         public bool Freezing => Warmth < Temperature.Freezing;
 
         /// <param name="seconds">Real time passed.</param>
         /// <param name="exertion">1 at rest or walking; more while sprinting (food and water go faster).</param>
         /// <param name="warmth">How warm the player feels: below <see cref="Temperature.Chilly"/> no healing, below freezing it hurts.</param>
-        public void Tick(float seconds, float exertion = 1f, float warmth = Temperature.DayAir)
+        /// <param name="dose">Radiation soaked up per second where the player stands (0 out of the ruins: what is held fades).</param>
+        public void Tick(float seconds, float exertion = 1f, float warmth = Temperature.DayAir, float dose = 0f)
         {
             Warmth = warmth;
             if (seconds < 0f) throw new ArgumentOutOfRangeException(nameof(seconds));
@@ -95,6 +99,8 @@ namespace Oxfall.Core.Survival
             if (change == 0f && warmth >= Temperature.Chilly && Food > MaxFood * 0.25f && Water > MaxWater * 0.25f && Health < MaxHealth)
                 change = HealPerSecond;
             change -= Temperature.Hurt(warmth);
+            Rads = Survival.Radiation.Next(Rads, dose, seconds);
+            change -= Survival.Radiation.Hurt(Rads);
             if (Regen > 0f)
             {
                 float back = Math.Min(Regen, RegenPerSecond * seconds);
@@ -135,6 +141,7 @@ namespace Oxfall.Core.Survival
         public void Respawn(float health = 60f, float food = 200f, float water = 150f)
         {
             Regen = 0f;
+            Rads = 0f;
             Health = Clamp(health, MaxHealth);
             Food = Clamp(food, MaxFood);
             Water = Clamp(water, MaxWater);

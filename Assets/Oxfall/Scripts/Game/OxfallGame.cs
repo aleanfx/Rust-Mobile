@@ -123,6 +123,10 @@ namespace Oxfall.Game
         private float _warmth = Temperature.DayAir;
         private bool _warnedCold;
 
+        /// <summary>Radiation soaked up per second where the player stands, and how much they hold.</summary>
+        private float _dose, _rads;
+        private bool _warnedRads;
+
         // The island's animals: alone the game runs them, online the server does and says where they are.
         private Fauna _fauna;
         private AnimalViews _animalViews;
@@ -1314,6 +1318,8 @@ namespace Oxfall.Game
             _player.enabled = false;
             _gatherer.enabled = false;
             if (_killer == null && _warmth < Temperature.Freezing) _killer = "el frío";
+            if (_killer == null && Radiation.Hurt(_rads) > 0f) _killer = "la radiación";
+            _rads = 0f;
             _vitalsUi.SetCause(_killer != null ? $"Te mató {_killer}." : null);
             _killer = null;
             _vitalsUi.SetBags(MyBags());
@@ -2373,7 +2379,10 @@ namespace Oxfall.Game
             if (_vitals == null || _vitals.IsDead) return;
             // Online, hunger and thirst run on the server; the copy here is updated from it.
             bool running = _input.Sprint && _input.Move.sqrMagnitude > 0.01f;
-            if (!_actions.Online) _vitals.Tick(dt, running ? 1.8f : 1f, _warmth);
+            // Radiation in the military ruins: held here too, to show (online the server's own count hurts).
+            _dose = Radiation.DoseAt(_world.Shape.Ground, _inventory, _player.transform.position.x, _player.transform.position.z);
+            if (!_actions.Online) _vitals.Tick(dt, running ? 1.8f : 1f, _warmth, _dose);
+            _rads = _actions.Online ? Radiation.Next(_rads, _dose, dt) : _vitals.Rads;
             _vitalsTimer -= dt;
             if (_vitalsTimer > 0f) return;
             _vitalsTimer = 0.5f;
@@ -2385,6 +2394,9 @@ namespace Oxfall.Game
             _warmth = Temperature.Felt(daylight, rain, Temperature.Insulation(_inventory), fire,
                 Temperature.Sheltered(_settlement.Grid, feet.x, feet.y, feet.z), inWater);
             _vitalsUi.SetWarmth(_warmth, fire > 0f, _warmth - fire < Temperature.Chilly);
+            _vitalsUi.SetRadiation(_rads, _dose > 0f);
+            if (_dose > 0f && !_warnedRads) _hud.ShowToast("Zona radiactiva: la ropa te protege, no te quedes mucho");
+            _warnedRads = _dose > 0f;
             if (_warmth < Temperature.Freezing && !_warnedCold)
                 _hud.ShowToast(fire <= 0f ? "Te congelas: abrígate, enciende una fogata o métete bajo techo" : "Te congelas");
             _warnedCold = _warmth < Temperature.Chilly;

@@ -532,7 +532,8 @@ namespace Oxfall.Core.Net
                 float exertion = found && player.Speed > RunningSpeed ? 1.8f : 1f;
                 // The cold, where they stand (not before they are placed on the island).
                 float warmth = found && player.Placed ? WarmthOf(s, player.Pose, daylight, rain) : Temperature.DayAir;
-                s.Vitals.Tick(deltaSeconds, exertion, warmth);
+                float dose = found && player.Placed ? Radiation.DoseAt(Ground, s.Inventory, player.Pose.X, player.Pose.Z) : 0f;
+                s.Vitals.Tick(deltaSeconds, exertion, warmth, dose);
                 if (s.Looting != 0 && found && Settlement.TryGet(s.Looting, out var box))
                 {
                     float dx = player.Pose.X - box.X, dz = player.Pose.Z - box.Z, reach = PlayerActions.UseReach + 2f;

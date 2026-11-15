@@ -209,6 +209,17 @@ namespace Oxfall.Game.UI
             return Min(Mathf.Max(tube, -bulb), bulb, column, marks);
         });
 
+        /// <summary>The radiation trefoil: three blades round a dot.</summary>
+        public static Sprite Radiation => Get("radiation", p =>
+        {
+            float ring = Mathf.Max(Circle(p, Vector2.zero, 0.82f), -Circle(p, Vector2.zero, 0.28f));
+            float angle = Mathf.Atan2(p.y, p.x) * Mathf.Rad2Deg + 90f;
+            float sector = Mathf.Repeat(angle, 120f) - 60f;
+            // Inside a blade where the angle is within 30 degrees of a blade's middle.
+            float blade = (Mathf.Abs(sector) - 30f) * Mathf.Deg2Rad * Mathf.Max(0.3f, p.magnitude);
+            return Mathf.Min(Mathf.Max(ring, blade), Circle(p, Vector2.zero, 0.16f));
+        });
+
         public static Sprite Moon => Get("moon", p =>
             Mathf.Max(Circle(p, Vector2.zero, 0.66f), -Circle(p, new Vector2(0.34f, 0.22f), 0.56f)));
 
