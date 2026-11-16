@@ -437,6 +437,7 @@ namespace Oxfall.Game
             _deployables = new DeployableViews(_settlement, models, materials);
             _deployables.FireStarted += fire => GameAudio.Attach(fire, audio.Bank.FireLoop, 0.7f, 16f);
             _deployables.MachineStarted += hum => GameAudio.Attach(hum, audio.Bank.MachineLoop, 0.55f, 18f);
+            _deployables.SirenStarted += wail => GameAudio.Attach(wail, audio.Bank.SirenLoop, 0.5f, 45f);
             _placer = playerObject.AddComponent<DeployablePlacer>();
             _placer.Init(input, player, materials, _hud, _settlement, _deployables);
             _placer.Actions = _actions;
@@ -2037,6 +2038,19 @@ namespace Oxfall.Game
                 case "battery": HoldItem(ItemIds.Battery); break;
                 case "switch": HoldItem(ItemIds.ElectricSwitch); break;
                 case "lamp": HoldItem(ItemIds.Lamp); break;
+                case "motion-sensor": HoldItem(ItemIds.MotionSensor); break;
+                case "siren": HoldItem(ItemIds.SirenLight); break;
+                case "door-controller": HoldItem(ItemIds.DoorController); break;
+                case "electric-door": BuildElectricDoor(); break;
+                case "sensor-mode":
+                {
+                    int sensor = Nearest(DeployableKind.MotionSensor);
+                    if (sensor != 0) Debug.Log($"[Oxfall] Sensor mode {sensor}: {_actions.Build(BuildOp.Toggle(sensor, !_settlement.Power.IsOn(sensor)))} everyone={!_settlement.Power.IsOn(sensor)}");
+                    break;
+                }
+                case "door-state":
+                    foreach (var pair in _settlement.Grid.Doors) Debug.Log($"[Oxfall] Door {pair.Key} open={pair.Value}");
+                    break;
                 case "fuel-generator":
                 {
                     // Test: opens the nearest generator and puts the fuel carried in.
@@ -2328,6 +2342,39 @@ namespace Oxfall.Game
                 grid.PlaceEdge(edge, edge.Equals(doorway) ? PieceType.Doorway : PieceType.Wall);
             grid.PlaceRoof(cell);
             Debug.Log($"[Oxfall] Test hut at {cell}, doorway {doorway}, pieces={grid.PieceCount}");
+        }
+
+        /// <summary>
+        /// For tests: a hut ahead with a wooden door in its doorway, and a door controller set down
+        /// outside beside it by the same rules as by hand (it must be carried).
+        /// </summary>
+        private void BuildElectricDoor()
+        {
+            BuildTestHut();
+            var grid = _settlement.Grid;
+            var p = _player.transform.position;
+            Edge door = default;
+            float best = float.MaxValue;
+            foreach (var piece in grid.Pieces)
+            {
+                if (!piece.IsEdge || piece.Type != PieceType.Doorway) continue;
+                var (ex, _, ez) = PlayerActions.EdgePoint(grid, piece.Edge);
+                float d2 = (ex - p.x) * (ex - p.x) + (ez - p.z) * (ez - p.z);
+                if (d2 >= best) continue;
+                best = d2;
+                door = piece.Edge;
+            }
+            if (best == float.MaxValue) return;
+            if (!grid.HasDoor(door)) grid.PlaceDoor(door);
+            var (cx, cy, cz) = PlayerActions.EdgePoint(grid, door);
+            var outward = new Vector3(p.x - cx, 0f, p.z - cz);
+            outward = door.Axis == EdgeAxis.AlongX ? new Vector3(0f, 0f, Mathf.Sign(outward.z)) : new Vector3(Mathf.Sign(outward.x), 0f, 0f);
+            var side = new Vector3(outward.z, 0f, -outward.x);
+            var at = new Vector3(cx, 0f, cz) + outward * 0.8f + side * 0.95f;
+            at.y = _world.Shape.Height(at.x, at.z);
+            float yaw = Mathf.Atan2(outward.x, outward.z) * Mathf.Rad2Deg;
+            var result = _actions.Build(BuildOp.Deploy(new Deployable(0, DeployableKind.DoorController, at.x, at.y, at.z, yaw)));
+            Debug.Log($"[Oxfall] Electric door {door}: controller {result}");
         }
 
         private Cell _towerStairs, _towerRoom;
@@ -3236,6 +3283,9 @@ namespace Oxfall.Game
                 // Solar panels follow the sun; rain dims them.
                 if (_dayNight != null) _settlement.Power.Sun = _dayNight.Cycle.SunElevation / Oxfall.Core.Environment.DayCycle.SunPeak;
                 _settlement.Power.Rain = _weather != null ? _weather.Rain : 0f;
+                // Alone, a sensor can only see the player, and only when set to see everyone.
+                _settlement.Power.Senses ??= (sensor, everyone) => everyone && _vitals != null && !_vitals.IsDead
+                    && (new Vector3(sensor.X, sensor.Y, sensor.Z) - _player.transform.position).sqrMagnitude <= Electricity.SensorRange * Electricity.SensorRange;
                 _settlement.Tick(Time.deltaTime);
             }
             _respawnTimer += Time.deltaTime;

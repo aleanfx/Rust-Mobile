@@ -93,6 +93,9 @@ namespace Oxfall.Core.Items
         public const string Battery = "small_battery";
         public const string ElectricSwitch = "electric_switch";
         public const string Lamp = "electric_lamp";
+        public const string MotionSensor = "motion_sensor";
+        public const string SirenLight = "siren_light";
+        public const string DoorController = "door_controller";
         public const string VendingMachine = "vending_machine";
     }
 }

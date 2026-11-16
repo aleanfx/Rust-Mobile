@@ -69,6 +69,19 @@ namespace Oxfall.Game.Construction
         }
     }
 
+    /// <summary>A siren light's beams: two turning lights inside its dome while it has power.</summary>
+    public sealed class SirenView : MonoBehaviour
+    {
+        public Transform Head;
+        public bool On;
+
+        private void Update()
+        {
+            if (!On || Head == null) return;
+            Head.Rotate(0f, 300f * Time.deltaTime, 0f, Space.Self);
+        }
+    }
+
     /// <summary>
     /// Draws what is set down in the settlement and nothing else: it listens to the Core
     /// <see cref="Settlement"/> and adds, lights and removes objects to match. A campfire always
@@ -90,6 +103,9 @@ namespace Oxfall.Game.Construction
         /// <summary>A recycler started: the object its hum should play from.</summary>
         public event Action<GameObject> MachineStarted;
 
+        /// <summary>A siren started wailing: the object its sound should play from.</summary>
+        public event Action<GameObject> SirenStarted;
+
         private readonly Mesh _hempPlant, _berryPlant;
         private readonly Mesh _turretBase = MeshFactory.AutoTurretBase(), _turretHead = MeshFactory.AutoTurretHead();
         private readonly ItemModel _soil;
@@ -103,6 +119,8 @@ namespace Oxfall.Game.Construction
         private readonly Dictionary<int, Light> _lamps = new Dictionary<int, Light>();
         private readonly Dictionary<int, Transform> _levers = new Dictionary<int, Transform>();
         private readonly Dictionary<int, GameObject> _hums = new Dictionary<int, GameObject>();
+        private readonly Dictionary<int, GameObject> _wails = new Dictionary<int, GameObject>();
+        private readonly Material _sirenOn, _sirenOff;
 
         /// <summary>Something set down is going (picked up, or destroyed): where it stood and what it was made of.</summary>
         public event Action<Bounds, Material> Fell;
@@ -152,6 +170,8 @@ namespace Oxfall.Game.Construction
             _bulbOn = materials.BulbOn;
             _bulbOff = materials.BulbOff;
             _ledDark = materials.Rubber;
+            _sirenOn = materials.SirenOn;
+            _sirenOff = materials.SirenOff;
             // The switch in the world is its post, with a lever of its own that turns.
             if (_models.TryGetValue(DeployableKind.ElectricSwitch, out var whole))
                 _models[DeployableKind.ElectricSwitch] = new ItemModel { Mesh = MeshFactory.ElectricSwitch(), Materials = new[] { whole.Materials[0], whole.Materials[1] } };
@@ -337,6 +357,36 @@ namespace Oxfall.Game.Construction
                 lever.AddComponent<MeshRenderer>().sharedMaterials = _switchGrip;
                 _levers[d.Id] = lever.transform;
             }
+            else if (d.Kind == DeployableKind.SirenLight)
+            {
+                // Two beams back to back, turning, and a glow round the dome.
+                var head = new GameObject("Siren beams").transform;
+                head.SetParent(go.transform, false);
+                head.localPosition = MeshFactory.SirenHead;
+                for (int i = 0; i < 2; i++)
+                {
+                    var beam = new GameObject("Beam");
+                    beam.transform.SetParent(head, false);
+                    beam.transform.localRotation = Quaternion.Euler(8f, i * 180f, 0f);
+                    beam.transform.localPosition = beam.transform.localRotation * new Vector3(0f, 0f, 0.1f);
+                    var light = beam.AddComponent<Light>();
+                    light.type = LightType.Spot;
+                    light.color = new Color(1f, 0.5f, 0.1f);
+                    light.range = 16f;
+                    light.spotAngle = 55f;
+                    light.intensity = 5f;
+                    light.shadows = LightShadows.None;
+                }
+                var glow = head.gameObject.AddComponent<Light>();
+                glow.type = LightType.Point;
+                glow.color = new Color(1f, 0.52f, 0.12f);
+                glow.range = 3.5f;
+                glow.intensity = 1.6f;
+                glow.shadows = LightShadows.None;
+                var view = go.AddComponent<SirenView>();
+                view.Head = head;
+                head.gameObject.SetActive(false);
+            }
             PowerChanged(d.Id);
         }
 
@@ -368,6 +418,25 @@ namespace Oxfall.Game.Construction
                     SetSlot(go, 5, charge > 0.75f ? _lampOn : _ledDark);
                     break;
                 }
+                case DeployableKind.SirenLight:
+                {
+                    SetSlot(go, 2, running ? _sirenOn : _sirenOff);
+                    var siren = go.GetComponent<SirenView>();
+                    if (siren != null)
+                    {
+                        siren.On = running;
+                        if (siren.Head != null) siren.Head.gameObject.SetActive(running);
+                    }
+                    Wail(id, go, running);
+                    break;
+                }
+                case DeployableKind.MotionSensor:
+                    // Green while it watches, red while it sees someone.
+                    SetSlot(go, 3, !running ? _ledDark : Electricity.Sensing(d.Kind, grid.Level(id)) ? _lampOff : _lampOn);
+                    break;
+                case DeployableKind.DoorController:
+                    SetSlot(go, 2, running ? _lampOn : _ledDark);
+                    break;
                 case DeployableKind.AutoTurret:
                 {
                     var turret = go.GetComponent<TurretView>();
@@ -407,12 +476,33 @@ namespace Oxfall.Game.Construction
             }
         }
 
+        /// <summary>A siren wails while it has power.</summary>
+        private void Wail(int id, GameObject go, bool on)
+        {
+            bool wailing = _wails.TryGetValue(id, out var wail) && wail != null;
+            if (on == wailing) return;
+            if (on)
+            {
+                wail = new GameObject("Wail");
+                wail.transform.SetParent(go.transform, false);
+                wail.transform.localPosition = new Vector3(0f, 0.9f, 0.1f);
+                _wails[id] = wail;
+                SirenStarted?.Invoke(wail);
+            }
+            else
+            {
+                UnityEngine.Object.Destroy(wail);
+                _wails.Remove(id);
+            }
+        }
+
         private void Hide(int id)
         {
             _plants.Remove(id);
             _lamps.Remove(id);
             _levers.Remove(id);
             _hums.Remove(id);
+            _wails.Remove(id);
             if (!_views.TryGetValue(id, out var go)) return;
             _views.Remove(id);
             _fires.Remove(id);

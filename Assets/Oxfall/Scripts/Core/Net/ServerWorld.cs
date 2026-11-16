@@ -479,6 +479,9 @@ namespace Oxfall.Core.Net
                 inventory.Add(ItemIds.Battery, 1);
                 inventory.Add(ItemIds.ElectricSwitch, 1);
                 inventory.Add(ItemIds.Lamp, 3);
+                inventory.Add(ItemIds.MotionSensor, 1);
+                inventory.Add(ItemIds.SirenLight, 1);
+                inventory.Add(ItemIds.DoorController, 1);
                 inventory.Add(ItemIds.LowGradeFuel, 20);
                 return;
             }
@@ -641,6 +644,7 @@ namespace Oxfall.Core.Net
             Settlement.GrowthRate = Crops.Rate(rainNow);
             Settlement.Power.Sun = Day.SunElevation / Environment.DayCycle.SunPeak;
             Settlement.Power.Rain = rainNow;
+            Settlement.Power.Senses ??= SensorSees;
             Settlement.Tick(deltaSeconds, _wentOut, _rotted, Announcements);
             foreach (int id in _wentOut) Announcements.Add(BuildOp.Light(id, false));
             foreach (int id in _rotted) Announcements.Add(BuildOp.Pickup(id));

@@ -1,6 +1,7 @@
 using System.Collections.Generic;
 using System.Linq;
 using NUnit.Framework;
+using Oxfall.Core.Building;
 using Oxfall.Core.Crafting;
 using Oxfall.Core.Items;
 using Oxfall.Core.Net;
@@ -33,18 +34,19 @@ namespace Oxfall.Core.Tests
         public void Everything_is_made_and_the_big_parts_learned_at_the_workbench()
         {
             var book = RecipeBook.CreateDefault(Catalog);
-            foreach (var id in new[] { "wire_tool", "electric_lamp", "electric_switch" })
+            foreach (var id in new[] { "wire_tool", "electric_lamp", "electric_switch", "siren_light" })
             {
                 Assert.IsTrue(book.TryGet(id, out var r), id);
                 Assert.IsFalse(r.NeedsWorkbench, id);
             }
-            foreach (var id in new[] { "small_generator", "solar_panel", "small_battery" })
+            foreach (var id in new[] { "small_generator", "solar_panel", "small_battery", "motion_sensor", "door_controller" })
             {
                 Assert.IsTrue(book.TryGet(id, out var r), id);
                 Assert.IsTrue(r.NeedsWorkbench, id);
                 Assert.Greater(r.ScrapToLearn, 0, id);
             }
-            foreach (var item in new[] { ItemIds.Generator, ItemIds.SolarPanel, ItemIds.Battery, ItemIds.ElectricSwitch, ItemIds.Lamp })
+            foreach (var item in new[] { ItemIds.Generator, ItemIds.SolarPanel, ItemIds.Battery, ItemIds.ElectricSwitch, ItemIds.Lamp,
+                         ItemIds.MotionSensor, ItemIds.SirenLight, ItemIds.DoorController })
             {
                 Assert.IsTrue(Deployables.TryKindOf(item, out var kind), item);
                 Assert.AreEqual(item, Deployables.ItemOf(kind));
@@ -233,6 +235,137 @@ namespace Oxfall.Core.Tests
             world.Tick(0.5f);
             Assert.IsTrue(world.Settlement.Power.Running(lamp.Id));
             Assert.IsTrue(world.Announcements.Any(o => o.Kind == BuildOpKind.Power && o.Id == lamp.Id));
+        }
+    
+        [Test]
+        public void A_sensor_passes_power_to_a_siren_only_while_it_sees_a_stranger_or_anyone_when_set_so()
+        {
+            var s = NewSettlement();
+            var sensor = Add(s, DeployableKind.MotionSensor, 0f);
+            var siren = Add(s, DeployableKind.SirenLight, 2f);
+            Power(s, sensor);
+            Assert.AreEqual(ActionResult.Ok, s.Power.CanWire(siren.Id, sensor.Id));
+            Assert.IsTrue(s.Power.Connect(siren.Id, sensor.Id));
+            bool stranger = false, owner = false;
+            s.Power.Senses = (d, everyone) => stranger || (everyone && owner);
+
+            s.Tick(1f);
+            Assert.IsTrue(s.Power.Running(sensor.Id), "the sensor itself is on");
+            Assert.IsFalse(Electricity.Sensing(sensor.Kind, s.Power.Level(sensor.Id)));
+            Assert.IsFalse(s.Power.Running(siren.Id), "nobody near: quiet");
+
+            stranger = true;
+            s.Tick(1f);
+            Assert.IsTrue(Electricity.Sensing(sensor.Kind, s.Power.Level(sensor.Id)));
+            Assert.IsTrue(s.Power.Running(siren.Id), "a stranger: the siren goes");
+
+            stranger = false;
+            owner = true;
+            s.Tick(1f);
+            Assert.IsFalse(s.Power.Running(siren.Id), "the owner alone: strangers only by default");
+            Assert.IsTrue(s.Power.SetOn(sensor.Id, true));
+            s.Tick(1f);
+            Assert.IsTrue(s.Power.Running(siren.Id), "set to everyone, it sees the owner too");
+
+            // The sensor's mode is kept for players who join.
+            var ops = new List<BuildOp>();
+            s.Power.Describe(ops);
+            Assert.IsTrue(ops.Any(o => o.Kind == BuildOpKind.Toggle && o.Id == sensor.Id && o.Open));
+        }
+
+        [Test]
+        public void A_sensor_without_power_passes_nothing()
+        {
+            var s = NewSettlement();
+            var sensor = Add(s, DeployableKind.MotionSensor, 0f);
+            var siren = Add(s, DeployableKind.SirenLight, 2f);
+            Assert.IsTrue(s.Power.Connect(siren.Id, sensor.Id));
+            s.Power.Senses = (d, everyone) => true;
+            s.Tick(1f);
+            Assert.IsFalse(s.Power.Running(sensor.Id));
+            Assert.IsFalse(s.Power.Running(siren.Id));
+        }
+
+        /// <summary>A survivor with a floor near the spawn, a doorway on its south side and a wooden door in it.</summary>
+        private static (Settlement s, Survivor me, Edge door, float x, float y, float z) WithDoor()
+        {
+            var ground = new IslandGround(Seed);
+            var s = new Settlement(ground, Catalog);
+            var me = new Survivor(Catalog);
+            me.Inventory.Add(ItemIds.Wood, 3000);
+            me.Inventory.Add(ItemIds.MetalFragments, 1000);
+            var spawn = Spawns.Beach(ground, new System.Random(Seed ^ 0x5f3759df));
+            var near = BuildingGrid.CellAt(spawn.X, spawn.Z);
+            const float S = BuildingGrid.CellSize;
+            for (int r = 1; r < 30; r++)
+            for (int dz = -r; dz <= r; dz++)
+            for (int dx = -r; dx <= r; dx++)
+            {
+                var cell = new Cell(near.X + dx, near.Z + dz);
+                if (PlayerActions.FoundationTop(s, cell, out _) != ActionResult.Ok) continue;
+                float x = (cell.X + 0.5f) * S, z = (cell.Z - 0.6f) * S, y = ground.Height(x, z);
+                Assert.AreEqual(ActionResult.Ok, PlayerActions.Build(s, me, 1, BuildOp.Foundation(cell, 0f), x, y, z, out _));
+                Assert.AreEqual(ActionResult.Ok, PlayerActions.Build(s, me, 1, BuildOp.Edge(cell.South, PieceType.Doorway), x, y, z, out _));
+                me.Inventory.Add(DoorKinds.ItemOf(DoorKind.Wood), 1);
+                Assert.AreEqual(ActionResult.Ok, PlayerActions.Build(s, me, 1, BuildOp.Door(cell.South, DoorKind.Wood), x, y, z, out _));
+                return (s, me, cell.South, x, y, z);
+            }
+            Assert.Fail("No buildable cell near the spawn.");
+            return default;
+        }
+
+        [Test]
+        public void A_door_controller_goes_by_a_door_and_opens_it_while_powered()
+        {
+            var (s, me, door, x, y, z) = WithDoor();
+            var (dx, dy, dz) = PlayerActions.EdgePoint(s.Grid, door);
+            // Far from any door: refused.
+            Assert.AreEqual(ActionResult.NoDoorNear, PlayerActions.CanDeploy(s, 1, DeployableKind.DoorController, x + 9f, s.Ground.Height(x + 9f, z - 9f), z - 9f));
+            // Inside, a step from the doorway (on the floor), it goes.
+            float top = s.Grid.TryGetFloorBelow(dx, dy + 2f, dz + 1f, out float t) ? t : y;
+            me.Inventory.Add(ItemIds.DoorController, 1);
+            var op = BuildOp.Deploy(new Deployable(0, DeployableKind.DoorController, dx + 0.8f, top, dz + 0.8f, 0f, 1));
+            Assert.AreEqual(ActionResult.Ok, PlayerActions.Build(s, me, 1, op, dx, top, dz + 1f, out _));
+            var controller = s.Deployables.First(d => d.Kind == DeployableKind.DoorController);
+            var sw = s.Add(new Deployable(0, DeployableKind.ElectricSwitch, controller.X + 1f, controller.Y, controller.Z, 0f, 1));
+            Power(s, sw);
+            Assert.IsTrue(s.Power.Connect(controller.Id, sw.Id));
+
+            var told = new List<BuildOp>();
+            s.Power.Tick(1f, told);
+            Assert.IsFalse(s.Grid.IsDoorOpen(door), "switch off: shut");
+            Assert.IsTrue(s.Power.SetOn(sw.Id, true));
+            s.Power.Tick(1f, told);
+            Assert.IsTrue(s.Grid.IsDoorOpen(door), "power in: open");
+            Assert.IsTrue(told.Any(o => o.Kind == BuildOpKind.ToggleDoor && o.Open), "and copies are told");
+
+            // Shut by hand while powered, it stays shut until the power goes and comes back.
+            s.Grid.ToggleDoor(door);
+            s.Power.Tick(1f, told);
+            Assert.IsFalse(s.Grid.IsDoorOpen(door));
+            Assert.IsTrue(s.Power.SetOn(sw.Id, false));
+            s.Power.Tick(1f, told);
+            Assert.IsFalse(s.Grid.IsDoorOpen(door));
+            Assert.IsTrue(s.Power.SetOn(sw.Id, true));
+            s.Power.Tick(1f, told);
+            Assert.IsTrue(s.Grid.IsDoorOpen(door));
+            Assert.IsTrue(s.Power.SetOn(sw.Id, false));
+            told.Clear();
+            s.Power.Tick(1f, told);
+            Assert.IsFalse(s.Grid.IsDoorOpen(door), "power gone: shut");
+            Assert.IsTrue(told.Any(o => o.Kind == BuildOpKind.ToggleDoor && !o.Open));
+        }
+
+        [Test]
+        public void A_player_flips_a_sensor_but_not_a_lamp()
+        {
+            var s = NewSettlement();
+            var me = new Survivor(Catalog);
+            var sensor = Add(s, DeployableKind.MotionSensor, 0f);
+            var lamp = Add(s, DeployableKind.Lamp, 1f);
+            Assert.AreEqual(ActionResult.Ok, PlayerActions.Build(s, me, 1, BuildOp.Toggle(sensor.Id, true), sensor.X, sensor.Y, sensor.Z, out _));
+            Assert.IsTrue(s.Power.IsOn(sensor.Id));
+            Assert.AreEqual(ActionResult.Invalid, PlayerActions.Build(s, me, 1, BuildOp.Toggle(lamp.Id, true), lamp.X, lamp.Y, lamp.Z, out _));
         }
     }
 }

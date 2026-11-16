@@ -394,6 +394,9 @@ namespace Oxfall.Game.Construction
                 case DeployableKind.Battery: return $"BATERÍA {Mathf.FloorToInt(grid.Charge01(d.Id) * 100f)}%";
                 case DeployableKind.SolarPanel: return $"PANEL {grid.Level(d.Id):0} W";
                 case DeployableKind.Lamp: return grid.Running(d.Id) ? "LÁMPARA" : "SIN ENERGÍA";
+                case DeployableKind.MotionSensor: return grid.IsOn(d.Id) ? "DETECTA: TODOS" : "DETECTA: EXTRAÑOS";
+                case DeployableKind.SirenLight: return grid.Running(d.Id) ? "SIRENA" : "SIN ENERGÍA";
+                case DeployableKind.DoorController: return grid.Running(d.Id) ? "PUERTA ABIERTA" : "SIN ENERGÍA";
                 default: return Deployables.Name(d.Kind).ToUpperInvariant();
             }
         }
@@ -454,6 +457,18 @@ namespace Oxfall.Game.Construction
                     else Debug.Log($"[Oxfall] Switch {d.Id} {(on ? "on" : "off")}");
                     break;
                 }
+                case DeployableKind.MotionSensor:
+                {
+                    bool everyone = !grid.IsOn(d.Id);
+                    var result = Actions.Build(BuildOp.Toggle(d.Id, everyone));
+                    if (result != ActionResult.Ok) _hud.ShowToast(GameActions.Explain(result));
+                    else
+                    {
+                        _hud.ShowToast(everyone ? "El sensor detecta a todos (también a ti)" : "El sensor detecta solo a extraños (sin permiso en tu armario)");
+                        Debug.Log($"[Oxfall] Sensor {d.Id} {(everyone ? "everyone" : "strangers")}");
+                    }
+                    break;
+                }
                 default:
                     _hud.ShowToast(PowerInfo(d));
                     break;
@@ -493,8 +508,19 @@ namespace Oxfall.Game.Construction
                     return $"{name}: {Mathf.FloorToInt(grid.Charge01(d.Id) * 100f)}% · da hasta {Electricity.BatteryOutput:0} W";
                 case DeployableKind.ElectricSwitch:
                     return $"{name}: {(grid.IsOn(d.Id) ? "encendido" : "apagado")}{(grid.SourceOf(d.Id) == 0 ? " · sin cable de entrada" : "")}";
+                case DeployableKind.MotionSensor:
+                {
+                    string who = grid.IsOn(d.Id) ? "todos" : "extraños";
+                    if (!grid.Running(d.Id)) return grid.SourceOf(d.Id) == 0 ? $"{name}: sin cable (necesita 1 W)" : $"{name}: sin energía";
+                    return Electricity.Sensing(d.Kind, grid.Level(d.Id)) ? $"{name}: ¡detecta a alguien! ({who})" : $"{name}: vigilando {Electricity.SensorRange:0} m ({who})";
+                }
+                case DeployableKind.DoorController:
+                    if (!Electricity.TryDoorNear(_settlement, d.X, d.Y, d.Z, out _)) return $"{name}: no hay puerta al lado";
+                    if (grid.Running(d.Id)) return $"{name}: con energía, puerta abierta";
+                    return grid.SourceOf(d.Id) == 0 ? $"{name}: sin cable (necesita 1 W)" : $"{name}: sin energía, puerta cerrada";
                 case DeployableKind.Lamp:
                 case DeployableKind.AutoTurret:
+                case DeployableKind.SirenLight:
                 {
                     float need = Electricity.Demand(d.Kind);
                     if (grid.Running(d.Id)) return $"{name}: con energía ({need:0} W)";

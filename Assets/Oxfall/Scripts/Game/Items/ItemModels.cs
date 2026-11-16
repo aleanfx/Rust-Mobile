@@ -250,6 +250,24 @@ namespace Oxfall.Game.Items
                     Materials = new[] { m.Steel, m.PlanePaint, m.BulbOff },
                     IconRotation = Tilt(-8f, 220f),
                 },
+                [ItemIds.MotionSensor] = new ItemModel
+                {
+                    Mesh = MeshFactory.MotionSensor(),
+                    Materials = new[] { m.Steel, m.PlanePaint, m.Glass, m.LedRed },
+                    IconRotation = Tilt(-8f, 205f),
+                },
+                [ItemIds.SirenLight] = new ItemModel
+                {
+                    Mesh = MeshFactory.SirenLight(),
+                    Materials = new[] { m.Steel, m.PlanePaint, m.SirenOn },
+                    IconRotation = Tilt(-10f, 210f),
+                },
+                [ItemIds.DoorController] = new ItemModel
+                {
+                    Mesh = MeshFactory.DoorController(),
+                    Materials = new[] { m.Steel, m.PlanePaint, m.LedGreen },
+                    IconRotation = Tilt(-8f, 205f),
+                },
                 [ItemIds.VendingMachine] = new ItemModel
                 {
                     Mesh = MeshFactory.VendingMachine(),

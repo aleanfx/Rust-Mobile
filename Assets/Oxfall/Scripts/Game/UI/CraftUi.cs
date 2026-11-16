@@ -107,6 +107,9 @@ namespace Oxfall.Game.UI
                 case ItemIds.Battery:
                 case ItemIds.ElectricSwitch:
                 case ItemIds.Lamp:
+                case ItemIds.MotionSensor:
+                case ItemIds.SirenLight:
+                case ItemIds.DoorController:
                 case ItemIds.HighWoodWall:
                 case ItemIds.LargeBox:
                 case ItemIds.HighStoneWall:

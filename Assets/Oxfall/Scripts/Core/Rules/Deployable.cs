@@ -71,6 +71,15 @@ namespace Oxfall.Core.Rules
 
         /// <summary>A lamp: light, for a little power.</summary>
         Lamp = 23,
+
+        /// <summary>A presence sensor: lets power through while someone (a stranger, or anyone) is near.</summary>
+        MotionSensor = 24,
+
+        /// <summary>A siren light: spins and wails while it has power.</summary>
+        SirenLight = 25,
+
+        /// <summary>A door controller: opens the door beside it while it has power, shuts it when that stops.</summary>
+        DoorController = 26,
     }
 
     /// <summary>One thing set down: what it is, where it stands, which way it faces, and who put it there.</summary>
@@ -170,6 +179,9 @@ namespace Oxfall.Core.Rules
                 case DeployableKind.Battery: return ItemIds.Battery;
                 case DeployableKind.ElectricSwitch: return ItemIds.ElectricSwitch;
                 case DeployableKind.Lamp: return ItemIds.Lamp;
+                case DeployableKind.MotionSensor: return ItemIds.MotionSensor;
+                case DeployableKind.SirenLight: return ItemIds.SirenLight;
+                case DeployableKind.DoorController: return ItemIds.DoorController;
                 // Nothing is made into a bag, a recycler or a supply crate, and none is picked up.
                 case DeployableKind.Bag:
                 case DeployableKind.Recycler:
@@ -204,6 +216,9 @@ namespace Oxfall.Core.Rules
                 case ItemIds.Battery: kind = DeployableKind.Battery; return true;
                 case ItemIds.ElectricSwitch: kind = DeployableKind.ElectricSwitch; return true;
                 case ItemIds.Lamp: kind = DeployableKind.Lamp; return true;
+                case ItemIds.MotionSensor: kind = DeployableKind.MotionSensor; return true;
+                case ItemIds.SirenLight: kind = DeployableKind.SirenLight; return true;
+                case ItemIds.DoorController: kind = DeployableKind.DoorController; return true;
                 default: kind = default; return false;
             }
         }
@@ -263,6 +278,9 @@ namespace Oxfall.Core.Rules
                 case DeployableKind.Battery: return 0.35f;
                 case DeployableKind.ElectricSwitch: return 0.15f;
                 case DeployableKind.Lamp: return 0.2f;
+                case DeployableKind.MotionSensor: return 0.15f;
+                case DeployableKind.SirenLight: return 0.18f;
+                case DeployableKind.DoorController: return 0.18f;
                 case DeployableKind.HempPlant:
                 case DeployableKind.BerryPlant:
                     return Crops.Spacing * 0.5f;
@@ -299,6 +317,9 @@ namespace Oxfall.Core.Rules
                 case DeployableKind.Battery: return 150f;
                 case DeployableKind.ElectricSwitch: return 60f;
                 case DeployableKind.Lamp: return 60f;
+                case DeployableKind.MotionSensor: return 60f;
+                case DeployableKind.SirenLight: return 60f;
+                case DeployableKind.DoorController: return 80f;
                 case DeployableKind.HempPlant:
                 case DeployableKind.BerryPlant:
                     return 20f;
@@ -332,6 +353,9 @@ namespace Oxfall.Core.Rules
                 case DeployableKind.Battery: return "Batería";
                 case DeployableKind.ElectricSwitch: return "Interruptor";
                 case DeployableKind.Lamp: return "Lámpara";
+                case DeployableKind.MotionSensor: return "Sensor de presencia";
+                case DeployableKind.SirenLight: return "Sirena";
+                case DeployableKind.DoorController: return "Controlador de puerta";
                 default: return "Objeto";
             }
         }

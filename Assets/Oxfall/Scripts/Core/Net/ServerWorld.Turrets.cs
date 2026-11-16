@@ -91,6 +91,21 @@ namespace Oxfall.Core.Net
             foreach (int id in _trapGone) _turretReady.Remove(id);
         }
 
+        /// <summary>Whether a presence sensor sees a living player near it: anyone, or only those its owner's cupboard does not know.</summary>
+        private bool SensorSees(Deployable sensor, bool everyone)
+        {
+            const float r2 = Electricity.SensorRange * Electricity.SensorRange;
+            foreach (var record in _online.Values)
+            {
+                if (record.Survivor.Vitals.IsDead || !Players.TryGet(record.PlayerId, out var player) || !player.Placed) continue;
+                var p = player.Pose;
+                float dx = p.X - sensor.X, dy = p.Y - sensor.Y, dz = p.Z - sensor.Z;
+                if (dx * dx + dy * dy + dz * dz > r2) continue;
+                if (everyone || !GunTraps.Spares(Settlement, sensor, record.Owner, Teams.SameTeam)) return true;
+            }
+            return false;
+        }
+
         /// <summary>Whether nothing (a hill, a ruin, a building's wall) stands between a turret's barrel and a point.</summary>
         private bool TurretSees(Deployable turret, float tx, float ty, float tz)
         {

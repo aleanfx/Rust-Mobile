@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using Oxfall.Core.Building;
 using Oxfall.Core.Items;
 
 namespace Oxfall.Core.Rules
@@ -27,6 +28,14 @@ namespace Oxfall.Core.Rules
 
         public const float LampDemand = 2f;
         public const float TurretDemand = 10f;
+        /// <summary>What a sensor, a siren or a door controller takes.</summary>
+        public const float SmallDemand = 1f;
+
+        /// <summary>How near someone must be for a sensor to notice them (metres).</summary>
+        public const float SensorRange = 10f;
+
+        /// <summary>How near a door a door controller must stand (metres, to the middle of the doorway).</summary>
+        public const float DoorReach = 2.5f;
 
         /// <summary>How long a cable can be (metres, end to end).</summary>
         public const float WireReach = 20f;
@@ -38,15 +47,34 @@ namespace Oxfall.Core.Rules
 
         /// <summary>Whether a cable can come into it.</summary>
         public static bool HasInput(DeployableKind kind) =>
-            kind == DeployableKind.Battery || kind == DeployableKind.ElectricSwitch || kind == DeployableKind.Lamp || kind == DeployableKind.AutoTurret;
+            kind == DeployableKind.Battery || kind == DeployableKind.ElectricSwitch || kind == DeployableKind.Lamp || kind == DeployableKind.AutoTurret
+            || kind == DeployableKind.MotionSensor || kind == DeployableKind.SirenLight || kind == DeployableKind.DoorController;
 
         /// <summary>Whether a cable can go out of it.</summary>
         public static bool HasOutput(DeployableKind kind) =>
-            kind == DeployableKind.Generator || kind == DeployableKind.SolarPanel || kind == DeployableKind.Battery || kind == DeployableKind.ElectricSwitch;
+            kind == DeployableKind.Generator || kind == DeployableKind.SolarPanel || kind == DeployableKind.Battery || kind == DeployableKind.ElectricSwitch
+            || kind == DeployableKind.MotionSensor;
+
+        /// <summary>Whether it passes power on only some of the time (a switch when on, a sensor when it sees someone).</summary>
+        public static bool Passes(DeployableKind kind) => kind == DeployableKind.ElectricSwitch || kind == DeployableKind.MotionSensor;
+
+        /// <summary>Whether it can be tapped to change: a switch on or off, a sensor to strangers only or everyone.</summary>
+        public static bool Toggles(DeployableKind kind) => kind == DeployableKind.ElectricSwitch || kind == DeployableKind.MotionSensor;
 
         /// <summary>Power it takes to run (0: none of its own).</summary>
-        public static float Demand(DeployableKind kind) =>
-            kind == DeployableKind.Lamp ? LampDemand : kind == DeployableKind.AutoTurret ? TurretDemand : 0f;
+        public static float Demand(DeployableKind kind)
+        {
+            switch (kind)
+            {
+                case DeployableKind.Lamp: return LampDemand;
+                case DeployableKind.AutoTurret: return TurretDemand;
+                case DeployableKind.MotionSensor:
+                case DeployableKind.SirenLight:
+                case DeployableKind.DoorController:
+                    return SmallDemand;
+                default: return 0f;
+            }
+        }
 
         /// <summary>What a generator burns.</summary>
         public static bool Burns(string itemId) => itemId == ItemIds.LowGradeFuel;
@@ -58,6 +86,30 @@ namespace Oxfall.Core.Rules
         /// <summary>Whether a device with this kind and this level of power in is running.</summary>
         public static bool Running(DeployableKind kind, float level) =>
             Demand(kind) > 0f ? level >= Demand(kind) - 1e-3f : level > 0f;
+
+        /// <summary>A sensor's level shows it sees someone: what it takes, and half a unit more at least.</summary>
+        public static bool Sensing(DeployableKind kind, float level) =>
+            kind == DeployableKind.MotionSensor && level >= SmallDemand + 0.25f;
+
+        /// <summary>The doorway nearest a spot, within <see cref="DoorReach"/>, that holds a door.</summary>
+        public static bool TryDoorNear(Settlement settlement, float x, float y, float z, out Edge door)
+        {
+            door = default;
+            float best = DoorReach * DoorReach;
+            bool found = false;
+            foreach (var pair in settlement.Grid.Doors)
+            {
+                var (ex, ey, ez) = PlayerActions.EdgePoint(settlement.Grid, pair.Key);
+                // From the controller's feet to the doorway's middle, which is half a wall up.
+                float dx = ex - x, dy = Math.Max(0f, Math.Abs(ey - y) - 1.5f), dz = ez - z;
+                float d2 = dx * dx + dy * dy + dz * dz;
+                if (d2 > best) continue;
+                best = d2;
+                door = pair.Key;
+                found = true;
+            }
+            return found;
+        }
     }
 
     /// <summary>
@@ -87,6 +139,15 @@ namespace Oxfall.Core.Rules
         /// <summary>How strong the sun is now (0..1 of noon), and how hard it rains: whoever ticks sets these.</summary>
         public float Sun { get; set; }
         public float Rain { get; set; }
+
+        /// <summary>
+        /// Whether a sensor sees someone near: everyone (true) or only strangers (false). Whoever ticks
+        /// sets it; unset, sensors see nobody.
+        /// </summary>
+        public Func<Deployable, bool, bool> Senses { get; set; }
+
+        // Door controllers that have opened their door, and the door each one works.
+        private readonly HashSet<int> _opened = new HashSet<int>();
 
         /// <summary>A cable was plugged or unplugged, a switch flipped, or a device's power changed (its id).</summary>
         public event Action<int> Changed;
@@ -176,10 +237,10 @@ namespace Oxfall.Core.Rules
             return true;
         }
 
-        /// <summary>Turns a switch on or off. False if it is no switch.</summary>
+        /// <summary>Turns a switch on or off, or sets a sensor to see everyone (on) or strangers only. False if it is neither.</summary>
         public bool SetOn(int id, bool on)
         {
-            if (!_settlement.TryGet(id, out var d) || d.Kind != DeployableKind.ElectricSwitch) return false;
+            if (!_settlement.TryGet(id, out var d) || !Electricity.Toggles(d.Kind)) return false;
             if (on ? _on.Add(id) : _on.Remove(id)) Changed?.Invoke(id);
             return true;
         }
@@ -213,6 +274,7 @@ namespace Oxfall.Core.Rules
                 Changed?.Invoke(fed);
             }
             _on.Remove(id);
+            _opened.Remove(id);
             _charge.Remove(id);
             _burn.Remove(id);
             _level.Remove(id);
@@ -223,6 +285,7 @@ namespace Oxfall.Core.Rules
         {
             _input.Clear();
             _on.Clear();
+            _opened.Clear();
             _charge.Clear();
             _burn.Clear();
             _level.Clear();
@@ -248,7 +311,7 @@ namespace Oxfall.Core.Rules
 
             foreach (var d in _settlement.Deployables)
             {
-                if (!Electricity.HasOutput(d.Kind) || d.Kind == DeployableKind.ElectricSwitch) continue;
+                if (!Electricity.HasOutput(d.Kind) || Electricity.Passes(d.Kind)) continue;
                 bool fed = _children.TryGetValue(d.Id, out var kids) && kids.Count > 0;
                 float supply = 0f;
                 switch (d.Kind)
@@ -300,6 +363,7 @@ namespace Oxfall.Core.Rules
                 float now = _next.TryGetValue(id, out float n) ? n : 0f;
                 float before = Level(id);
                 _level[id] = now;
+                if (d.Kind == DeployableKind.DoorController) WorkDoor(d, Electricity.Running(d.Kind, now), told);
                 if (Math.Abs(now - before) < 0.5f && Electricity.Running(d.Kind, now) == Electricity.Running(d.Kind, before)) continue;
                 told?.Add(BuildOp.Power(id, (float)Math.Round(now, 1)));
                 Changed?.Invoke(id);
@@ -321,6 +385,8 @@ namespace Oxfall.Core.Rules
             {
                 case DeployableKind.Lamp:
                 case DeployableKind.AutoTurret:
+                case DeployableKind.SirenLight:
+                case DeployableKind.DoorController:
                 {
                     float need = Electricity.Demand(d.Kind);
                     if (offered + 1e-4f < need) return 0f;
@@ -337,6 +403,22 @@ namespace Oxfall.Core.Rules
                     _next[id] = Math.Max(used, 0.01f);
                     return used;
                 }
+                case DeployableKind.MotionSensor:
+                {
+                    // Takes its own bit, and passes the rest on while it sees someone.
+                    float need = Electricity.SmallDemand;
+                    if (offered + 1e-4f < need) return 0f;
+                    if (Senses == null || !Senses(d, _on.Contains(id)))
+                    {
+                        _next[id] = need;
+                        return need;
+                    }
+                    float used = 0f;
+                    if (_children.TryGetValue(id, out var kids))
+                        foreach (int kid in kids) used += Feed(kid, offered - need - used, dt);
+                    _next[id] = need + Math.Max(used, 0.6f);
+                    return need + used;
+                }
                 case DeployableKind.Battery:
                 {
                     float room = Electricity.BatteryCapacity - Charge(id);
@@ -348,6 +430,21 @@ namespace Oxfall.Core.Rules
                 default:
                     return 0f;
             }
+        }
+
+        /// <summary>
+        /// A door controller opens its door when power comes and shuts it when power goes (only then:
+        /// in between, anyone with the code still works the door by hand).
+        /// </summary>
+        private void WorkDoor(Deployable controller, bool running, List<BuildOp> told)
+        {
+            if (running == _opened.Contains(controller.Id)) return;
+            if (running) _opened.Add(controller.Id);
+            else _opened.Remove(controller.Id);
+            if (!Electricity.TryDoorNear(_settlement, controller.X, controller.Y, controller.Z, out var door)) return;
+            if (_settlement.Grid.IsDoorOpen(door) == running) return;
+            _settlement.Grid.ToggleDoor(door);
+            told?.Add(BuildOp.ToggleDoor(door, running));
         }
 
         /// <summary>A generator with something plugged in burns its fuel: true while it runs.</summary>

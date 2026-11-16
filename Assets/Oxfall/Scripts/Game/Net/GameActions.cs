@@ -578,6 +578,7 @@ namespace Oxfall.Game.Net
                 case ActionResult.WireTooLong: return $"Demasiado lejos: un cable llega hasta {Electricity.WireReach:0} m";
                 case ActionResult.OutputsFull: return $"Esa salida ya alimenta {Electricity.MaxOutputs} cosas: usa un interruptor para repartir más";
                 case ActionResult.NoWireTool: return "Necesitas el cable en el inventario";
+                case ActionResult.NoDoorNear: return "Ponlo junto a una puerta (a menos de 2 m)";
                 case ActionResult.OutOfStock: return "Agotado: la máquina no tiene más de eso";
                 case ActionResult.ShopFull: return "La máquina está llena: no cabe lo que pagas";
                 case ActionResult.NeedsDoorway: return "Apunta a un marco de puerta vacío";

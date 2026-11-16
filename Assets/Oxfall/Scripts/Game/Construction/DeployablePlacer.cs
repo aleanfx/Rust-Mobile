@@ -131,6 +131,9 @@ namespace Oxfall.Game.Construction
                 case DeployableKind.Battery: return "Batería colocada: conéctale un generador o panel y luego lo que quieras alimentar";
                 case DeployableKind.ElectricSwitch: return "Interruptor colocado: pásale un cable de entrada y uno de salida";
                 case DeployableKind.Lamp: return "Lámpara colocada: llévale energía con el cable";
+                case DeployableKind.MotionSensor: return "Sensor colocado: entrada de energía y salida a una sirena, lámpara o puerta";
+                case DeployableKind.SirenLight: return "Sirena colocada: conéctala a un sensor o interruptor";
+                case DeployableKind.DoorController: return "Controlador colocado: con energía abre la puerta de al lado";
                 case DeployableKind.VendingMachine: return "Máquina colocada: llénala y pon tus ofertas. Cualquiera podrá comprarte";
                 case DeployableKind.HempPlant: return "Cáñamo sembrado: crece solo en unos minutos (más rápido con lluvia)";
                 case DeployableKind.BerryPlant: return "Moras sembradas: vuelve cuando estén maduras y cosecha";

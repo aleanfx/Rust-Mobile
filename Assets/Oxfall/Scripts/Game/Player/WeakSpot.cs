@@ -53,7 +53,7 @@ namespace Oxfall.Game.Player
                 _glintMaterial = new Material(flame) { name = "Weak spot glint" };
                 if (_glintMaterial.HasProperty("_CoreColor")) _glintMaterial.SetColor("_CoreColor", new Color(1f, 0.97f, 0.82f));
                 if (_glintMaterial.HasProperty("_TipColor")) _glintMaterial.SetColor("_TipColor", new Color(1f, 0.78f, 0.3f));
-                if (_glintMaterial.HasProperty("_Intensity")) _glintMaterial.SetFloat("_Intensity", 2.6f);
+                if (_glintMaterial.HasProperty("_Intensity")) _glintMaterial.SetFloat("_Intensity", 3.4f);
                 renderer.sharedMaterial = _glintMaterial;
             }
             _glint.SetActive(false);
@@ -114,7 +114,7 @@ namespace Oxfall.Game.Player
             if (_glint.activeSelf)
             {
                 _pulse += dt;
-                float s = 0.36f + 0.08f * Mathf.Sin(_pulse * 7f);
+                float s = 0.6f + 0.12f * Mathf.Sin(_pulse * 7f);
                 _glint.transform.localScale = new Vector3(s, s * 1.1f, s);
             }
         }

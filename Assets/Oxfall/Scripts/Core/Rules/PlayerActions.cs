@@ -105,6 +105,8 @@ namespace Oxfall.Core.Rules
         OutputsFull,
         /// <summary>Wiring needs the cable in hand.</summary>
         NoWireTool,
+        /// <summary>A door controller goes beside a door.</summary>
+        NoDoorNear,
     }
 
     /// <summary>
@@ -667,7 +669,7 @@ namespace Oxfall.Core.Rules
                 case BuildOpKind.Toggle:
                 {
                     if (!settlement.TryGet(op.Id, out var d)) return ActionResult.NoPiece;
-                    if (d.Kind != DeployableKind.ElectricSwitch) return ActionResult.Invalid;
+                    if (!Electricity.Toggles(d.Kind)) return ActionResult.Invalid;
                     if (!Near(x, y, z, d.X, d.Y, d.Z, UseReach)) return ActionResult.TooFar;
                     settlement.Power.SetOn(d.Id, op.Open);
                     return ActionResult.Ok;
@@ -844,6 +846,7 @@ namespace Oxfall.Core.Rules
                 if (!HighWalls.LadderSupported(settlement, x, y, z, yaw)) return ActionResult.NoSupport;
             }
             else if (!settlement.HasPrivilege(owner, x, z)) return ActionResult.BuildingBlocked;
+            if (kind == DeployableKind.DoorController && !Electricity.TryDoorNear(settlement, x, y, z, out _)) return ActionResult.NoDoorNear;
             if (wall)
             {
                 HighWalls.Ends(kind, x, z, yaw, out float ax, out float az, out float bx, out float bz);

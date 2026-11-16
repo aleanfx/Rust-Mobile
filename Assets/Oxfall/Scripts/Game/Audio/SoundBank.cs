@@ -61,6 +61,8 @@ namespace Oxfall.Game.Audio
 
         /// <summary>A recycler running: a motor's hum, the drum's grinding rasp and a clank each turn (a loop).</summary>
         public AudioClip MachineLoop { get; }
+        /// <summary>A siren's wail, rising and falling (loops).</summary>
+        public AudioClip SirenLoop { get; }
         /// <summary>A cargo plane's four engines droning, heard from far off (loops).</summary>
         public AudioClip PlaneLoop { get; }
 
@@ -211,6 +213,7 @@ namespace Oxfall.Game.Audio
             WindLoop = MakeLoop("wind", 6f, WindSample);
             WavesLoop = MakeLoop("waves", 8f, WavesSample);
             MachineLoop = MakeLoop("machine", 2f, MachineSample);
+            SirenLoop = MakeLoop("siren", 2f, SirenSample);
             PlaneLoop = MakeLoop("plane", 4f, PlaneSample);
             EngineLoop = MakeLoop("engine", 2f, EngineSample);
             RainLoop = MakeLoop("rain", 5f, RainSample);
@@ -296,6 +299,15 @@ namespace Oxfall.Game.Audio
         }
 
         private float _grind;
+        private static float SirenSample(float t, int i)
+        {
+            // The pitch swings between 600 and 1100 Hz once every two seconds; the phase is the sweep's
+            // integral (850 t, less 250/pi cos(pi t), turns), so it rises and falls smoothly and the loop joins.
+            float phase = 2f * Mathf.PI * 850f * t - 500f * Mathf.Cos(Mathf.PI * t);
+            // A horn's buzz: the tone and two overtones.
+            return Mathf.Sin(phase) * 0.6f + Mathf.Sin(phase * 2f) * 0.25f + Mathf.Sin(phase * 3f) * 0.12f;
+        }
+
         private float MachineSample(float t, int i)
         {
             // Whole cycles in the loop's two seconds, so it joins up: a 55 Hz hum with its overtones,

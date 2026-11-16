@@ -186,6 +186,61 @@ namespace Oxfall.Game.World
             return b.Build("Lamp");
         }
 
+        /// <summary>
+        /// A presence sensor: a post, a small box and a faceted white eye looking out the front, with
+        /// a lamp that lights while it sees someone. Submeshes: steel, paint, lens, lamp.
+        /// </summary>
+        public static Mesh MotionSensor()
+        {
+            var b = new FlatMeshBuilder(4) { UvScale = 0.6f };
+            b.AddBox(0, new Vector3(-0.11f, 0f, -0.11f), new Vector3(0.11f, 0.03f, 0.11f));
+            b.AddTube(0, new Vector3(0f, 0.03f, 0f), new Vector3(0f, 1.05f, 0f), 0.025f, 0.025f, 8);
+            b.AddBox(1, new Vector3(-0.08f, 1.05f, -0.06f), new Vector3(0.08f, 1.21f, 0.06f));
+            // The eye: a faceted dome, and the lamp under it.
+            b.AddTube(2, new Vector3(0f, 1.13f, 0.06f), new Vector3(0f, 1.13f, 0.1f), 0.055f, 0.045f, 10, 0);
+            b.AddTube(2, new Vector3(0f, 1.13f, 0.1f), new Vector3(0f, 1.13f, 0.12f), 0.045f, 0.012f, 10, 2);
+            b.AddBox(3, new Vector3(0.035f, 1.07f, 0.06f), new Vector3(0.06f, 1.085f, 0.07f));
+            return b.Build("Motion sensor");
+        }
+
+        /// <summary>
+        /// A siren light: a heavy foot, a short post and a round housing under an orange dome. The
+        /// beams that turn inside it are lights of the view. Submeshes: steel, paint, dome.
+        /// </summary>
+        public static Mesh SirenLight()
+        {
+            var b = new FlatMeshBuilder(3) { UvScale = 0.6f };
+            b.AddTube(0, Vector3.zero, new Vector3(0f, 0.05f, 0f), 0.16f, 0.14f, 10, 0);
+            b.AddTube(0, new Vector3(0f, 0.05f, 0f), new Vector3(0f, 0.95f, 0f), 0.025f, 0.025f, 8);
+            b.AddTube(1, new Vector3(0f, 0.95f, 0f), new Vector3(0f, 1.03f, 0f), 0.1f, 0.1f, 12, 1);
+            b.AddTube(2, new Vector3(0f, 1.03f, 0f), new Vector3(0f, 1.17f, 0f), 0.085f, 0.08f, 12);
+            b.AddTube(2, new Vector3(0f, 1.17f, 0f), new Vector3(0f, 1.22f, 0f), 0.08f, 0.03f, 12, 2);
+            // The horn under the housing.
+            b.AddTube(1, new Vector3(0f, 0.86f, 0.03f), new Vector3(0f, 0.86f, 0.13f), 0.025f, 0.06f, 10, 0);
+            return b.Build("Siren light");
+        }
+
+        /// <summary>Where the siren's light turns.</summary>
+        public static readonly Vector3 SirenHead = new Vector3(0f, 1.1f, 0f);
+
+        /// <summary>
+        /// A door controller: a grey box on a short post with a lamp that shows when it holds the door
+        /// open. Submeshes: steel, paint, lamp.
+        /// </summary>
+        public static Mesh DoorController()
+        {
+            var b = new FlatMeshBuilder(3) { UvScale = 0.6f };
+            b.AddBox(0, new Vector3(-0.12f, 0f, -0.1f), new Vector3(0.12f, 0.03f, 0.1f));
+            b.AddTube(0, new Vector3(0f, 0.03f, 0f), new Vector3(0f, 0.8f, 0f), 0.03f, 0.03f, 8);
+            b.AddBox(1, new Vector3(-0.11f, 0.8f, -0.07f), new Vector3(0.11f, 1.08f, 0.07f));
+            // A cable gland on top, two screws and the lamp on the face.
+            b.AddTube(0, new Vector3(0f, 1.08f, 0f), new Vector3(0f, 1.13f, 0f), 0.02f, 0.02f, 8, 1);
+            b.AddBox(0, new Vector3(-0.09f, 1.04f, 0.07f), new Vector3(-0.07f, 1.06f, 0.075f));
+            b.AddBox(0, new Vector3(0.07f, 0.82f, 0.07f), new Vector3(0.09f, 0.84f, 0.075f));
+            b.AddBox(2, new Vector3(-0.03f, 0.95f, 0.07f), new Vector3(0.03f, 0.99f, 0.08f));
+            return b.Build("Door controller");
+        }
+
         /// <summary>Where the bulb is, for its light.</summary>
         public static readonly Vector3 LampBulb = new Vector3(0f, 1.52f, 0.22f);
 
@@ -226,6 +281,9 @@ namespace Oxfall.Game.World
                 case DeployableKind.ElectricSwitch: return new Vector3(-0.1f, 0.84f, 0f);
                 case DeployableKind.Lamp: return new Vector3(0f, 0.06f, -0.12f);
                 case DeployableKind.AutoTurret: return new Vector3(0f, 0.5f, -0.2f);
+                case DeployableKind.MotionSensor: return new Vector3(-0.08f, 1.1f, 0f);
+                case DeployableKind.SirenLight: return new Vector3(0f, 0.06f, -0.12f);
+                case DeployableKind.DoorController: return new Vector3(0f, 1.13f, 0f);
                 default: return new Vector3(0f, 0.3f, 0f);
             }
         }
@@ -239,6 +297,7 @@ namespace Oxfall.Game.World
                 case DeployableKind.SolarPanel: return new Vector3(0f, 0.7f, -0.12f);
                 case DeployableKind.Battery: return new Vector3(0.16f, 0.56f, 0.06f);
                 case DeployableKind.ElectricSwitch: return new Vector3(0.1f, 0.84f, 0f);
+                case DeployableKind.MotionSensor: return new Vector3(0.08f, 1.1f, 0f);
                 default: return new Vector3(0f, 0.3f, 0f);
             }
         }

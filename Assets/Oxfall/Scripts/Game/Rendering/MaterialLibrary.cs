@@ -118,6 +118,8 @@ namespace Oxfall.Game.Rendering
         /// <summary>A lamp's bulb, lit and dark.</summary>
         public Material BulbOn { get; }
         public Material BulbOff { get; }
+        public Material SirenOn { get; }
+        public Material SirenOff { get; }
 
         /// <summary>The pale paint of a tree's weak-spot X.</summary>
         public Material WeakSpotPaint { get; }
@@ -305,6 +307,8 @@ namespace Oxfall.Game.Rendering
             WeakSpotPaint = Make("Weak spot paint", new Color(0.95f, 0.88f, 0.6f), 0.05f);
             BulbOn = Make("Bulb on", new Color(1f, 0.95f, 0.78f), 0.85f);
             BulbOff = Make("Bulb off", new Color(0.32f, 0.31f, 0.28f), 0.85f);
+            SirenOn = Make("Siren on", new Color(1f, 0.62f, 0.16f), 0.9f);
+            SirenOff = Make("Siren off", new Color(0.46f, 0.2f, 0.05f), 0.9f);
             Berries = Make("Berries", new Color(0.50f, 0.06f, 0.20f), 0.55f);
             Shirt = Make("Shirt", new Color(0.46f, 0.42f, 0.33f), 0.05f);
             Trousers = Make("Trousers", new Color(0.17f, 0.18f, 0.20f), 0.05f);
