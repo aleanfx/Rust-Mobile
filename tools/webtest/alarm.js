@@ -86,7 +86,8 @@ const stamp = () => ((Date.now() - t0) / 1000).toFixed(1).padStart(6);
 
   // The door: shut while the switch is off, open while it is on.
   await cmd('time-12', 1500);
-  await cmd('turn-180', 800);
+  await cmd('aim-door', 1500);
+  await cmd('back-2', 800);
   log.push('---');
   await cmd('door-state', 800);
   check('switch off: the door is shut', has('open=False') && !log.slice(log.lastIndexOf('---')).some(l => l.includes('open=True')), '');
