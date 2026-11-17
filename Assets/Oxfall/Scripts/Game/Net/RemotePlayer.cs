@@ -304,21 +304,25 @@ namespace Oxfall.Game.Net
                 _busy = Busy.None;
                 _busyUntil = 0f;
             }
-            // Down on one knee to bandage: the hips drop, one leg forward, the other back.
+            // Crouched low to bandage: the hips drop, the body leans in, one foot forward, one back
+            // (the legs drawn up a little shorter, so both feet stay on the ground).
             _crouch = Mathf.MoveTowards(_crouch, _busy == Busy.Healing && !Down ? 1f : 0f, dt * 4f);
             _busyBlend = Mathf.MoveTowards(_busyBlend, _busy != Busy.None && !Down ? 1f : 0f, dt * 5f);
             _kick = Mathf.MoveTowards(_kick, 0f, dt * 7f);
             if (_crouch > 0f)
             {
                 float c = Mathf.SmoothStep(0f, 1f, _crouch);
-                _figure.localPosition += new Vector3(0f, -0.37f * c, 0f);
-                _legL.localRotation = Quaternion.Euler(Mathf.Lerp(s, -62f, c), 0f, 0f);
-                _legR.localRotation = Quaternion.Euler(Mathf.Lerp(-s, 55f, c), 0f, 0f);
+                _figure.localPosition += new Vector3(0f, -0.21f * c, 0.04f * c);
+                _figure.localRotation *= Quaternion.Euler(14f * c, 0f, 0f);
+                _legL.localRotation = Quaternion.Euler(Mathf.Lerp(s, -32f, c), 0f, 0f);
+                _legR.localRotation = Quaternion.Euler(Mathf.Lerp(-s, 22f, c), 0f, 0f);
+                _legL.localScale = _legR.localScale = new Vector3(1f, Mathf.Lerp(1f, 0.86f, c), 1f);
             }
             else
             {
                 _legL.localRotation = Quaternion.Euler(s, 0f, 0f);
                 _legR.localRotation = Quaternion.Euler(-s, 0f, 0f);
+                _legL.localScale = _legR.localScale = Vector3.one;
             }
             _armL.localRotation = Quaternion.Euler(-s * 0.8f, 0f, -6f);
             _armR.localRotation = Quaternion.Euler(s * 0.8f, 0f, 6f);
