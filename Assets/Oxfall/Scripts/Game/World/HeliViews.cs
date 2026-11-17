@@ -319,7 +319,7 @@ namespace Oxfall.Game.World
             UnityEngine.Object.Destroy(bulb.GetComponent<Collider>());
             bulb.name = "Searchlight bulb";
             bulb.transform.SetParent(lamp, false);
-            bulb.transform.localScale = Vector3.one * 0.35f;
+            bulb.transform.localScale = Vector3.one * 0.6f;
             var bulbRenderer = bulb.GetComponent<MeshRenderer>();
             bulbRenderer.sharedMaterial = _materials.BulbOff;
             bulbRenderer.shadowCastingMode = ShadowCastingMode.Off;

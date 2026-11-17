@@ -250,6 +250,8 @@ namespace Oxfall.Game
         private void ShootHeli()
         {
             FaceHeli();
+            // The colliders where the helicopter is drawn this frame (on a slow machine they lag a frame behind).
+            Physics.SyncTransforms();
             _gatherer.UseOnce();
         }
 
