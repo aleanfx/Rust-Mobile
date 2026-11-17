@@ -2524,7 +2524,7 @@ namespace Oxfall.Game.World
         public const int CrateScreen = 3, CrateLamp = 5;
 
         /// <summary>Where the countdown hangs over a locked crate (its laptop's screen), in its own frame.</summary>
-        public static readonly Vector3 CrateTimer = new Vector3(0f, 1.25f, 0f);
+        public static readonly Vector3 CrateTimer = new Vector3(0f, 1.1f, 0f);
 
         /// <summary>
         /// A locked military crate, long and heavy, front along +Z: olive steel with ribs and hazard

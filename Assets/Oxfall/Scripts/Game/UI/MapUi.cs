@@ -131,6 +131,7 @@ namespace Oxfall.Game.UI
             AddLegend(_root, left, new Vector2(60f, 65f), Icons.Ruins, RuinsColour, "Ruinas: botín y bandidos");
             AddLegend(_root, left, new Vector2(60f, 20f), Icons.Close, UiTheme.Bad, "Donde moriste");
             AddLegend(_root, left, new Vector2(60f, -25f), Icons.Marker, MarkerColour, "Tu marca");
+            AddLegend(_root, left, new Vector2(60f, -70f), Icons.Keypad, UiTheme.Accent, "Caja bloqueada");
             var hint = UiFactory.NewRect("Hint", _root, new Vector2(0.5f, 0f), centre, new Vector2(0f, 16f), new Vector2(900f, 30f));
             _hint = UiFactory.AddText(hint, "", 22, TextAnchor.MiddleCenter, UiTheme.TextFaint);
             ShowHint();

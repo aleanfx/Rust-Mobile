@@ -149,6 +149,7 @@ namespace Oxfall.Game
         private Airdrops _airdrops;
         /// <summary>Alone: when the next locked crate turns up (online the server says).</summary>
         private LockedCrates _lockedCrates;
+        private float _hackClock;
         /// <summary>What each locked crate was last seen doing (0 locked, 1 hacked, 2 open), to tell of changes once.</summary>
         private readonly System.Collections.Generic.Dictionary<int, int> _crateStates = new System.Collections.Generic.Dictionary<int, int>();
         private AirdropViews _airdropViews;
@@ -1511,7 +1512,7 @@ namespace Oxfall.Game
                 {
                     bool open = _settlement.IsCrateOpen(d.Id), hacked = _settlement.IsHacked(d.Id);
                     _mapPins.Add(new MapUi.Pin(new Vector3(d.X, d.Y, d.Z), Icons.Keypad, open ? UiTheme.Good : UiTheme.Accent,
-                        open ? "Caja abierta" : hacked ? "Hackeo " + LockedCrates.Clock(_settlement.HackLeft(d.Id)) : "Caja bloqueada"));
+                        hacked && !open ? LockedCrates.Clock(_settlement.HackLeft(d.Id)) : null));
                     continue;
                 }
                 if (d.Owner != owner) continue;
@@ -3286,7 +3287,7 @@ namespace Oxfall.Game
             foreach (var d in _settlement.Deployables)
             {
                 if (d.Kind != DeployableKind.LockedCrate || !_deployables.TryGetView(d.Id, out var view)) continue;
-                var at = view.transform.TransformPoint(MeshFactory.CrateTimer) + Vector3.up * 0.35f;
+                var at = view.transform.TransformPoint(MeshFactory.CrateTimer) + Vector3.up * 0.15f;
                 if (_settlement.IsCrateOpen(d.Id)) _nameTags.Show(_camera, at, "CAJA ABIERTA", 30f, UiTheme.Good);
                 else if (_settlement.IsHacked(d.Id)) _nameTags.Show(_camera, at, "HACKEO  " + LockedCrates.Clock(_settlement.HackLeft(d.Id)), 160f, UiTheme.Accent);
                 else _nameTags.Show(_camera, at, "CAJA BLOQUEADA", 45f, UiTheme.Bad);
@@ -3531,7 +3532,13 @@ namespace Oxfall.Game
                 _settlement.Tick(Time.deltaTime);
             }
             // Online, locked crates' countdowns run here between the server's word.
-            else if (_settlement != null) _settlement.CountDownHacks(Time.deltaTime);
+            // (By the real clock: a slow frame must not slow the countdown.)
+            else if (_settlement != null)
+            {
+                float now = Time.realtimeSinceStartup;
+                if (_hackClock > 0f) _settlement.CountDownHacks(now - _hackClock);
+                _hackClock = now;
+            }
             _respawnTimer += Time.deltaTime;
             if (_respawnTimer < RespawnTickSeconds || _world == null) return;
             CloseWhatIsFar();

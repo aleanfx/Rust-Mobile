@@ -467,6 +467,8 @@ namespace Oxfall.Game.Net
             var p = _player.position;
             if (!Online) return PlayerActions.Open(_settlement, _survivor, 0, id, p.x, p.y, p.z);
             if (_settlement.Container(id) == null) return ActionResult.NoPiece;
+            // A locked crate opens when the server says its hack is done, not before.
+            if (!_settlement.IsCrateOpen(id)) return ActionResult.CrateLocked;
             // The copy opens at once; what is inside arrives from the server a moment later.
             _survivor.Looting = id;
             _survivor.Shopping = _settlement.TryGet(id, out var d) && d.Kind == DeployableKind.VendingMachine && d.Owner != Owner;
