@@ -67,6 +67,7 @@ namespace Oxfall.Game
                 if (_title != null || !_settlement.Grid.FoundationNear(at.x, at.z, 4.5f) || Time.time - _baseToastAt < 12f) return;
                 _baseToastAt = Time.time;
                 _hud.ShowToast("¡Los cohetes del helicóptero revientan la base! La madera no aguanta: piedra o metal");
+                Debug.Log("[Oxfall] Toast: los cohetes revientan la base");
             };
             _heliViews.Downed += s =>
             {
