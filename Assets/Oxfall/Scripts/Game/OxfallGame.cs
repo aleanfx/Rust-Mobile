@@ -313,6 +313,7 @@ namespace Oxfall.Game
             _animalViews.BanditRadioed += at =>
             {
                 audio.PlayRadio(at);
+                Debug.Log("[Oxfall] Bandit radio heard");
                 // Near enough to hear it: a warning, now and then.
                 var me = _player.transform.position;
                 if ((at - me).sqrMagnitude < Bandits.RadioRange * Bandits.RadioRange && Time.time - _radioWarnedAt > 25f)
@@ -323,6 +324,7 @@ namespace Oxfall.Game
             };
             _animalViews.BanditBusy += (act, at) =>
             {
+                Debug.Log($"[Oxfall] Bandit busy: {act}");
                 if (act == BanditAct.Reloading) GameAudio.PlayAt(audio.Bank.GunReload, at, 0.85f, 2f, 30f, 0.05f);
                 else if (act == BanditAct.Healing) GameAudio.PlayAt(audio.Bank.Bandage, at, 0.8f, 2f, 22f, 0.05f);
             };
@@ -1759,7 +1761,7 @@ namespace Oxfall.Game
                         if (b.Kind != AnimalKind.Bandit) continue;
                         var at = new Vector3(b.X, b.Y, b.Z);
                         float d = Vector3.Distance(at, _player.transform.position);
-                        if (d < 90f) Debug.Log($"[Oxfall] Bandit {b.Id} {b.State} act={b.Act} rounds={b.Rounds} hp={b.Health:0} calls={b.Calls} healed={b.Healed} strafing={b.Strafing} ({d:0.0} m)");
+                        Debug.Log($"[Oxfall] Bandit {b.Id} {b.State} act={b.Act} rounds={b.Rounds} hp={b.Health:0} calls={b.Calls} healed={b.Healed} strafing={b.Strafing} ({d:0.0} m)");
                     }
                     break;
                 case "hurt-bandit":
