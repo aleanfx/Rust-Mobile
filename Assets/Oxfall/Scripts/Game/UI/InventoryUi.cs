@@ -168,7 +168,7 @@ namespace Oxfall.Game.UI
             bool trap = d.Kind == DeployableKind.ShotgunTrap, turret = d.Kind == DeployableKind.AutoTurret;
             bool shop = d.Kind == DeployableKind.VendingMachine;
             bool generator = d.Kind == DeployableKind.Generator;
-            _lootTitle.text = furnace ? "HORNO" : d.Kind == DeployableKind.SupplyDrop ? "SUMINISTROS" : d.Kind == DeployableKind.LockedCrate ? "CAJA MILITAR" : bag ? "BOLSA" : fire ? "FOGATA"
+            _lootTitle.text = furnace ? "HORNO" : d.Kind == DeployableKind.SupplyDrop ? "SUMINISTROS" : d.Kind == DeployableKind.LockedCrate ? "CAJA MILITAR" : d.Kind == DeployableKind.HeliCrate ? "CAJA DEL HELICÓPTERO" : bag ? "BOLSA" : fire ? "FOGATA"
                 : recycler ? "RECICLADORA" : cupboard ? "ARMARIO" : trap ? "TRAMPA" : turret ? "TORRETA" : shop ? "MÁQUINA"
                 : generator ? "GENERADOR" : "CAJA";
             _lootRows = 0;
@@ -357,10 +357,11 @@ namespace Oxfall.Game.UI
                 LayoutLoot(Mathf.Clamp(last / BoxColumns + 1, 1, MaxBoxSlots / BoxColumns));
                 _lightLabel.text = "TOMAR TODO";
                 _lightFill.color = UiTheme.Accent;
-                bool crate = _boxKind == DeployableKind.SupplyDrop || _boxKind == DeployableKind.LockedCrate;
+                bool crate = _boxKind == DeployableKind.SupplyDrop || _boxKind == DeployableKind.LockedCrate || _boxKind == DeployableKind.HeliCrate;
                 _lootStatus.text = stacks > _boxSlots.Length
                     ? $"Y {stacks - _boxSlots.Length} más debajo · {(crate ? "la caja desaparece en unos minutos" : "la bolsa se pudre en unos minutos")}"
                     : _boxKind == DeployableKind.LockedCrate ? "Hackeada · el mejor botín de la isla, para quien la defendió"
+                    : _boxKind == DeployableKind.HeliCrate ? "Del helicóptero derribado · botín militar entre los restos"
                     : crate ? "Lanzado desde el avión · para el primero que llegue"
                     : "Lo que llevaba al morir · la bolsa se pudre en unos minutos";
                 _lootStatus.color = UiTheme.TextMuted;

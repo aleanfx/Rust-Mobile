@@ -94,6 +94,7 @@ namespace Oxfall.Game.Rendering
         /// <summary>The ruins' recycler: chipped machine yellow.</summary>
         public Material RecyclerPaint { get; }
         /// <summary>Supply drops: the cargo plane's grey-olive paint, the crate's deep blue, and the parachute's orange and white.</summary>
+        public Material HeliPaint { get; }
         public Material PlanePaint { get; }
         public Material DropPaint { get; }
         public Material ChuteOrange { get; }
@@ -294,6 +295,9 @@ namespace Oxfall.Game.Rendering
             RecyclerPaint.SetFloat(Metallic, 0.25f);
             PlanePaint = Make("Plane paint", new Color(0.36f, 0.39f, 0.35f), 0.35f);
             PlanePaint.SetFloat(Metallic, 0.3f);
+            // The patrol helicopter: dark olive drab, a little worn.
+            HeliPaint = Make("Helicopter paint", new Color(0.2f, 0.22f, 0.17f), 0.32f);
+            HeliPaint.SetFloat(Metallic, 0.35f);
             DropPaint = Make("Supply crate paint", new Color(0.16f, 0.36f, 0.56f), 0.35f);
             DropPaint.SetFloat(Metallic, 0.2f);
             ChuteOrange = Make("Parachute orange", new Color(0.93f, 0.38f, 0.1f), 0.15f);

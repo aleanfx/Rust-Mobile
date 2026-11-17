@@ -385,6 +385,33 @@ namespace Oxfall.Game.World
                 new Color(0.86f, 0.13f, 0.08f, 0.85f), new Color(0.78f, 0.52f, 0.48f, 0f), 0.35f, 0.9f, 0f, 0f);
         }
 
+        /// <summary>
+        /// One puff of smoke pouring from something burning or badly hurt at <paramref name="at"/>: black and
+        /// oily, swelling and paling as it climbs (call several times a second). <paramref name="drift"/>: how it moves off.
+        /// </summary>
+        public void BurningSmoke(Vector3 at, Vector3 drift, float size = 1f)
+        {
+            if (!_puffsReal) return;
+            Spawn(false, at + Random.insideUnitSphere * 0.2f * size, drift + Vector3.up * Random.Range(1.2f, 2.2f) + Random.insideUnitSphere * 0.3f,
+                Random.Range(3f, 4.5f), 0.6f * size, Random.Range(3.5f, 5f) * size,
+                new Color(0.07f, 0.065f, 0.06f, 0.85f), new Color(0.3f, 0.29f, 0.28f, 0f), 0.9f, 0.6f, 0f, 0f);
+            if (Random.value < 0.35f)
+                Spawn(true, at + Random.insideUnitSphere * 0.25f * size, drift * 0.5f + Vector3.up * Random.Range(0.8f, 1.6f), Random.Range(0.25f, 0.45f),
+                    0.35f * size, 0.6f * size, new Color(1f, 0.7f, 0.3f, 1f), new Color(0.9f, 0.25f, 0.05f, 0f), 2f, 0.6f, 0f, 0f);
+        }
+
+        /// <summary>A rocket's exhaust at <paramref name="at"/> as it flies the way of <paramref name="velocity"/>: a hot spark and a grey wisp left behind.</summary>
+        public void RocketTrail(Vector3 at, Vector3 velocity)
+        {
+            if (!_puffsReal) return;
+            Spawn(true, at, -velocity * 0.05f, 0.12f, 0.18f, 0.08f, new Color(1f, 0.85f, 0.5f, 1f), new Color(1f, 0.4f, 0.1f, 0f), 0f, 0f, 0f, 0f);
+            Spawn(false, at, Random.insideUnitSphere * 0.3f, Random.Range(1.2f, 1.8f), 0.18f, Random.Range(0.9f, 1.3f),
+                new Color(0.55f, 0.53f, 0.5f, 0.55f), new Color(0.7f, 0.69f, 0.67f, 0f), 1.2f, 0.25f, 0f, 0f);
+        }
+
+        /// <summary>The camera shakes as if something heavy went off this close (0..1).</summary>
+        public void Shake(float amount) => _shake = Mathf.Max(_shake, Mathf.Clamp01(amount));
+
         /// <summary>A bullet or a pellet streaking from <paramref name="from"/> to <paramref name="to"/>: a hot spark that flies there.</summary>
         public void Bullet(Vector3 from, Vector3 to)
         {

@@ -66,6 +66,11 @@ namespace Oxfall.Game.Audio
         /// <summary>A cargo plane's four engines droning, heard from far off (loops).</summary>
         public AudioClip PlaneLoop { get; }
 
+        /// <summary>The patrol helicopter: its blades' heavy thudding over a turbine's whine (loops), a round of its gun, a rocket's rush.</summary>
+        public AudioClip RotorLoop { get; }
+        public AudioClip HeliGun { get; }
+        public AudioClip RocketWhoosh { get; }
+
         /// <summary>An outboard motor's two-stroke putter (a loop; its pitch rises with the boat's speed).</summary>
         public AudioClip EngineLoop { get; }
 
@@ -227,6 +232,15 @@ namespace Oxfall.Game.Audio
             MachineLoop = MakeLoop("machine", 2f, MachineSample);
             SirenLoop = MakeLoop("siren", 2f, SirenSample);
             PlaneLoop = MakeLoop("plane", 4f, PlaneSample);
+            RotorLoop = MakeLoop("rotor", 2f, RotorSample);
+            HeliGun = Make("heli gun", 0.32f, (t, i) =>
+                Noise() * Env(t, 0.0001f, 0.008f) * 1.4f + Thump(t, 140f, 0.03f) * 0.9f + Dark(0.2f) * Env(t, 0.002f, 0.12f) * 0.5f);
+            RocketWhoosh = Make("rocket", 1.4f, (t, i) =>
+            {
+                // A pop as it leaves the tube, then a roaring hiss that fades as it goes.
+                _rush += (Noise() - _rush) * 0.35f;
+                return Thump(t, 90f, 0.05f) * 0.8f + _rush * Env(t, 0.03f, 0.9f) * 1.1f + Noise() * Env(t, 0.01f, 0.5f) * 0.25f;
+            });
             EngineLoop = MakeLoop("engine", 2f, EngineSample);
             RainLoop = MakeLoop("rain", 5f, RainSample);
             Thunder = Make("thunder", 7f, ThunderSample);
@@ -419,6 +433,20 @@ namespace Oxfall.Game.Audio
             _drone += (Noise() - _drone) * 0.05f;
             float beat = 0.8f + 0.2f * Mathf.Sin(t * Mathf.PI * 2f * 1.5f);
             return (props + _drone * 0.9f) * beat;
+        }
+
+        private float _slap, _rush;
+        private float RotorSample(float t, int i)
+        {
+            // Five blade passes a second (whole cycles in the loop's two seconds): each a heavy thud of
+            // low tone and chopped air, over the turbine's steady whine and a rumble.
+            float pass = t % 0.2f;
+            _slap += (Noise() - _slap) * 0.18f;
+            float thud = Mathf.Exp(-pass * 26f);
+            float chop = (Tone(pass, 48f) * 0.9f + _slap * 1.1f) * thud;
+            float whine = Tone(t, 1150f) * 0.035f + Tone(t, 2300f) * 0.015f;
+            _drone += (Noise() - _drone) * 0.04f;
+            return chop + whine + _drone * 0.5f;
         }
 
         private float _exhaust;

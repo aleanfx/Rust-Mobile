@@ -26,7 +26,7 @@ namespace Oxfall.Game
     /// Builds and runs a game session: the world, the player, the controls and the HUD. Everything
     /// is made here in code, so the scene file stays empty and there is nothing to set up by hand.
     /// </summary>
-    public sealed class OxfallGame : MonoBehaviour
+    public sealed partial class OxfallGame : MonoBehaviour
     {
         /// <summary>The island's seed. A weekly wipe will hand out a new one from the server.</summary>
         public const int DefaultSeed = 20261113;
@@ -550,6 +550,8 @@ namespace Oxfall.Game
                 audio.Play(SoundCue.Accepted);
             };
             _actions.ChargeBlast += OnSoloBlast;
+            // The patrol helicopter.
+            CreateHelis(materials, audio);
 
             // The use button: doors, boxes, furnaces, cupboards.
             _interactor = playerObject.AddComponent<Interactor>();
@@ -762,6 +764,7 @@ namespace Oxfall.Game
             _net.MinicoptersSeen += copters => _copters.Apply(copters, _net.PlayerId);
             _net.HorsesSeen += horses => _horses.Apply(horses, _net.PlayerId);
             _net.AirdropSeen += drop => _airdropViews.Add(drop);
+            ListenToHelis();
             _net.WeatherSeen += (rain, fog) => _weather.SetTarget(rain, fog);
             _net.Broke += ToolBroke;
             // What this player has learned; one more than before is one just learned.
@@ -1088,6 +1091,7 @@ namespace Oxfall.Game
             if (_nameTags == null) return;
             _nameTags.Begin();
             CrateTags();
+            HeliCrateTags();
             if (_net != null && _net.State == NetClient.Status.Online)
             {
                 if (_net.OnlineCount != _shownOnline)
@@ -1521,6 +1525,7 @@ namespace Oxfall.Game
                 else if (d.Kind == DeployableKind.ToolCupboard)
                     _mapPins.Add(new MapUi.Pin(new Vector3(d.X, d.Y, d.Z), Icons.Home, new Color(1f, 0.82f, 0.4f)));
             }
+            HeliPins(_mapPins);
             if (_diedAt.HasValue) _mapPins.Add(new MapUi.Pin(_diedAt.Value, Icons.Close, UiTheme.Bad, "Moriste aquí"));
             // Teammates, where they are (asleep: dimmed).
             if (_team != null)
@@ -1795,6 +1800,7 @@ namespace Oxfall.Game
         {
             // Test commands move the player at will; the server is told so it does not pull them back.
             _net?.MarkTeleport();
+            if (HeliCommand(command)) return;
             switch (command)
             {
                 case "settings": _hud.ToggleSettings(); break;
@@ -3481,6 +3487,7 @@ namespace Oxfall.Game
             TickNet();
             TickAnimals(Time.deltaTime);
             TickAirdrops(Time.deltaTime);
+            TickHelis(Time.deltaTime);
             TickBoats(Time.deltaTime);
             TickCopters(Time.deltaTime);
             TickHorses(Time.deltaTime);

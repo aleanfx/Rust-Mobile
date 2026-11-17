@@ -186,6 +186,8 @@ namespace Oxfall.Game.Construction
                         else if (_settlement.IsHacked(d.Id)) _hud.SetUseButton("HACKEO " + LockedCrates.Clock(_settlement.HackLeft(d.Id)), Icons.Keypad);
                         else _hud.SetUseButton("HACKEAR", Icons.Keypad);
                     }
+                    else if (d.Kind == DeployableKind.HeliCrate)
+                        _hud.SetUseButton(_settlement.IsCrateOpen(d.Id) ? "CAJA DEL HELI" : "ARDIENDO " + LockedCrates.Clock(_settlement.HackLeft(d.Id)), _settlement.IsCrateOpen(d.Id) ? Icons.Box : Icons.Flame);
                     else if (d.Kind == DeployableKind.Furnace) _hud.SetUseButton("HORNO", Icons.Flame);
                     else if (d.Kind == DeployableKind.Campfire) _hud.SetUseButton("FOGATA", Icons.Flame);
                     else if (d.Kind == DeployableKind.Recycler) _hud.SetUseButton("RECICLAR", Icons.Recycle);
@@ -329,6 +331,12 @@ namespace Oxfall.Game.Construction
                     if (_settlement.TryGet(_deployable, out var box) && box.Kind == DeployableKind.LockedCrate && !_settlement.IsCrateOpen(box.Id))
                     {
                         Hack(box.Id);
+                        _timer = 0f;
+                        break;
+                    }
+                    if (box.Kind == DeployableKind.HeliCrate && !_settlement.IsCrateOpen(box.Id))
+                    {
+                        _hud.ShowToast($"Está ardiendo: se podrá abrir en {LockedCrates.Clock(_settlement.HackLeft(box.Id))}");
                         _timer = 0f;
                         break;
                     }

@@ -509,6 +509,12 @@ namespace Oxfall.Game.Player
             var player = collider != null ? collider.GetComponent<Net.PlayerTag>() : null;
             var animal = collider != null ? collider.GetComponent<AnimalTag>() : null;
             var sleeper = collider != null ? collider.GetComponent<Net.SleeperTag>() : null;
+            var heli = collider != null ? collider.GetComponent<HeliTag>() : null;
+            if (heli != null)
+            {
+                Actions.ArrowHit(ArrowTarget.Heli, heli.Id, heli.Rotor);
+                return;
+            }
             bool head = player != null && IsHead(collider, point);
             if (head) Sound?.Invoke(SoundCue.Headshot);
             if (player != null) Actions.ArrowHit(ArrowTarget.Player, player.Id, head);
@@ -652,7 +658,20 @@ namespace Oxfall.Game.Player
                     var player = hit.collider.GetComponent<Net.PlayerTag>();
                     var animal = player == null ? hit.collider.GetComponent<AnimalTag>() : null;
                     var sleeper = player == null && animal == null ? hit.collider.GetComponent<Net.SleeperTag>() : null;
+                    var heli = player == null && animal == null && sleeper == null ? hit.collider.GetComponent<HeliTag>() : null;
                     bool flesh = player != null || animal != null || sleeper != null;
+                    if (hits != null && heli != null)
+                    {
+                        // Its armour: sparks off the metal; a round in a rotor counts as a head shot.
+                        var key = (ArrowTarget.Heli, heli.Id);
+                        hits.TryGetValue(key, out int n);
+                        hits[key] = n + 1;
+                        if (headHits != null && heli.Rotor)
+                        {
+                            headHits.TryGetValue(key, out int h);
+                            headHits[key] = h + 1;
+                        }
+                    }
                     if (hits != null && flesh)
                     {
                         var key = player != null ? (ArrowTarget.Player, (int)player.Id)

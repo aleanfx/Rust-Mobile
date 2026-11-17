@@ -37,6 +37,8 @@ namespace Oxfall.Server
         private readonly ServerState _state;
         private readonly object _lock = new object();
         private readonly Dictionary<ushort, Session> _sessions = new Dictionary<ushort, Session>();
+        /// <summary>Whether helicopters were sent last time (so everyone hears once that the last one went).</summary>
+        private bool _helisSent;
         private readonly string[] _worn = new string[Inventory.WearSlots];
         private readonly Stopwatch _clock = Stopwatch.StartNew();
         private readonly ILogger _log;
@@ -242,6 +244,20 @@ namespace Oxfall.Server
                         _log.LogInformation("Supply plane {Id}: the crate comes down at ({X:0}, {Z:0})", drop.Id, drop.DropX, drop.DropZ);
                     }
                     _world.AirdropsStarted.Clear();
+                    // The patrol helicopters' rounds, rockets and bursts, in batches; who brought one down, for everyone.
+                    for (int from = 0; from < _world.HeliShots.Count; from += 60)
+                    {
+                        Messages.HeliShots(writer, _world.HeliShots, from, Math.Min(60, _world.HeliShots.Count - from));
+                        Broadcast(writer.ToArray());
+                    }
+                    _world.HeliShots.Clear();
+                    foreach (var (heli, by) in _world.HelisDowned)
+                    {
+                        Messages.ChatLine(writer, 0, "", by != null ? $"{by} derribó el helicóptero de patrulla" : "El helicóptero de patrulla cayó", false);
+                        Broadcast(writer.ToArray());
+                        _log.LogInformation("Patrol helicopter {Id} shot down by {By}", heli, by ?? "nobody");
+                    }
+                    _world.HelisDowned.Clear();
                     // Charges that went off: the bang, who it hurt; what fell follows with the announcements.
                     foreach (var blast in _world.Blasts)
                     {
@@ -337,6 +353,13 @@ namespace Oxfall.Server
                     {
                         _world.MinicoptersChanged = false;
                         Messages.Minicopters(writer, _world.Minicopters);
+                        Broadcast(writer.ToArray());
+                    }
+                    // The patrol helicopters ten times a second while any is about.
+                    if (ticks % (Protocol.TickRate / 10) == 0 && (_world.Helis.Count > 0 || _helisSent))
+                    {
+                        _helisSent = _world.Helis.Count > 0;
+                        Messages.Helis(writer, _world.Helis.All);
                         Broadcast(writer.ToArray());
                     }
                     // The horses the same way.
@@ -550,7 +573,7 @@ namespace Oxfall.Server
                         Messages.SleeperHit(writer, target, id, session.Record.Name, damage, killed);
                         Broadcast(writer.ToArray());
                     }
-                    else
+                    else if (kind == ArrowTarget.Animal)
                     {
                         Messages.AnimalHit(writer, target, blow, damage);
                         session.Connection.Send(writer.ToArray());
@@ -582,11 +605,12 @@ namespace Oxfall.Server
                         Messages.SleeperHit(writer, target, id, session.Record.Name, damage, killed);
                         Broadcast(writer.ToArray());
                     }
-                    else
+                    else if (kind == ArrowTarget.Animal)
                     {
                         Messages.AnimalHit(writer, target, blow, damage);
                         session.Connection.Send(writer.ToArray());
                     }
+                    // A helicopter's health follows in the next Helis.
                     break;
                 }
                 case MessageType.Reload:

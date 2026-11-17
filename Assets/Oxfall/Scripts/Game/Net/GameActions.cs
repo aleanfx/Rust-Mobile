@@ -116,6 +116,29 @@ namespace Oxfall.Game.Net
         /// <summary>The island's animals when playing alone (online the server keeps them).</summary>
         public Fauna Fauna { get; set; }
 
+        /// <summary>Alone: the patrol helicopters (online the server's).</summary>
+        public PatrolHelis Helis { get; set; }
+
+        /// <summary>This player's shot or arrow struck a helicopter: which, roughly how much (a rotor counts more), and whether it came down.</summary>
+        public event System.Action<int, float, bool> HeliHit;
+
+        /// <summary>A helicopter struck: alone it is hurt here; online the server judges it and this only says so.</summary>
+        private void StrikeHeli(int id, float body, float rotor, Vector3 from)
+        {
+            float damage = body + rotor * PatrolHelis.RotorMultiplier;
+            if (Online || Helis == null)
+            {
+                HeliHit?.Invoke(id, damage, false);
+                return;
+            }
+            bool down = Helis.Hit(id, body, false, OxfallSoloKey, from.x, from.y, from.z, Time.time)
+                | Helis.Hit(id, rotor, true, OxfallSoloKey, from.x, from.y, from.z, Time.time);
+            HeliHit?.Invoke(id, damage, down);
+        }
+
+        /// <summary>The player's key among the helicopter's targets alone (0 means nobody to it).</summary>
+        public const int OxfallSoloKey = 1;
+
         /// <summary>The hotbar, for which tool is in hand when one wears (alone; online the server wears it).</summary>
         public Hotbar Hotbar { get; set; }
 
@@ -217,6 +240,9 @@ namespace Oxfall.Game.Net
             var state = GunState(tool);
             if (!state.CanFire(gun, Time.time)) return false;
             state.Fire(gun, Time.time);
+            _lastGun = gun;
+            _lastGunFrom = origin;
+            _lastGunAt = Time.time;
             if (Online)
             {
                 _net.SendFire(tool, origin, yaw, pitch, seed);
@@ -224,15 +250,22 @@ namespace Oxfall.Game.Net
             }
             Inventory.Remove(gun.Ammo, 1);
             Spend(tool);
-            _lastGun = gun;
-            _lastGunFrom = origin;
-            _lastGunAt = Time.time;
             return true;
         }
 
         /// <summary>Some pellets of this player's last shot hit something (a player online, an animal, a sleeper).</summary>
         public void GunHit(ArrowTarget kind, int target, int pellets, int headPellets = 0)
         {
+            if (kind == ArrowTarget.Heli)
+            {
+                if (Online) _net.SendGunHit(kind, target, pellets, headPellets);
+                if (_lastGun == null || Time.time - _lastGunAt > 1f) return;
+                float range = 50f;
+                if (!Online && Helis != null && Helis.TryGet(target, out var h)) range = Vector3.Distance(_lastGunFrom, new Vector3(h.X, h.Y, h.Z));
+                int head = Mathf.Clamp(headPellets, 0, pellets);
+                StrikeHeli(target, Firearms.Damage(_lastGun, pellets - head, range), Firearms.Damage(_lastGun, head, range), _lastGunFrom);
+                return;
+            }
             if (Online)
             {
                 _net.SendGunHit(kind, target, pellets, headPellets);
@@ -324,10 +357,16 @@ namespace Oxfall.Game.Net
             if (Online)
             {
                 _net.SendArrowHit(kind, target, head);
+                if (kind == ArrowTarget.Heli) HeliHit?.Invoke(target, 0f, false);
                 return;
             }
             if (_shots.Count == 0) return;
             var from = _shots.Dequeue();
+            if (kind == ArrowTarget.Heli)
+            {
+                StrikeHeli(target, head ? 0f : from.w, head ? from.w : 0f, new Vector3(from.x, from.y, from.z));
+                return;
+            }
             if (kind != ArrowTarget.Animal || Fauna == null || !Fauna.TryGet(target, out var animal) || animal.IsDead) return;
             float damage = Mathf.Min(from.w, animal.Health);
             bool killed = Fauna.Hit(target, from.w, 0, from.x, from.z);

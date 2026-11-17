@@ -130,6 +130,15 @@ namespace Oxfall.Game.Net
 
         /// <summary>Every minicopter, as the server last told.</summary>
         public event Action<List<MinicopterSnap>> MinicoptersSeen;
+
+        /// <summary>Every patrol helicopter, ten times a second while any is about (empty once the last is gone).</summary>
+        public event Action<List<HeliSnap>> HelisSeen;
+
+        /// <summary>Something a helicopter fired, with the damage it did and whether it killed.</summary>
+        public event Action<Oxfall.Core.Rules.HeliShot, int, bool> HeliFired;
+
+        private readonly List<HeliSnap> _helis = new List<HeliSnap>();
+        private readonly List<(Oxfall.Core.Rules.HeliShot Shot, int Damage, bool Killed)> _heliShots = new List<(Oxfall.Core.Rules.HeliShot, int, bool)>();
         private readonly List<SleeperSnap> _sleepers = new List<SleeperSnap>();
 
         private readonly string[] _outfit = new string[Inventory.WearSlots];
@@ -667,6 +676,18 @@ namespace Oxfall.Game.Net
                 case MessageType.Horses:
                     Messages.ReadHorses(reader, _horses);
                     HorsesSeen?.Invoke(_horses);
+                    break;
+                case MessageType.Helis:
+                    Messages.ReadHelis(reader, _helis);
+                    HelisSeen?.Invoke(_helis);
+                    break;
+                case MessageType.HeliShots:
+                    Messages.ReadHeliShots(reader, _heliShots);
+                    foreach (var (shot, damage, killed) in _heliShots)
+                    {
+                        if (shot.Target != 0 && damage > 0 && _players.TryGetValue((ushort)shot.Target, out var hit)) hit.Flinch();
+                        HeliFired?.Invoke(shot, damage, killed);
+                    }
                     break;
                 case MessageType.Minicopters:
                     Messages.ReadMinicopters(reader, _copters);

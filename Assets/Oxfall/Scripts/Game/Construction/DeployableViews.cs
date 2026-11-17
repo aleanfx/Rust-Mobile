@@ -205,6 +205,12 @@ namespace Oxfall.Game.Construction
                 Mesh = MeshFactory.LockedCrate(),
                 Materials = new[] { materials.CratePaint, materials.Steel, materials.LockBody, materials.LedRed, materials.WarnYellow, materials.LedRed },
             };
+            // And a crate thrown from a downed helicopter, scorched at the foot.
+            _models[DeployableKind.HeliCrate] = new ItemModel
+            {
+                Mesh = MeshFactory.HeliCrate(),
+                Materials = new[] { materials.CratePaint, materials.Steel, materials.WarnYellow, materials.Char },
+            };
             _crateScreenLocked = materials.SirenOff;
             _crateScreenWorking = materials.LedGreen;
             // Crops: the plant as it will grow (the ghost shows it full size), on a mound of dug earth.
@@ -309,6 +315,8 @@ namespace Oxfall.Game.Construction
                 crate.Beep = at => CrateBeeped?.Invoke(at);
                 crate.Set(CrateMode(d.Id));
             }
+            else if (d.Kind == DeployableKind.HeliCrate)
+                Changed(d.Id);
             else if (d.Kind == DeployableKind.Recycler)
             {
                 var wheel = new GameObject("Flywheel");
@@ -601,6 +609,18 @@ namespace Oxfall.Game.Construction
                 if (mode == CrateView.Mode.Open && crate.State != CrateView.Mode.Open)
                     CrateOpened?.Invoke(go.transform.TransformPoint(MeshFactory.CrateTimer));
                 crate.Set(mode);
+                return;
+            }
+            if (d.Kind == DeployableKind.HeliCrate)
+            {
+                // Burning until it cools enough to open.
+                bool hot = !_settlement.IsCrateOpen(id);
+                if (hot && !_fires.ContainsKey(id)) Light(id, go, new Vector3(0.15f, 0.62f, 0f), 2.4f, 4, 8f, 2.2f);
+                else if (!hot && _fires.TryGetValue(id, out var flames))
+                {
+                    _fires.Remove(id);
+                    UnityEngine.Object.Destroy(flames.gameObject);
+                }
                 return;
             }
             if (d.Kind != DeployableKind.Furnace) return;
