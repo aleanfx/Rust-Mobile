@@ -270,6 +270,140 @@ namespace Oxfall.Core.Rules
             }
         }
 
+        /// <summary>
+        /// A patrol helicopter's rocket bursting at (x, y, z): every wall, doorway, window, floor, roof,
+        /// foundation, stair and door within <see cref="RocketReach"/> that no other wall or roof hides
+        /// from the burst loses health by how close it is and what it is made of (twig and wood go fast,
+        /// stone holds, metal shrugs it off), and what is set down near it takes half a charge's splash.
+        /// What changed goes into <paramref name="changes"/> as health ops. How many pieces it struck.
+        /// </summary>
+        public static int RocketBlast(Settlement settlement, float x, float y, float z, List<BuildOp> changes)
+        {
+            var grid = settlement.Grid;
+            var hits = new List<(ChargeTarget Target, float Damage)>();
+            foreach (var piece in grid.Pieces)
+            {
+                float d = NearestOn(grid, piece, x, y, z, out float px, out float py, out float pz);
+                float amount = DamageToPieceFromRocket(d);
+                if (amount <= 0f || !grid.TryGetTier(piece, out var tier)) continue;
+                if (Hidden(settlement, x, y, z, px, py, pz, d)) continue;
+                hits.Add((ChargeTarget.OnPiece(piece), amount * RocketShare(tier)));
+            }
+            foreach (var door in grid.Doors)
+            {
+                var piece = PieceRef.OnEdge(door.Key, PieceType.Doorway);
+                float d = NearestOn(grid, piece, x, y, z, out float px, out float py, out float pz);
+                float amount = DamageToPieceFromRocket(d);
+                if (amount <= 0f || Hidden(settlement, x, y, z, px, py, pz, d)) continue;
+                hits.Add((ChargeTarget.OnDoor(door.Key), amount * RocketDoorShare(grid.DoorKindOf(door.Key))));
+            }
+            int struck = 0;
+            foreach (var (target, damage) in hits)
+                if (Blast(grid, target, changes, damage)) struck++;
+            Splash(settlement, x, y, z, changes, RocketSplashShare);
+            return struck;
+        }
+
+        /// <summary>How far a rocket's burst reaches what is built, and what it takes off a twig or wooden piece right next to it.</summary>
+        public const float RocketReach = 3.2f, RocketDamage = 90f;
+
+        /// <summary>The share of a satchel's harm a rocket does to what is set down near it.</summary>
+        public const float RocketSplashShare = 0.5f;
+
+        /// <summary>Health a rocket takes off a twig or wooden piece this far from it (its nearest point), before its tier.</summary>
+        public static float DamageToPieceFromRocket(float distance)
+        {
+            if (distance >= RocketReach) return 0f;
+            float t = Math.Max(0f, distance - 0.6f) / (RocketReach - 0.6f);
+            return RocketDamage * (1f - t * 0.75f);
+        }
+
+        /// <summary>How much of a rocket's bite a piece of this tier takes: a wooden wall falls to a volley, a stone one to three, metal holds.</summary>
+        public static float RocketShare(BuildingTier tier)
+        {
+            switch (tier)
+            {
+                case BuildingTier.Stone: return 0.45f;
+                case BuildingTier.Metal: return 0.25f;
+                default: return 1f;
+            }
+        }
+
+        public static float RocketDoorShare(DoorKind kind) => kind == DoorKind.Metal ? 0.4f : 1f;
+
+        /// <summary>Whether another wall or roof stands between a burst and the nearest point of a piece (a hair towards the burst, so the piece does not hide itself).</summary>
+        private static bool Hidden(Settlement settlement, float x, float y, float z, float px, float py, float pz, float d)
+        {
+            if (d < 0.25f) return false;
+            float k = 0.15f / d;
+            return Shielded(settlement, x, y, z, px + (x - px) * k, py + (y - py) * k, pz + (z - pz) * k);
+        }
+
+        /// <summary>The nearest point of a piece to (x, y, z), and how far it is.</summary>
+        public static float NearestOn(BuildingGrid grid, PieceRef piece, float x, float y, float z, out float px, out float py, out float pz)
+        {
+            const float S = BuildingGrid.CellSize, H = BuildingGrid.WallHeight;
+            if (piece.IsEdge)
+            {
+                var e = piece.Edge;
+                float y0 = grid.EdgeBaseHeight(e);
+                py = Clamp(y, y0, y0 + H);
+                if (e.Axis == EdgeAxis.AlongX)
+                {
+                    px = Clamp(x, e.X * S, (e.X + 1) * S);
+                    pz = e.Z * S;
+                }
+                else
+                {
+                    px = e.X * S;
+                    pz = Clamp(z, e.Z * S, (e.Z + 1) * S);
+                }
+            }
+            else
+            {
+                var c = piece.Cell;
+                px = Clamp(x, c.X * S, (c.X + 1) * S);
+                pz = Clamp(z, c.Z * S, (c.Z + 1) * S);
+                grid.TryGetFoundationTop(c, out float top);
+                switch (piece.Type)
+                {
+                    case PieceType.Foundation:
+                        py = Clamp(y, top - 1f, top);
+                        break;
+                    case PieceType.Roof:
+                        py = top + (c.Level + 1) * H + BuildingGrid.FloorThickness * 0.5f;
+                        break;
+                    default:
+                        float base0 = top + c.Level * H;
+                        py = Clamp(y, base0, base0 + H);
+                        break;
+                }
+            }
+            return Distance(x, y, z, px, py, pz);
+        }
+
+        /// <summary>
+        /// Where something flying straight from (x0, y0, z0) towards (x1, y1, z1) first meets a wall, a
+        /// shut door, a roof or a high wall (a hair short of it); the end itself if nothing is in the way.
+        /// </summary>
+        public static void FirstStop(Func<float, float, float, float, float, float, bool> shielded,
+            float x0, float y0, float z0, ref float x1, ref float y1, ref float z1)
+        {
+            if (shielded == null || !shielded(x0, y0, z0, x1, y1, z1)) return;
+            float lo = 0f, hi = 1f, length = Distance(x0, y0, z0, x1, y1, z1);
+            while ((hi - lo) * length > 0.05f)
+            {
+                float mid = (lo + hi) * 0.5f;
+                if (shielded(x0, y0, z0, x0 + (x1 - x0) * mid, y0 + (y1 - y0) * mid, z0 + (z1 - z0) * mid)) hi = mid;
+                else lo = mid;
+            }
+            x1 = x0 + (x1 - x0) * lo;
+            y1 = y0 + (y1 - y0) * lo;
+            z1 = z0 + (z1 - z0) * lo;
+        }
+
+        private static float Clamp(float v, float lo, float hi) => v < lo ? lo : v > hi ? hi : v;
+
         /// <summary>How far from a high wall a blast still bites it, and how much at full strength (a charge stuck to it).</summary>
         public const float WallReach = 2.5f;
 
@@ -342,15 +476,23 @@ namespace Oxfall.Core.Rules
                 float t0 = (float)i / steps, t1 = (float)(i + 1) / steps;
                 float xa = x0 + (x1 - x0) * t0, ya = y0 + (y1 - y0) * t0, za = z0 + (z1 - z0) * t0;
                 float xb = x0 + (x1 - x0) * t1, yb = y0 + (y1 - y0) * t1, zb = z0 + (z1 - z0) * t1;
-                var column = BuildingGrid.CellAt((xa + xb) * 0.5f, (za + zb) * 0.5f);
-                if (!grid.TryGetFoundationTop(column, out float top)) continue;
                 float low = Math.Min(ya, yb), high = Math.Max(ya, yb);
-                // The roof over storey L lies at top + (L + 1) × wall height, a floor's thickness deep.
-                for (int level = 0; level <= BuildingGrid.MaxLevel; level++)
+                // Either end of the step may stand over a building (a step can straddle a square's edge).
+                for (int end = 0; end < 2; end++)
                 {
-                    float plane = top + (level + 1) * BuildingGrid.WallHeight + BuildingGrid.FloorThickness * 0.5f;
-                    if (plane > high) break;
-                    if (plane >= low && grid.HasRoof(new Cell(column.X, column.Z, level))) return true;
+                    var column = BuildingGrid.CellAt(end == 0 ? xa : xb, end == 0 ? za : zb);
+                    if (!grid.TryGetFoundationTop(column, out float top)) continue;
+                    // The roof over storey L lies at top + (L + 1) × wall height, a floor's thickness deep.
+                    for (int level = 0; level <= BuildingGrid.MaxLevel; level++)
+                    {
+                        float plane = top + (level + 1) * BuildingGrid.WallHeight + BuildingGrid.FloorThickness * 0.5f;
+                        if (plane > high) break;
+                        if (plane < low || !grid.HasRoof(new Cell(column.X, column.Z, level))) continue;
+                        // Where the line meets that plane: over this square?
+                        float u = Math.Abs(yb - ya) < 1e-6f ? 0.5f : (plane - ya) / (yb - ya);
+                        var at = BuildingGrid.CellAt(xa + (xb - xa) * u, za + (zb - za) * u);
+                        if (at.X == column.X && at.Z == column.Z) return true;
+                    }
                 }
             }
             return false;

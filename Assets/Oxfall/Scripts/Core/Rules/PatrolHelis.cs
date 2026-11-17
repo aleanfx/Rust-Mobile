@@ -153,6 +153,9 @@ namespace Oxfall.Core.Rules
         /// <summary>Whether a wall, a floor or a high wall stands between two points (none known: nothing does).</summary>
         public Func<float, float, float, float, float, float, bool> Shielded { get; set; }
 
+        /// <summary>A rocket burst here (the heli's id, where): what is built round it takes the blast (none set: nothing does).</summary>
+        public Action<int, float, float, float> RocketBurst { get; set; }
+
         public PatrolHelis(IslandGround ground, int seed, float now = 0f)
         {
             _ground = ground;
@@ -554,7 +557,15 @@ namespace Oxfall.Core.Rules
 
         private void Fire(PatrolHeli h, float now, IReadOnlyList<Fauna.Prey> players, List<HeliShot> shots)
         {
-            if (!h.Sees || !TryFind(players, h.Target, out var t)) return;
+            if (!TryFind(players, h.Target, out var t)) return;
+            if (!h.Sees)
+            {
+                // Someone who shot at it from cover: it cannot see them, but it saw where the shots came
+                // from, and it rockets the walls round that spot, as on the PC game.
+                if (h.Target == h.Aggro && now < h.AggroUntil && now - h.LastSeen < LoseSeconds)
+                    Rockets(h, now, h.SeenX, h.SeenY, h.SeenZ, shots);
+                return;
+            }
             float distance = Distance(h, t);
             float aim = Math.Abs(DeltaAngle(h.Yaw, Heading(t.X - h.X, t.Z - h.Z)));
             Muzzle(h, out float mx, out float my, out float mz);
@@ -582,7 +593,14 @@ namespace Oxfall.Core.Rules
                 }
             }
 
-            // Rockets: a volley now and then, a rocket at a time.
+            Rockets(h, now, t.X, t.Y, t.Z, shots);
+        }
+
+        /// <summary>A volley now and then at about (tx, ty, tz), a rocket at a time; each bursts on the first wall or roof in its way.</summary>
+        private void Rockets(PatrolHeli h, float now, float tx, float ty, float tz, List<HeliShot> shots)
+        {
+            float distance = Distance(h, tx, ty, tz);
+            float aim = Math.Abs(DeltaAngle(h.Yaw, Heading(tx - h.X, tz - h.Z)));
             if (h.RocketsLeft == 0 && now >= h.NextVolley && distance <= RocketRange && aim < 25f)
             {
                 h.RocketsLeft = VolleyRockets;
@@ -595,12 +613,13 @@ namespace Oxfall.Core.Rules
                 h.NextRocket += RocketGap;
                 double a = _random.NextDouble() * Math.PI * 2.0;
                 float r = (float)_random.NextDouble() * 4f;
-                float x = t.X + (float)Math.Sin(a) * r, z = t.Z + (float)Math.Cos(a) * r;
-                float y = Math.Max(_ground.Height(x, z), t.Y) + 0.2f;
+                float x = tx + (float)Math.Sin(a) * r, z = tz + (float)Math.Cos(a) * r;
+                float y = Math.Max(_ground.Height(x, z), ty) + 0.2f;
                 // From the pod on one side, then the other.
                 double yaw = h.Yaw * Math.PI / 180.0;
                 float sideways = h.RocketsLeft % 2 == 0 ? 1.6f : -1.6f;
                 float fx = h.X + (float)Math.Cos(yaw) * sideways, fz = h.Z - (float)Math.Sin(yaw) * sideways, fy = h.Y - 0.9f;
+                Explosives.FirstStop(Shielded, fx, fy, fz, ref x, ref y, ref z);
                 shots?.Add(new HeliShot(h.Id, HeliShotKind.Rocket, fx, fy, fz, x, y, z, 0, 0f));
                 float flight = (float)Math.Sqrt((x - fx) * (x - fx) + (y - fy) * (y - fy) + (z - fz) * (z - fz)) / RocketSpeed;
                 _rockets.Add((now + flight, h.Id, x, y, z));
@@ -609,6 +628,7 @@ namespace Oxfall.Core.Rules
 
         private void Burst(int heli, float x, float y, float z, IReadOnlyList<Fauna.Prey> players, List<HeliShot> shots)
         {
+            RocketBurst?.Invoke(heli, x, y, z);
             if (players == null) return;
             foreach (var p in players)
             {
@@ -656,6 +676,12 @@ namespace Oxfall.Core.Rules
         private static float Distance(PatrolHeli h, Fauna.Prey p)
         {
             float dx = h.X - p.X, dy = h.Y - p.Y, dz = h.Z - p.Z;
+            return (float)Math.Sqrt(dx * dx + dy * dy + dz * dz);
+        }
+
+        private static float Distance(PatrolHeli h, float x, float y, float z)
+        {
+            float dx = h.X - x, dy = h.Y - y, dz = h.Z - z;
             return (float)Math.Sqrt(dx * dx + dy * dy + dz * dz);
         }
 

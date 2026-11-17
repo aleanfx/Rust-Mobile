@@ -64,6 +64,8 @@ namespace Oxfall.Game.World
 
         /// <summary>A helicopter showed up over the island (not one already there when this machine joined), or went down.</summary>
         public event Action<HeliSnap> Arrived, Downed;
+        /// <summary>A rocket reached where it bursts (on a wall or roof in its way, or the ground).</summary>
+        public event Action<Vector3> RocketLanded;
 
         /// <summary>Where a player is (their key), for the searchlight to follow; null if unknown.</summary>
         public Func<int, Vector3?> Locate { get; set; }
@@ -261,6 +263,7 @@ namespace Oxfall.Game.World
                 }
                 if (t < 1f) continue;
                 _effects?.Blast(_blastIds++, r.To);
+                RocketLanded?.Invoke(r.To);
                 UnityEngine.Object.Destroy(r.T.gameObject);
                 _rockets.RemoveAt(i);
             }

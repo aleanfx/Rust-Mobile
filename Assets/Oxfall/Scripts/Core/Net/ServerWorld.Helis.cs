@@ -26,6 +26,8 @@ namespace Oxfall.Core.Net
             Helis = new PatrolHelis(Ground, seed)
             {
                 Shielded = (x0, y0, z0, x1, y1, z1) => Explosives.Shielded(Settlement, x0, y0, z0, x1, y1, z1),
+                // What a rocket breaks is told with the rest of this tick's changes.
+                RocketBurst = (heli, x, y, z) => Explosives.RocketBlast(Settlement, x, y, z, Announcements),
             };
         }
 

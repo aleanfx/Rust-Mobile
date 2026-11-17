@@ -1,4 +1,5 @@
 using System.Collections.Generic;
+using Oxfall.Core.Building;
 using Oxfall.Core.Gathering;
 using Oxfall.Core.Net;
 using Oxfall.Core.Rules;
@@ -22,7 +23,7 @@ namespace Oxfall.Game
         private readonly List<HeliShot> _heliShots = new List<HeliShot>();
         private readonly List<PatrolHeli> _heliCrashed = new List<PatrolHeli>();
         private readonly List<HeliSnap> _heliSnaps = new List<HeliSnap>();
-        private float _heliToastAt = -10f;
+        private float _heliToastAt = -10f, _baseToastAt = -20f;
         private float _onlineRealSince = -100f;
 
         /// <summary>The helicopter's rules alone, and its views (with what to say when one comes and goes down).</summary>
@@ -31,6 +32,11 @@ namespace Oxfall.Game
             _helis = new PatrolHelis(_world.Shape.Ground, s_seed, Time.time)
             {
                 Shielded = (x0, y0, z0, x1, y1, z1) => Explosives.Shielded(_settlement, x0, y0, z0, x1, y1, z1),
+                RocketBurst = (heli, x, y, z) =>
+                {
+                    int struck = Explosives.RocketBlast(_settlement, x, y, z, null);
+                    if (struck > 0) Debug.Log($"[Oxfall] A helicopter rocket struck {struck} built piece(s) at ({x:0.0}, {y:0.0}, {z:0.0})");
+                },
             };
             _actions.Helis = _helis;
             _actions.HeliHit += (id, damage, down) =>
@@ -54,6 +60,13 @@ namespace Oxfall.Game
                 _hud.ShowToast("¡Helicóptero de patrulla sobre la isla! Ponte a cubierto o derríbalo");
                 audio.Play(SoundCue.Accepted);
                 Debug.Log($"[Oxfall] Patrol helicopter {s.Id} came in at ({s.X:0}, {s.Y:0}, {s.Z:0})");
+            };
+            _heliViews.RocketLanded += at =>
+            {
+                // Its rockets bursting on a base (whoever's): the walls take it; say so now and then.
+                if (_title != null || !_settlement.Grid.FoundationNear(at.x, at.z, 4.5f) || Time.time - _baseToastAt < 12f) return;
+                _baseToastAt = Time.time;
+                _hud.ShowToast("¡Los cohetes del helicóptero revientan la base! La madera no aguanta: piedra o metal");
             };
             _heliViews.Downed += s =>
             {
@@ -197,6 +210,40 @@ namespace Oxfall.Game
                         if (d.Kind == DeployableKind.HeliCrate && !_settlement.IsCrateOpen(d.Id)) _settlement.SetHack(d.Id, 1f);
                     return true;
                 case "shoot-heli": ShootHeli(); return true;
+                case "rocket-hut": RocketHut(); return true;
+                case "heli-aggro":
+                    // Test, alone: as if the player had shot it from where they stand (hidden or not).
+                    if (!_actions.Online && _player != null)
+                    {
+                        var at = _player.transform.position;
+                        foreach (var h in _helis.All)
+                            if (!h.Down) _helis.Hit(h.Id, 1f, false, GameActions.OxfallSoloKey, at.x, at.y, at.z, Time.time);
+                    }
+                    return true;
+                case "hut-state":
+                {
+                    var grid = _settlement.Grid;
+                    float health = 0f, max = 0f;
+                    foreach (var piece in grid.Pieces)
+                    {
+                        health += grid.Health(piece);
+                        max += grid.MaxHealth(piece);
+                    }
+                    Debug.Log($"[Oxfall] Hut pieces={grid.PieceCount} health={health:0} max={max:0}");
+                    return true;
+                }
+                case "view-hut":
+                {
+                    // Test view: 9 m south of the hut, looking at it.
+                    var at = _rocketHut + new Vector3(0.5f, 0f, -9f);
+                    at.y = _world.Shape.Height(at.x, at.z) + 0.05f;
+                    var to = _rocketHut + Vector3.up * 2.2f - (at + Vector3.up * 1.6f);
+                    _player.Teleport(at, Mathf.Atan2(to.x, to.z) * Mathf.Rad2Deg, -Mathf.Atan2(to.y, new Vector2(to.x, to.z).magnitude) * Mathf.Rad2Deg);
+                    return true;
+                }
+                case "into-hut":
+                    _player.Teleport(_rocketHut + Vector3.up * 0.05f, 0f, 0f);
+                    return true;
                 default: return false;
             }
         }
@@ -253,6 +300,61 @@ namespace Oxfall.Game
             // The colliders where the helicopter is drawn this frame (on a slow machine they lag a frame behind).
             Physics.SyncTransforms();
             _gatherer.UseOnce();
+        }
+
+        private Vector3 _rocketHut;
+
+        /// <summary>
+        /// Test, alone: a 2×1 wooden hut (wooden walls all round, a wooden roof) on the nearest flat
+        /// open ground, free, with the player inside it.
+        /// </summary>
+        private void RocketHut()
+        {
+            var grid = _settlement.Grid;
+            var ground = _world.Shape.Ground;
+            var p = _player.transform.position;
+            float best = float.MaxValue;
+            Cell chosen = default;
+            float chosenTop = 0f;
+            const float S = BuildingGrid.CellSize;
+            var near = BuildingGrid.CellAt(p.x, p.z);
+            for (int dz = -25; dz <= 25; dz++)
+            for (int dx = -25; dx <= 25; dx++)
+            {
+                var c = new Cell(near.X + dx, near.Z + dz);
+                float lo = float.MaxValue, hi = float.MinValue;
+                bool ok = true;
+                for (float x = c.X * S - 1f; x <= (c.X + 2) * S + 1f && ok; x += 1.5f)
+                for (float z = c.Z * S - 1f; z <= (c.Z + 1) * S + 1f && ok; z += 1.5f)
+                {
+                    float g = ground.Height(x, z);
+                    lo = Mathf.Min(lo, g);
+                    hi = Mathf.Max(hi, g);
+                    if (g < IslandGround.WaterLevel + 1f || Monuments.NoBuilding(ground, x, z)
+                        || (_settlement.Obstacles != null && _settlement.Obstacles.Blocks(x, z, 0.5f))) ok = false;
+                }
+                float score = (hi - lo) * 30f + Mathf.Sqrt(dx * dx + dz * dz);
+                if (!ok || hi - lo > 1.5f || score >= best) continue;
+                best = score;
+                chosen = c;
+                chosenTop = hi + 0.2f;
+            }
+            if (best == float.MaxValue)
+            {
+                Debug.Log("[Oxfall] Rocket hut: no flat ground near");
+                return;
+            }
+            var cells = new[] { chosen, new Cell(chosen.X + 1, chosen.Z) };
+            foreach (var c in cells) grid.PlaceFoundation(c, chosenTop);
+            foreach (var c in cells)
+                foreach (var e in c.Edges)
+                    if (!grid.HasEdgePiece(e) && !e.Equals(cells[0].East)) grid.PlaceEdge(e, PieceType.Wall);
+            foreach (var c in cells) grid.PlaceRoof(c);
+            foreach (var piece in new List<PieceRef>(grid.Pieces))
+                if (grid.TryGetTier(piece, out var tier) && tier == BuildingTier.Twig) grid.Upgrade(piece, BuildingTier.Wood);
+            _rocketHut = new Vector3((chosen.X + 1) * S, chosenTop, (chosen.Z + 0.5f) * S);
+            _player.Teleport(_rocketHut + Vector3.up * 0.05f, 0f, 0f);
+            Debug.Log($"[Oxfall] Rocket hut at {chosen}, pieces={grid.PieceCount}");
         }
 
         /// <summary>Test view: some metres from the wreck, looking at it and its crates.</summary>
