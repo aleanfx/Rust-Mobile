@@ -1,7 +1,8 @@
 # Oxfall: hoja de ruta
 
-Actualizada el 2026-11-13. Es la guía para decidir qué se construye después y en qué orden.
-Quien retome el proyecto (persona o IA) debe leer esto primero.
+Escrita el 2026-11-13 como guía inicial. **El estado real y actualizado está en [`ESTADO.md`](ESTADO.md)
+(léelo primero).** Las fases 1 a 4 de abajo ya están hechas en gran parte; esta hoja queda por el
+presupuesto de rendimiento, las decisiones del dueño y las reglas de trabajo.
 
 ## Dónde estamos
 
@@ -80,7 +81,7 @@ la tienda y prueba cerrada en Google Play.
 
 En gama media-alta y alta el mínimo es 60 FPS.
 
-## Decisiones que solo Alejandro puede tomar
+## Decisiones que solo Ander puede tomar
 
 - **Probar el APK en el Redmi 12C** y pasar los FPS.
 - **Activar GitHub Pages** (Settings, Pages, Source: GitHub Actions) para tener el enlace web del iPhone.
@@ -100,4 +101,4 @@ En gama media-alta y alta el mínimo es 60 FPS.
 - Nunca se escribe a mano el YAML de Unity: los ajustes van en `Assets/Oxfall/Editor/ProjectSetup.cs`.
 - Las reglas del juego van en `Core` (sin Unity) con sus pruebas; `Game` solo las muestra.
 - Todo lo visible se construye por código al iniciar; la escena queda vacía.
-- Cada cambio se prueba en la versión web antes de pedirle a Alejandro que lo mire.
+- Cada cambio se prueba en la versión web antes de pedirle a Ander que lo mire.

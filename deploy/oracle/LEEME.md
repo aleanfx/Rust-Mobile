@@ -27,7 +27,7 @@ ssh ubuntu@TU_IP
 y pega:
 
 ```
-curl -fsSL https://raw.githubusercontent.com/aleanfx/Rust-Mobile/claude/project-thread-v0it3s/deploy/oracle/setup.sh | sudo bash
+curl -fsSL https://raw.githubusercontent.com/aleanfx/Rust-Mobile/claude/project-thread-53puct/deploy/oracle/setup.sh | sudo bash
 ```
 
 Tarda unos minutos. Al final muestra la dirección del juego, por ejemplo `wss://129-151-1-2.sslip.io/ws`.

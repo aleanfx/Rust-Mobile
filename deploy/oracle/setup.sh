@@ -2,7 +2,7 @@
 # Oxfall game server on a fresh Ubuntu machine (made for Oracle Cloud's Always Free VMs, Ampere
 # or AMD; any Ubuntu 22.04/24.04 server works). Run once, as root:
 #
-#   curl -fsSL https://raw.githubusercontent.com/aleanfx/Rust-Mobile/claude/project-thread-v0it3s/deploy/oracle/setup.sh | sudo bash
+#   curl -fsSL https://raw.githubusercontent.com/aleanfx/Rust-Mobile/claude/project-thread-53puct/deploy/oracle/setup.sh | sudo bash
 #
 # It installs .NET 8 and Caddy, builds the server from the repository, runs it as a service that
 # restarts on its own (and so starts the new island at each weekly wipe), and puts Caddy in front
@@ -11,7 +11,7 @@
 set -euo pipefail
 
 REPO="https://github.com/aleanfx/Rust-Mobile.git"
-BRANCH="${OXFALL_BRANCH:-claude/project-thread-v0it3s}"
+BRANCH="${OXFALL_BRANCH:-claude/project-thread-53puct}"
 SRC=/opt/oxfall/src
 APP=/opt/oxfall/app
 DATA=/var/lib/oxfall
