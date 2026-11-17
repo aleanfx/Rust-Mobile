@@ -23,7 +23,7 @@ namespace Oxfall.Game
         private readonly List<PatrolHeli> _heliCrashed = new List<PatrolHeli>();
         private readonly List<HeliSnap> _heliSnaps = new List<HeliSnap>();
         private float _heliToastAt = -10f;
-        private bool _helisHeard;
+        private float _onlineRealSince = -100f;
 
         /// <summary>The helicopter's rules alone, and its views (with what to say when one comes and goes down).</summary>
         private void CreateHelis(MaterialLibrary materials, GameAudio audio)
@@ -67,11 +67,10 @@ namespace Oxfall.Game
         {
             _net.HelisSeen += snaps =>
             {
-                // The first word after joining: those already about are not news.
-                _heliViews?.Apply(snaps, false, !_helisHeard);
-                _helisHeard = true;
+                // Those already about when this player joined are not news (a real clock: a slow phone's game clock lags).
+                _heliViews?.Apply(snaps, false, Time.realtimeSinceStartup - _onlineRealSince < 4f);
             };
-            _net.StatusChanged += state => { if (state != NetClient.Status.Online) _helisHeard = false; };
+            _net.StatusChanged += state => { if (state == NetClient.Status.Online) _onlineRealSince = Time.realtimeSinceStartup; };
             _net.HeliFired += (shot, damage, killed) => OnHeliFired(shot, damage, killed, _net.PlayerId);
         }
 

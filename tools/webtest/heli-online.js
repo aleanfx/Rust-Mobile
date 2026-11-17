@@ -54,10 +54,10 @@ const check = (name, ok) => { results.push(`${ok ? 'PASS' : 'FAIL'} ${name}`); l
   check('the server sent the helicopter and she was told', await waitForLog('Patrol helicopter 1 came in', 15000, mark));
   let s = await until(s => s.state === 'Engage', 90000);
   check('it hunts her', s.state === 'Engage');
-  await cmd('view-heli', 1200);
+  // She fires back at once, before it wears her down.
+  const h0 = s.health;
+  for (let i = 0; i < 6; i++) await cmd('shoot-heli', 700);
   await ana.screenshot({ path: path.join(out, '01-online-heli.png') });
-  const h0 = (await heli()).health;
-  for (let i = 0; i < 6; i++) await cmd('shoot-heli', 900);
   await wait(1500);
   const after = await heli();
   const h1 = after.health;
