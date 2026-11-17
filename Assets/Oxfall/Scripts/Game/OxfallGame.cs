@@ -760,6 +760,21 @@ namespace Oxfall.Game
                 Debug.Log($"[Oxfall] Blast {id} at ({at.x:0.0}, {at.y:0.0}, {at.z:0.0})");
             };
             _net.Gunshot += OnGunshot;
+            _net.Swung += (who, impact) =>
+            {
+                if (!_net.Players.TryGetValue(who, out var them) || !them.Visible) return;
+                them.Swing();
+                var at = them.Root.position + Vector3.up * 1.1f;
+                var bank = _audio.Bank;
+                // Chopping and mining carry far (that is how others are found); blows less.
+                switch (impact)
+                {
+                    case SwingImpact.Wood: GameAudio.PlayAt(bank.ChopWood, at, 0.9f, 3f, 80f, 0.1f); break;
+                    case SwingImpact.Stone: GameAudio.PlayAt(bank.HitStone, at, 0.85f, 3f, 75f, 0.1f); break;
+                    case SwingImpact.Metal: GameAudio.PlayAt(bank.HitMetal, at, 0.8f, 3f, 55f, 0.08f); break;
+                    default: GameAudio.PlayAt(bank.HitBody, at, 0.9f, 2f, 35f, 0.08f); break;
+                }
+            };
             _net.ArrowSeen += (origin, yaw, pitch) =>
             {
                 var direction = Quaternion.Euler(-pitch, yaw, 0f) * Vector3.forward;

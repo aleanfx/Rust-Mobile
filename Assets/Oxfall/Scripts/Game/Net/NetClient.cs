@@ -164,6 +164,9 @@ namespace Oxfall.Game.Net
         /// <summary>Someone else fired a gun: who, which kind, from where, which way (yaw, pitch) and the seed of its spray.</summary>
         public event Action<ushort, ToolKind, Vector3, float, float, ushort> Gunshot;
 
+        /// <summary>Someone else's blow landed: who, and what it struck.</summary>
+        public event Action<ushort, SwingImpact> Swung;
+
         /// <summary>The blueprints this player has learned, as the server says (on joining and after learning one).</summary>
         public event Action<List<string>> BlueprintsSeen;
 
@@ -603,6 +606,12 @@ namespace Oxfall.Game.Net
                 {
                     var charge = Messages.ReadChargeArmed(reader, out float left);
                     ChargeArmed?.Invoke(charge, left);
+                    break;
+                }
+                case MessageType.Swung:
+                {
+                    Messages.ReadSwung(reader, out ushort swinger, out var impact);
+                    if (swinger != PlayerId) Swung?.Invoke(swinger, impact);
                     break;
                 }
                 case MessageType.Gunshot:

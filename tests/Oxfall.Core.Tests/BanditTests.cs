@@ -331,5 +331,21 @@ namespace Oxfall.Core.Tests
             Assert.Less(fromPost, 7f, "back about his post");
             Assert.AreEqual(Bandits.Magazine, bandit.Rounds, "and reloaded");
         }
+    
+        [Test]
+        public void Another_players_blow_reaches_the_phones_with_what_it_struck()
+        {
+            Assert.AreEqual(SwingImpact.Wood, SwingImpacts.ForNode(Oxfall.Core.Gathering.ResourceNodeType.Tree));
+            Assert.AreEqual(SwingImpact.Stone, SwingImpacts.ForNode(Oxfall.Core.Gathering.ResourceNodeType.Sulfur));
+            Assert.AreEqual(SwingImpact.Metal, SwingImpacts.ForNode(Oxfall.Core.Gathering.ResourceNodeType.Barrel));
+            Assert.AreEqual(SwingImpact.None, SwingImpacts.ForNode(Oxfall.Core.Gathering.ResourceNodeType.Hemp), "picking makes no blow");
+            var w = new NetWriter();
+            Messages.Swung(w, 12, SwingImpact.Stone);
+            var r = new NetReader(w.Buffer, 0, w.Length);
+            Assert.AreEqual(MessageType.Swung, (MessageType)r.Byte());
+            Messages.ReadSwung(r, out ushort who, out var impact);
+            Assert.AreEqual(12, who);
+            Assert.AreEqual(SwingImpact.Stone, impact);
+        }
     }
 }

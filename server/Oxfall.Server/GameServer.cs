@@ -491,6 +491,7 @@ namespace Oxfall.Server
                     _world.TryGetNode(nodeId, out var node, out _, out _);
                     Messages.NodeStates(writer, new[] { (node.Id, node.Remaining) });
                     Broadcast(writer.ToArray());
+                    if (node != null) SendSwung(id, SwingImpacts.ForNode(node.Type), writer);
                     break;
                 }
                 case MessageType.Strike:
@@ -500,6 +501,7 @@ namespace Oxfall.Server
                     // Everyone sees the blow land (the victim's own health follows in their next update).
                     Messages.Hurt(writer, target, id, damage, killed);
                     Broadcast(writer.ToArray());
+                    SendSwung(id, SwingImpact.Flesh, writer);
                     break;
                 }
                 case MessageType.StrikeSleeper:
@@ -508,6 +510,7 @@ namespace Oxfall.Server
                     if (!_world.StrikeSleeper(id, owner, (ToolKind)tool, now, out float damage, out bool killed)) break;
                     Messages.SleeperHit(writer, owner, id, session.Record.Name, damage, killed);
                     Broadcast(writer.ToArray());
+                    SendSwung(id, SwingImpact.Flesh, writer);
                     if (killed) _log.LogInformation("Player {Id} '{Name}' killed sleeper {Owner}", id, session.Record.Name, owner);
                     break;
                 }
@@ -519,6 +522,7 @@ namespace Oxfall.Server
                     Messages.AnimalHit(writer, animal, blow, damage);
                     session.Connection.Send(writer.ToArray());
                     if (lost > 0) Fail(session, writer, ActionResult.InventoryFull);
+                    if (blow != AnimalBlow.NeedsBlade) SendSwung(id, SwingImpact.Flesh, writer);
                     break;
                 }
                 case MessageType.Shoot:
@@ -711,6 +715,23 @@ namespace Oxfall.Server
             Messages.Failed(writer, why);
             session.Connection.Send(writer.ToArray());
         }
+
+        /// <summary>A player's blow landed: everyone else near enough to hear it sees the swing and hears what it struck.</summary>
+        private void SendSwung(ushort id, SwingImpact impact, NetWriter writer)
+        {
+            if (impact == SwingImpact.None || !_world.Players.TryGet(id, out var swinger) || !swinger.Placed) return;
+            Messages.Swung(writer, id, impact);
+            var message = writer.ToArray();
+            foreach (var other in _sessions.Values)
+            {
+                if (other.Id == id || !_world.Players.TryGet(other.Id, out var them) || !them.Placed) continue;
+                float dx = them.Pose.X - swinger.Pose.X, dz = them.Pose.Z - swinger.Pose.Z;
+                if (dx * dx + dz * dz <= SwungRange * SwungRange) other.Connection.Send(message);
+            }
+        }
+
+        /// <summary>How far another player's chopping, mining or blows are heard.</summary>
+        private const float SwungRange = 90f;
 
         private void Broadcast(byte[] message)
         {

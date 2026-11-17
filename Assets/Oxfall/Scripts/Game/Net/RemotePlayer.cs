@@ -170,6 +170,19 @@ namespace Oxfall.Game.Net
         /// <summary>They fired: the gun jumps up and back, and settles.</summary>
         public void Kick() => _kick = 1f;
 
+        /// <summary>Their blow landed on something: the tool in hand goes up and comes down.</summary>
+        public void Swing() => _swing = 1f;
+
+        private float _swing;
+
+        /// <summary>How far through a swing the tool is raised (+) or brought down (−), degrees.</summary>
+        private static float SwingArc(float t)
+        {
+            if (t < 0.3f) return 55f * Mathf.SmoothStep(0f, 1f, t / 0.3f);
+            if (t < 0.5f) return 55f - 105f * Mathf.SmoothStep(0f, 1f, (t - 0.3f) / 0.2f);
+            return -50f * (1f - Mathf.SmoothStep(0f, 1f, (t - 0.5f) / 0.5f));
+        }
+
         /// <summary>Anyone drawn this way took a step on the ground (where, and whether running): to be heard.</summary>
         public static System.Action<Vector3, bool> Footstep;
 
@@ -300,6 +313,8 @@ namespace Oxfall.Game.Net
             if (Down) return;
             _pitch = dt > 0f ? Mathf.Lerp(_pitch, _pitchTarget, 1f - Mathf.Exp(-dt * 12f)) : _pitchTarget;
             float p = _hands == Hands.One ? _pitch * 0.35f : _pitch;
+            _swing = Mathf.MoveTowards(_swing, 0f, dt / 0.45f);
+            if (_swing > 0f && _hands == Hands.One) p += SwingArc(1f - _swing);
             // Busy: the gun comes down (tipped on its side to reload); a shot kicks it up.
             float busyPitch = _busy == Busy.Healing ? -65f : -28f;
             p = Mathf.Lerp(p, busyPitch, _busyBlend) + _kick * 9f;

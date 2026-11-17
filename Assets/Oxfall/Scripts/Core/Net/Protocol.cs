@@ -201,6 +201,8 @@ namespace Oxfall.Core.Net
         Horses = 69,
         /// <summary>An automatic turret fired: which, at what (a player or an animal, and its id), where it was, the damage and whether it killed.</summary>
         TurretShot = 70,
+        /// <summary>Another player's blow landed on something: who, and what it struck (a <see cref="SwingImpact"/>), for their swing and its sound.</summary>
+        Swung = 71,
     }
 
     /// <summary>What a player does to their own belongings (inside an <see cref="MessageType.Act"/> message).</summary>
@@ -1448,6 +1450,21 @@ namespace Oxfall.Core.Net
 
         public static Items.ToolKind ReadReload(NetReader r) => (Items.ToolKind)r.Byte();
 
+        public static void Swung(NetWriter w, ushort player, SwingImpact impact)
+        {
+            w.Reset();
+            w.Byte((byte)MessageType.Swung);
+            w.UShort(player);
+            w.Byte((byte)impact);
+        }
+
+        public static void ReadSwung(NetReader r, out ushort player, out SwingImpact impact)
+        {
+            player = r.UShort();
+            impact = (SwingImpact)r.Byte();
+            if (impact < SwingImpact.Wood || impact > SwingImpact.Metal) throw new ProtocolException("Unknown swing.");
+        }
+
         public static void Gunshot(NetWriter w, ushort shooter, Items.ToolKind tool, float x, float y, float z, float yaw, float pitch, ushort seed)
         {
             w.Reset();
@@ -1842,6 +1859,33 @@ namespace Oxfall.Core.Net
             by = r.String();
             damage = r.Byte();
             killed = r.Bool();
+        }
+    }
+
+    /// <summary>What a blow struck, for the sound others hear: chopping and mining carry far.</summary>
+    public enum SwingImpact : byte
+    {
+        None = 0,
+        Wood = 1,
+        Stone = 2,
+        Flesh = 3,
+        Metal = 4,
+    }
+
+    public static class SwingImpacts
+    {
+        /// <summary>What a blow on a resource sounds like (nothing for what is picked by hand).</summary>
+        public static SwingImpact ForNode(Gathering.ResourceNodeType type)
+        {
+            switch (type)
+            {
+                case Gathering.ResourceNodeType.Tree: return SwingImpact.Wood;
+                case Gathering.ResourceNodeType.Stone:
+                case Gathering.ResourceNodeType.MetalOre:
+                case Gathering.ResourceNodeType.Sulfur: return SwingImpact.Stone;
+                case Gathering.ResourceNodeType.Barrel: return SwingImpact.Metal;
+                default: return SwingImpact.None;
+            }
         }
     }
 }
