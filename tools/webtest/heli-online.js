@@ -37,6 +37,7 @@ const check = (name, ok) => { results.push(`${ok ? 'PASS' : 'FAIL'} ${name}`); l
       state: h ? (h.match(/Heli \d+ (\w+)/) || [])[1] : null,
       health: h ? +(h.match(/health=(\d+)/) || [])[1] : null,
       crates: lines.filter(l => l.includes('[Oxfall] Heli crate')),
+      mine: (() => { const m = lines.find(l => l.includes('Heli count=')); return m ? +(m.match(/ health=(\d+)/) || [])[1] : null; })(),
     };
   };
   const until = async (pred, ms) => { const end = Date.now() + ms; let s; while (Date.now() < end) { s = await heli(); if (pred(s)) return s; await wait(1500); } return s; };
@@ -55,12 +56,12 @@ const check = (name, ok) => { results.push(`${ok ? 'PASS' : 'FAIL'} ${name}`); l
   check('it hunts her', s.state === 'Engage');
   await cmd('view-heli', 1200);
   await ana.screenshot({ path: path.join(out, '01-online-heli.png') });
-  check('its rounds reach her', await waitForLog('te dispara', 40000, mark) || await waitForLog('cohete', 1000, mark));
   const h0 = (await heli()).health;
-  mark = log.length;
   for (let i = 0; i < 6; i++) await cmd('shoot-heli', 900);
   await wait(1500);
-  const h1 = (await heli()).health;
+  const after = await heli();
+  const h1 = after.health;
+  check('its rounds reach her', after.mine !== null && after.mine < 100);
   check('the server took her rifle rounds', h1 < h0);
   mark = log.length;
   await cmd('heli-down', 1500);

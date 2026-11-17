@@ -23,6 +23,7 @@ namespace Oxfall.Game
         private readonly List<PatrolHeli> _heliCrashed = new List<PatrolHeli>();
         private readonly List<HeliSnap> _heliSnaps = new List<HeliSnap>();
         private float _heliToastAt = -10f;
+        private bool _helisHeard;
 
         /// <summary>The helicopter's rules alone, and its views (with what to say when one comes and goes down).</summary>
         private void CreateHelis(MaterialLibrary materials, GameAudio audio)
@@ -64,7 +65,13 @@ namespace Oxfall.Game
         /// <summary>Online: what the server says of the helicopters.</summary>
         private void ListenToHelis()
         {
-            _net.HelisSeen += snaps => _heliViews?.Apply(snaps, false, Time.time - _onlineSince < 3f);
+            _net.HelisSeen += snaps =>
+            {
+                // The first word after joining: those already about are not news.
+                _heliViews?.Apply(snaps, false, !_helisHeard);
+                _helisHeard = true;
+            };
+            _net.StatusChanged += state => { if (state != NetClient.Status.Online) _helisHeard = false; };
             _net.HeliFired += (shot, damage, killed) => OnHeliFired(shot, damage, killed, _net.PlayerId);
         }
 
@@ -178,7 +185,11 @@ namespace Oxfall.Game
                 case "view-heli": FaceHeli(); return true;
                 case "go-wreck": ToWreck(); return true;
                 case "open-heli-crate":
-                    if (_settlement.TryGet(Nearest(DeployableKind.HeliCrate), out var c) && _settlement.IsCrateOpen(c.Id)) OpenBox(c.Id);
+                    if (_settlement.TryGet(Nearest(DeployableKind.HeliCrate), out var c) && _settlement.IsCrateOpen(c.Id))
+                    {
+                        GoTo(c.Id);
+                        OpenBox(c.Id);
+                    }
                     else Debug.Log("[Oxfall] Heli crate still burning (or none)");
                     return true;
                 case "heli-cool":

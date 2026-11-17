@@ -33,6 +33,7 @@ namespace Oxfall.Game.World
             public Transform Main, Tail, Lamp;
             public MeshRenderer Body;
             public Light Spot;
+            public MeshRenderer Bulb;
             public AudioSource Rotor, Burning;
             public Vector3 Pos, Goal;
             public Quaternion Rot, GoalRot;
@@ -232,7 +233,11 @@ namespace Oxfall.Game.World
                 if (v.Spot != null)
                 {
                     bool on = Night && !v.Wrecked && v.Snap.State != HeliState.Crashing;
-                    if (v.Spot.enabled != on) v.Spot.enabled = on;
+                    if (v.Spot.enabled != on)
+                    {
+                        v.Spot.enabled = on;
+                        v.Bulb.sharedMaterial = on ? _materials.BulbOn : _materials.BulbOff;
+                    }
                     if (on)
                     {
                         Vector3? target = v.Snap.State == HeliState.Engage && Locate != null ? Locate(v.Snap.Target) : null;
@@ -301,17 +306,27 @@ namespace Oxfall.Game.World
             lamp.localRotation = Quaternion.Euler(45f, 0f, 0f);
             var spot = lamp.gameObject.AddComponent<Light>();
             spot.type = LightType.Spot;
-            spot.range = 110f;
-            spot.spotAngle = 22f;
-            spot.innerSpotAngle = 12f;
-            spot.intensity = 9f;
+            // Bright enough to light the ground some fifty metres off (the light falls off with distance squared).
+            spot.range = 140f;
+            spot.spotAngle = 24f;
+            spot.innerSpotAngle = 10f;
+            spot.intensity = 900f;
             spot.color = new Color(1f, 0.97f, 0.9f);
             spot.shadows = LightShadows.None;
             spot.enabled = false;
+            // The lamp itself, glowing while it is on.
+            var bulb = GameObject.CreatePrimitive(PrimitiveType.Sphere);
+            UnityEngine.Object.Destroy(bulb.GetComponent<Collider>());
+            bulb.name = "Searchlight bulb";
+            bulb.transform.SetParent(lamp, false);
+            bulb.transform.localScale = Vector3.one * 0.35f;
+            var bulbRenderer = bulb.GetComponent<MeshRenderer>();
+            bulbRenderer.sharedMaterial = _materials.BulbOff;
+            bulbRenderer.shadowCastingMode = ShadowCastingMode.Off;
 
             var v = new View
             {
-                Id = s.Id, Root = root, Main = main, Tail = tail, Lamp = lamp, Body = renderer, Spot = spot,
+                Id = s.Id, Root = root, Main = main, Tail = tail, Lamp = lamp, Body = renderer, Spot = spot, Bulb = bulbRenderer,
                 Pos = new Vector3(s.X, s.Y, s.Z), Rot = Quaternion.Euler(s.Pitch, s.Yaw, -s.Roll),
             };
             v.Goal = v.Pos;
