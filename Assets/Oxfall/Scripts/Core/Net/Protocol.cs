@@ -1462,7 +1462,7 @@ namespace Oxfall.Core.Net
         {
             player = r.UShort();
             impact = (SwingImpact)r.Byte();
-            if (impact < SwingImpact.Wood || impact > SwingImpact.Metal) throw new ProtocolException("Unknown swing.");
+            if (impact < SwingImpact.Wood || impact > SwingImpact.Reload) throw new ProtocolException("Unknown swing.");
         }
 
         public static void Gunshot(NetWriter w, ushort shooter, Items.ToolKind tool, float x, float y, float z, float yaw, float pitch, ushort seed)
@@ -1870,6 +1870,8 @@ namespace Oxfall.Core.Net
         Stone = 2,
         Flesh = 3,
         Metal = 4,
+        /// <summary>Not a blow: they reloaded their gun (heard close by, and seen).</summary>
+        Reload = 5,
     }
 
     public static class SwingImpacts

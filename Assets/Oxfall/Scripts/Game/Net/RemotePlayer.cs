@@ -165,7 +165,20 @@ namespace Oxfall.Game.Net
         private Busy _busy;
         private float _busyBlend, _crouch, _kick, _lastSin;
 
-        public void SetBusy(Busy busy) => _busy = busy;
+        public void SetBusy(Busy busy)
+        {
+            _busy = busy;
+            _busyUntil = 0f;
+        }
+
+        /// <summary>Busy for a while (another player reloading), then back to aiming.</summary>
+        public void BusyFor(Busy busy, float seconds)
+        {
+            _busy = busy;
+            _busyUntil = Time.time + seconds;
+        }
+
+        private float _busyUntil;
 
         /// <summary>They fired: the gun jumps up and back, and settles.</summary>
         public void Kick() => _kick = 1f;
@@ -286,6 +299,11 @@ namespace Oxfall.Game.Net
             if (dt > 0f && !Down && _speed > 0.8f && (sin >= 0f) != (_lastSin >= 0f)) Footstep?.Invoke(position, _speed > 4.5f);
             _lastSin = sin;
             float s = sin * swing;
+            if (_busyUntil > 0f && Time.time > _busyUntil)
+            {
+                _busy = Busy.None;
+                _busyUntil = 0f;
+            }
             // Down on one knee to bandage: the hips drop, one leg forward, the other back.
             _crouch = Mathf.MoveTowards(_crouch, _busy == Busy.Healing && !Down ? 1f : 0f, dt * 4f);
             _busyBlend = Mathf.MoveTowards(_busyBlend, _busy != Busy.None && !Down ? 1f : 0f, dt * 5f);

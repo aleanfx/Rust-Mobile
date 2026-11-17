@@ -52,6 +52,13 @@ async function open(browser, name) {
   check('Beto sees Ana swing at wood', await waitForLog('Beto [log] [Oxfall] Saw Ana swing: Wood', 10000));
   check('Ana does not get her own swing back', !log.some(l => l.includes('Ana [log] [Oxfall] Saw Ana')));
   await shot(beto, '02-beto-after');
+  // Ana fires and reloads: Beto hears and sees the reload.
+  await cmd(ana, 'Ana', 'give-guns', 1500);
+  await cmd(ana, 'Ana', 'revolver', 1500);
+  await cmd(ana, 'Ana', 'fire', 1200);
+  await cmd(ana, 'Ana', 'reload', 300);
+  await shot(beto, '03-beto-sees-ana-reload');
+  check('Beto sees Ana reload', await waitForLog('Beto [log] [Oxfall] Saw Ana swing: Reload', 10000));
   fs.writeFileSync(path.join(out, 'console.log'), log.join('\n'));
   console.log(log.filter(l => l.includes('[test]') || l.includes('pageerror') || l.includes('Exception')).join('\n'));
   console.log(results.join('\n'));

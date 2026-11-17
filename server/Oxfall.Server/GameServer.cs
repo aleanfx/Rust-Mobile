@@ -590,7 +590,7 @@ namespace Oxfall.Server
                     break;
                 }
                 case MessageType.Reload:
-                    _world.ReloadGun(id, Messages.ReadReload(reader), now);
+                    if (_world.ReloadGun(id, Messages.ReadReload(reader), now)) SendSwung(id, SwingImpact.Reload, writer);
                     break;
                 case MessageType.Hold:
                 {
@@ -716,7 +716,7 @@ namespace Oxfall.Server
             session.Connection.Send(writer.ToArray());
         }
 
-        /// <summary>A player's blow landed: everyone else near enough to hear it sees the swing and hears what it struck.</summary>
+        /// <summary>A player's blow landed (or they reloaded): everyone else near enough to hear it sees the swing and hears what it struck.</summary>
         private void SendSwung(ushort id, SwingImpact impact, NetWriter writer)
         {
             if (impact == SwingImpact.None || !_world.Players.TryGet(id, out var swinger) || !swinger.Placed) return;

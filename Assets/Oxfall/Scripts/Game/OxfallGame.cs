@@ -764,9 +764,15 @@ namespace Oxfall.Game
             {
                 if (!_net.Players.TryGetValue(who, out var them) || !them.Visible) return;
                 Debug.Log($"[Oxfall] Saw {them.Name} swing: {impact}");
-                them.Swing();
                 var at = them.Root.position + Vector3.up * 1.1f;
                 var bank = _audio.Bank;
+                if (impact == SwingImpact.Reload)
+                {
+                    them.BusyFor(RemotePlayer.Busy.Reloading, 2f);
+                    GameAudio.PlayAt(bank.GunReload, at, 0.85f, 2f, 28f, 0.04f);
+                    return;
+                }
+                them.Swing();
                 // Chopping and mining carry far (that is how others are found); blows less.
                 switch (impact)
                 {
