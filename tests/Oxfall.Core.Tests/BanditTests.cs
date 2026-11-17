@@ -91,7 +91,7 @@ namespace Oxfall.Core.Tests
             Assert.IsTrue(shots.All(b => b.Target == 7 && (b.Damage == Bandits.Damage || b.Damage == 0f)));
             Assert.IsTrue(shots.Any(b => b.Damage > 0f), "close: most hit");
             float moved = (float)System.Math.Sqrt((bandit.X - postX) * (bandit.X - postX) + (bandit.Z - postZ) * (bandit.Z - postZ));
-            Assert.Less(moved, 1.5f, "stood his ground to shoot");
+            Assert.Less(moved, Bandits.StrafeMetres + 1f, "kept his ground, a step or two aside at most");
         }
 
         [Test]
@@ -198,6 +198,138 @@ namespace Oxfall.Core.Tests
             Assert.AreEqual(AnimalKind.Bandit, snap.Kind);
             Assert.AreEqual(bandit.Shots & 0xFF, snap.Shots);
             Assert.AreEqual(AnimalState.Chase, snap.State);
+            Assert.AreEqual(bandit.Calls & 0xFF, snap.Calls);
+            Assert.Greater(snap.Calls, 0, "he called it in");
+            Assert.AreEqual(bandit.Act, snap.Act);
+        }
+
+        /// <summary>The outpost (two posts) with one player in sight of its first bandit.</summary>
+        private static (Fauna fauna, Animal first, Animal second, IslandGround ground) Outpost()
+        {
+            var ground = new IslandGround(Seed);
+            var fauna = new Fauna(ground, Seed);
+            var outpost = Monuments.Find(ground).First(m => m.Kind == MonumentKind.Outpost);
+            fauna.Guard(Monuments.GuardPosts(outpost));
+            var pair = fauna.All.Where(a => a.Kind == AnimalKind.Bandit).ToList();
+            Assert.AreEqual(2, pair.Count);
+            return (fauna, pair[0], pair[1], ground);
+        }
+
+        [Test]
+        public void A_bandit_who_sees_someone_radios_the_others_and_they_come()
+        {
+            var (fauna, first, second, ground) = Outpost();
+            var prey = new[] { InSight(ground, first, 14f) };
+            fauna.Tick(0.05f, prey, null);
+            Assert.AreEqual(AnimalState.Chase, first.State);
+            Assert.AreEqual(1, first.Calls, "one call on the radio");
+            Assert.AreEqual(AnimalState.Chase, second.State, "the other one heard it");
+            Assert.AreEqual(7, second.Quarry);
+            // Out of sight of the second, he still comes looking for longer than he would on his own.
+            var bites = new List<Fauna.Bite>();
+            Run(fauna, Bandits.LoseSeconds + 1f, prey, bites);
+            Assert.AreEqual(AnimalState.Chase, second.State);
+            Assert.IsTrue(bites.Any(b => b.Animal == first.Id));
+        }
+
+        [Test]
+        public void A_bandit_runs_dry_after_six_rounds_and_reloads()
+        {
+            var (fauna, bandit) = Guarded();
+            var ground = new IslandGround(Seed);
+            var prey = new[] { InSight(ground, bandit, 10f) };
+            var bites = new List<Fauna.Bite>();
+            bool sawReload = false;
+            for (float t = 0f; t < 14f; t += 0.05f)
+            {
+                fauna.Tick(0.05f, prey, bites);
+                if (bandit.Act != BanditAct.Reloading) continue;
+                sawReload = true;
+                Assert.AreEqual(0, bandit.Rounds);
+                Assert.AreEqual(Bandits.Magazine, bites.Count(b => b.Animal == bandit.Id), "a full cylinder first");
+                int before = bites.Count(b => b.Animal == bandit.Id);
+                Run(fauna, Bandits.ReloadSeconds - 0.2f, prey, bites);
+                Assert.AreEqual(before, bites.Count(b => b.Animal == bandit.Id), "no shots while reloading");
+                Run(fauna, 0.4f, prey, bites);
+                Assert.AreNotEqual(BanditAct.Reloading, bandit.Act);
+                Assert.GreaterOrEqual(bandit.Rounds, Bandits.Magazine - 1, "full again (and maybe firing at once)");
+                break;
+            }
+            Assert.IsTrue(sawReload);
+        }
+
+        [Test]
+        public void A_bandit_steps_aside_between_shots_still_facing_his_target()
+        {
+            var (fauna, bandit) = Guarded();
+            var ground = new IslandGround(Seed);
+            var prey = new[] { InSight(ground, bandit, 12f) };
+            float x0 = bandit.X, z0 = bandit.Z, most = 0f;
+            bool slid = false;
+            for (float t = 0f; t < 6f; t += 0.05f)
+            {
+                fauna.Tick(0.05f, prey, null);
+                most = System.Math.Max(most, (float)System.Math.Sqrt((bandit.X - x0) * (bandit.X - x0) + (bandit.Z - z0) * (bandit.Z - z0)));
+                if (bandit.Strafing)
+                {
+                    slid = true;
+                    Assert.AreEqual(0f, bandit.Drift, "the phones are not told to walk him on forward");
+                }
+            }
+            Assert.IsTrue(slid);
+            Assert.Greater(most, 0.8f, "moved off his spot");
+            Assert.Less(most, Bandits.StrafeMetres * 2f + 0.5f);
+            float want = (float)(System.Math.Atan2(prey[0].X - bandit.X, prey[0].Z - bandit.Z) * 180.0 / System.Math.PI);
+            float off = System.Math.Abs(((want - bandit.Yaw) % 360f + 540f) % 360f - 180f);
+            Assert.Less(off, 20f, "still aiming at them");
+        }
+
+        [Test]
+        public void A_badly_hurt_bandit_runs_for_cover_and_bandages_himself_once()
+        {
+            var (fauna, first, second, ground) = Outpost();
+            var shooter = InSight(ground, first, 14f, 9);
+            Assert.IsFalse(fauna.Hit(first.Id, 70f, 9, shooter.X, shooter.Z));
+            Assert.AreEqual(BanditAct.Cover, first.Act);
+            Assert.AreEqual(AnimalState.Flee, first.State);
+            float hurt = first.Health;
+            // Away from the shooter: the bandage takes a few seconds, then he has more health.
+            float x0 = first.X, z0 = first.Z;
+            for (float t = 0f; t < Bandits.CoverSeconds + 0.2f && first.Act == BanditAct.Cover; t += 0.05f)
+                fauna.Tick(0.05f, new[] { shooter }, null);
+            Assert.AreEqual(BanditAct.Healing, first.Act);
+            Assert.Greater((first.X - x0) * (first.X - x0) + (first.Z - z0) * (first.Z - z0), 4f, "ran some way");
+            Assert.AreEqual(hurt, first.Health, 0.01f);
+            Run(fauna, Bandits.HealSeconds + 0.2f, new[] { shooter }, null);
+            Assert.AreNotEqual(BanditAct.Healing, first.Act);
+            Assert.AreEqual(hurt + Bandits.HealAmount, first.Health, 0.01f);
+            Assert.IsTrue(first.Healed);
+            // Hurt again: no second bandage, he fights on.
+            Assert.IsFalse(fauna.Hit(first.Id, 40f, 9, shooter.X, shooter.Z));
+            Assert.AreEqual(AnimalState.Chase, first.State);
+            Assert.AreNotEqual(BanditAct.Cover, first.Act);
+        }
+
+        [Test]
+        public void A_bandit_who_loses_someone_looks_where_they_were_then_goes_back_to_his_post()
+        {
+            var (fauna, bandit) = Guarded();
+            var ground = new IslandGround(Seed);
+            float postX = bandit.X, postZ = bandit.Z;
+            var seen = InSight(ground, bandit, 15f);
+            fauna.Tick(0.05f, new[] { seen }, null);
+            Assert.AreEqual(AnimalState.Chase, bandit.State);
+            // Gone round a wall.
+            fauna.WallBetween = (x0, y0, z0, x1, y1, z1) => true;
+            Run(fauna, Bandits.LoseSeconds + 0.5f, new[] { seen }, null);
+            Assert.AreEqual(BanditAct.Searching, bandit.Act);
+            Run(fauna, 20f, System.Array.Empty<Fauna.Prey>(), null);
+            Assert.AreNotEqual(AnimalState.Chase, bandit.State);
+            Run(fauna, 40f, System.Array.Empty<Fauna.Prey>(), null);
+            Assert.AreEqual(BanditAct.None, bandit.Act);
+            float fromPost = (float)System.Math.Sqrt((bandit.X - postX) * (bandit.X - postX) + (bandit.Z - postZ) * (bandit.Z - postZ));
+            Assert.Less(fromPost, 7f, "back about his post");
+            Assert.AreEqual(Bandits.Magazine, bandit.Rounds, "and reloaded");
         }
     }
 }

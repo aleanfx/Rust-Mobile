@@ -159,6 +159,20 @@ namespace Oxfall.Game.Net
         /// <summary>A blow landed: a quick jolt backwards.</summary>
         public void Flinch() => _flinch = 1f;
 
+        /// <summary>What keeps their hands busy besides aiming: reloading (gun tipped, the other hand at it) or bandaging (down on one knee, gun lowered).</summary>
+        public enum Busy { None, Reloading, Healing }
+
+        private Busy _busy;
+        private float _busyBlend, _crouch, _kick, _lastSin;
+
+        public void SetBusy(Busy busy) => _busy = busy;
+
+        /// <summary>They fired: the gun jumps up and back, and settles.</summary>
+        public void Kick() => _kick = 1f;
+
+        /// <summary>Anyone drawn this way took a step on the ground (where, and whether running): to be heard.</summary>
+        public static System.Action<Vector3, bool> Footstep;
+
         /// <summary>Where they look, degrees up (from the snapshots): their gun follows it.</summary>
         public void SetPitch(float pitch) => _pitchTarget = Mathf.Clamp(pitch, -89f, 89f);
 
@@ -254,9 +268,27 @@ namespace Oxfall.Game.Net
             if (Down) _speed = 0f;
             float swing = Mathf.Clamp01(_speed / 4f) * 32f;
             _phase += dt * Mathf.Lerp(4f, 9f, Mathf.Clamp01(_speed / 6.6f));
-            float s = Mathf.Sin(_phase) * swing;
-            _legL.localRotation = Quaternion.Euler(s, 0f, 0f);
-            _legR.localRotation = Quaternion.Euler(-s, 0f, 0f);
+            float sin = Mathf.Sin(_phase);
+            // A footfall each time the legs pass (half a stride), when really walking.
+            if (dt > 0f && !Down && _speed > 0.8f && (sin >= 0f) != (_lastSin >= 0f)) Footstep?.Invoke(position, _speed > 4.5f);
+            _lastSin = sin;
+            float s = sin * swing;
+            // Down on one knee to bandage: the hips drop, one leg forward, the other back.
+            _crouch = Mathf.MoveTowards(_crouch, _busy == Busy.Healing && !Down ? 1f : 0f, dt * 4f);
+            _busyBlend = Mathf.MoveTowards(_busyBlend, _busy != Busy.None && !Down ? 1f : 0f, dt * 5f);
+            _kick = Mathf.MoveTowards(_kick, 0f, dt * 7f);
+            if (_crouch > 0f)
+            {
+                float c = Mathf.SmoothStep(0f, 1f, _crouch);
+                _figure.localPosition += new Vector3(0f, -0.37f * c, 0f);
+                _legL.localRotation = Quaternion.Euler(Mathf.Lerp(s, -62f, c), 0f, 0f);
+                _legR.localRotation = Quaternion.Euler(Mathf.Lerp(-s, 55f, c), 0f, 0f);
+            }
+            else
+            {
+                _legL.localRotation = Quaternion.Euler(s, 0f, 0f);
+                _legR.localRotation = Quaternion.Euler(-s, 0f, 0f);
+            }
             _armL.localRotation = Quaternion.Euler(-s * 0.8f, 0f, -6f);
             _armR.localRotation = Quaternion.Euler(s * 0.8f, 0f, 6f);
             _armL.localScale = _armR.localScale = Vector3.one;
@@ -268,32 +300,51 @@ namespace Oxfall.Game.Net
             if (Down) return;
             _pitch = dt > 0f ? Mathf.Lerp(_pitch, _pitchTarget, 1f - Mathf.Exp(-dt * 12f)) : _pitchTarget;
             float p = _hands == Hands.One ? _pitch * 0.35f : _pitch;
+            // Busy: the gun comes down (tipped on its side to reload); a shot kicks it up.
+            float busyPitch = _busy == Busy.Healing ? -65f : -28f;
+            p = Mathf.Lerp(p, busyPitch, _busyBlend) + _kick * 9f;
             var look = Quaternion.Euler(-p, 0f, 0f);
             float bob = Mathf.Sin(_phase * 2f) * 0.012f * Mathf.Clamp01(_speed / 4f);
-            var at = Eye + look * _heldModel.HandPosition + new Vector3(0f, bob, 0f);
-            var turn = look * _heldModel.HandRotation;
+            // (Kneeling lowers the whole figure, the hands and what they hold with it.)
+            var eye = Eye;
+            var at = eye + look * (_heldModel.HandPosition + new Vector3(0f, 0f, -0.05f * _kick)) + new Vector3(0f, bob, 0f);
+            float roll = _busy == Busy.Reloading ? 55f * _busyBlend : 0f;
+            var turn = look * Quaternion.Euler(0f, 0f, roll) * _heldModel.HandRotation;
+            var shoulderL = ShoulderL;
+            var shoulderR = ShoulderR;
             _held.localPosition = at;
             _held.localRotation = turn;
             float scale = _heldModel.HandScale;
+            if (_busyBlend > 0.5f && _hands != Hands.Free)
+            {
+                // The right hand keeps the gun; the left works at it (rounds into the cylinder) or
+                // winds a bandage round the chest.
+                Reach(_armR, shoulderR, at);
+                float work = Mathf.Sin(_lastTime * 11f) * 0.03f;
+                Reach(_armL, shoulderL, _busy == Busy.Healing
+                    ? eye + new Vector3(0.04f + work, -0.42f, 0.2f)
+                    : at + new Vector3(-0.02f, 0.05f + work, 0.02f));
+                return;
+            }
             switch (_hands)
             {
                 case Hands.Rifle:
                     // Shouldered: the right hand on the grip, the left under the fore-end.
-                    Reach(_armR, ShoulderR, at);
-                    Reach(_armL, ShoulderL, at + turn * new Vector3(0.24f * scale, -0.03f * scale, 0f));
+                    Reach(_armR, shoulderR, at);
+                    Reach(_armL, shoulderL, at + turn * new Vector3(0.24f * scale, -0.03f * scale, 0f));
                     break;
                 case Hands.Pistol:
                     // Held out in both hands.
-                    Reach(_armR, ShoulderR, at);
-                    Reach(_armL, ShoulderL, at + look * new Vector3(-0.03f, -0.03f, -0.02f));
+                    Reach(_armR, shoulderR, at);
+                    Reach(_armL, shoulderL, at + look * new Vector3(-0.03f, -0.03f, -0.02f));
                     break;
                 case Hands.Bow:
                     // The bow out in the left hand, the right at the string by the chin.
-                    Reach(_armL, ShoulderL, at);
-                    Reach(_armR, ShoulderR, Eye + look * new Vector3(0.06f, -0.14f, 0.18f));
+                    Reach(_armL, shoulderL, at);
+                    Reach(_armR, shoulderR, eye + look * new Vector3(0.06f, -0.14f, 0.18f));
                     break;
                 default:
-                    Reach(_armR, ShoulderR, at);
+                    Reach(_armR, shoulderR, at);
                     break;
             }
         }

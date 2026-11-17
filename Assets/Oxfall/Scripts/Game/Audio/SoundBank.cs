@@ -69,6 +69,15 @@ namespace Oxfall.Game.Audio
         /// <summary>An outboard motor's two-stroke putter (a loop; its pitch rises with the boat's speed).</summary>
         public AudioClip EngineLoop { get; }
 
+        /// <summary>A bandit's radio: the squelch as he keys it, a burst of crackly, muffled voice, a beep as he lets go.</summary>
+        public AudioClip Radio { get; }
+
+        /// <summary>Birds by day: a few different calls (a whistle, a trill, a chirp run), one now and then from the trees.</summary>
+        public AudioClip[] Birds { get; }
+
+        /// <summary>Crickets at night (a loop).</summary>
+        public AudioClip CricketsLoop { get; }
+
         /// <summary>Rain falling all round (a loop) and a roll of thunder far off.</summary>
         public AudioClip RainLoop { get; }
         public AudioClip Thunder { get; }
@@ -218,6 +227,25 @@ namespace Oxfall.Game.Audio
             EngineLoop = MakeLoop("engine", 2f, EngineSample);
             RainLoop = MakeLoop("rain", 5f, RainSample);
             Thunder = Make("thunder", 7f, ThunderSample);
+            Radio = Make("radio", 1.25f, RadioSample);
+            Birds = new[]
+            {
+                // A falling two-note whistle.
+                Make("bird whistle", 0.7f, (t, i) => Chirp(t, 3400f, 2900f, 0.18f) + Chirp(t - 0.28f, 3000f, 2300f, 0.3f)),
+                // A quick trill.
+                Make("bird trill", 0.8f, (t, i) =>
+                {
+                    float sum = 0f;
+                    for (int k = 0; k < 9; k++) sum += Chirp(t - k * 0.075f, 4600f - k * 60f, 3900f - k * 60f, 0.05f) * (1f - k * 0.07f);
+                    return sum;
+                }),
+                // Three rising chirps.
+                Make("bird chirps", 0.75f, (t, i) => Chirp(t, 2500f, 3900f, 0.09f) + Chirp(t - 0.22f, 2600f, 4100f, 0.09f) + Chirp(t - 0.44f, 2700f, 4400f, 0.11f)),
+                // A soft cooing low call.
+                Make("bird coo", 1.1f, (t, i) => (Tone(t, 520f + 40f * Mathf.Sin(t * 9f)) * Env(t, 0.06f, 0.18f)
+                    + Tone(t - 0.45f, 470f + 30f * Mathf.Sin(t * 9f)) * Env(t - 0.45f, 0.08f, 0.3f)) * 0.6f),
+            };
+            CricketsLoop = MakeLoop("crickets", 4f, CricketSample);
         }
 
         // ---- building blocks ----
@@ -268,6 +296,52 @@ namespace Oxfall.Game.Audio
             float f = 420f - 900f * t;
             return Mathf.Sin(2f * Mathf.PI * f * t) * Env(t, 0.01f, 0.06f) + Thump(t, 80f, 0.03f) * 0.4f;
         }
+
+        /// <summary>One bird's note: a sweep from one pitch to another under a quick swell and fade.</summary>
+        private static float Chirp(float t, float from, float to, float length)
+        {
+            if (t < 0f || t > length) return 0f;
+            float u = t / length;
+            // The phase of a linear sweep, so the pitch glides without clicks.
+            float phase = 2f * Mathf.PI * (from * t + (to - from) * t * u * 0.5f);
+            float shape = Mathf.Sin(u * Mathf.PI);
+            return (Mathf.Sin(phase) + 0.25f * Mathf.Sin(phase * 2f)) * shape * shape * 0.5f;
+        }
+
+        private float _radioLow;
+        private float RadioSample(float t, int i)
+        {
+            float n = Noise();
+            _radioLow += (n - _radioLow) * 0.5f;
+            float bright = n - _radioLow;
+            // Keyed: a burst of squelch; then a voice, muffled and broken up; a beep when let go.
+            float squelch = bright * Env(t, 0.002f, 0.06f) * 0.9f;
+            float talking = t > 0.12f && t < 1.0f ? 1f : 0f;
+            float syllables = Mathf.Max(0f, Mathf.Sin(t * 26f + Mathf.Sin(t * 7f) * 2.5f));
+            float pitch = 170f + 40f * Mathf.Sin(t * 5f) + 25f * Mathf.Sin(t * 13f);
+            float voice = Mathf.Clamp((Tone(t, pitch) + 0.6f * Tone(t, pitch * 2f) + 0.5f * Tone(t, pitch * 3f) + 0.3f * Tone(t, pitch * 5f)) * 1.8f, -1f, 1f);
+            float speech = (voice * 0.55f + bright * 0.35f) * syllables * talking;
+            float beep = Mathf.Clamp(Tone(t - 1.06f, 1450f) * 3f, -1f, 1f) * (t > 1.06f && t < 1.16f ? 1f : 0f) * 0.35f;
+            return squelch + speech * 0.7f + bright * 0.05f * talking + beep;
+        }
+
+        private float CricketSample(float t, int i)
+        {
+            // Two crickets out of step: quick pulses of a high tone, in bursts.
+            float a = Tone(t, 4300f) * Pulse(t, 28f, 0.55f) * Gate(t, 0.9f, 0.45f);
+            float b = Tone(t, 4700f) * Pulse(t + 0.013f, 31f, 0.5f) * Gate(t + 0.37f, 1.15f, 0.5f) * 0.6f;
+            return (a + b) * 0.35f + Noise() * 0.01f;
+        }
+
+        /// <summary>1 for the first <paramref name="duty"/> of each cycle at <paramref name="hz"/>, softened.</summary>
+        private static float Pulse(float t, float hz, float duty)
+        {
+            float u = (t * hz) % 1f;
+            return u < duty ? Mathf.Sin(u / duty * Mathf.PI) : 0f;
+        }
+
+        /// <summary>On for <paramref name="on"/> seconds out of every <paramref name="period"/>.</summary>
+        private static float Gate(float t, float period, float on) => (t % period) < on ? 1f : 0f;
 
         // ---- loops ----
 

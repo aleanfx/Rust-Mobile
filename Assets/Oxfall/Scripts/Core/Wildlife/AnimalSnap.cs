@@ -16,9 +16,18 @@ namespace Oxfall.Core.Wildlife
         /// <summary>A bandit's shots so far, counted round from 0 to 255: a change is a shot.</summary>
         public readonly int Shots;
 
-        public AnimalSnap(int id, AnimalKind kind, AnimalState state, float x, float z, float yaw, float speed, float health, int shots = 0)
+        /// <summary>What a bandit is busy with (reloading, running for cover, bandaging, searching).</summary>
+        public readonly BanditAct Act;
+
+        /// <summary>A bandit's radio calls so far, counted round from 0 to 255: a change is a call.</summary>
+        public readonly int Calls;
+
+        public AnimalSnap(int id, AnimalKind kind, AnimalState state, float x, float z, float yaw, float speed, float health, int shots = 0,
+            BanditAct act = BanditAct.None, int calls = 0)
         {
             Shots = shots & 0xFF;
+            Act = act;
+            Calls = calls & 0xFF;
             Id = id;
             Kind = kind;
             State = state;
@@ -30,7 +39,7 @@ namespace Oxfall.Core.Wildlife
         }
 
         public static AnimalSnap Of(Animal a) =>
-            new AnimalSnap(a.Id, a.Kind, a.State, a.X, a.Z, a.Yaw, a.Speed, a.Health / Animals.MaxHealth(a.Kind), a.Shots);
+            new AnimalSnap(a.Id, a.Kind, a.State, a.X, a.Z, a.Yaw, a.Drift, a.Health / Animals.MaxHealth(a.Kind), a.Shots, a.Act, a.Calls);
     }
 
     /// <summary>What a blow at an animal did.</summary>

@@ -247,12 +247,26 @@ namespace Oxfall.Core.Wildlife
             if (a.Kind == AnimalKind.Deer) Flee(a, fromX, fromZ, 6f);
             else if (a.Kind == AnimalKind.Bandit)
             {
-                // Shot at: turns on whoever did it, wherever they are.
+                // Shot at: turns on whoever did it, wherever they are, and calls the others in.
+                bool fresh = a.State != AnimalState.Chase || a.Quarry != attacker;
                 a.Angry = true;
                 a.Quarry = attacker;
-                a.State = AnimalState.Chase;
                 a.Lost = 0f;
-                a.AttackTimer = Math.Max(a.AttackTimer, 0.4f);
+                a.SeenX = fromX;
+                a.SeenZ = fromZ;
+                a.HasSeen = true;
+                if (a.Act == BanditAct.Cover || a.Act == BanditAct.Healing)
+                {
+                    // Already getting away: keeps at it.
+                }
+                else if (!a.Healed && a.Health < Bandits.CoverBelow * Animals.MaxHealth(a.Kind)) TakeCover(a, fromX, fromZ);
+                else
+                {
+                    if (a.Act == BanditAct.Searching) a.Act = BanditAct.None;
+                    a.State = AnimalState.Chase;
+                    a.AttackTimer = Math.Max(a.AttackTimer, 0.4f);
+                }
+                if (fresh) Alert(a, attacker);
             }
             else
             {
@@ -398,13 +412,19 @@ namespace Oxfall.Core.Wildlife
 
         private void Move(Animal a, float dt, IReadOnlyList<Prey> players)
         {
+            if (a.Pace > 0f)
+            {
+                Slide(a, dt);
+                return;
+            }
             float speed = a.State == AnimalState.Wander ? Animals.WalkSpeed
                 : a.State == AnimalState.Chase || a.State == AnimalState.Flee ? Animals.RunSpeed(a.Kind) : 0f;
             float dx = a.GoalX - a.X, dz = a.GoalZ - a.Z;
             float d = (float)Math.Sqrt(dx * dx + dz * dz);
             // A chaser stops at biting range; a walker at its spot.
             float stop = a.State == AnimalState.Chase ? Animals.AttackReach * 0.8f : 0.3f;
-            if (speed <= 0f || d <= stop)
+            // (A hair short counts as there: turning as it walks, it could inch closer for ever.)
+            if (speed <= 0f || d <= stop + 0.05f)
             {
                 a.Speed = 0f;
                 if (a.State == AnimalState.Chase && d > 0.01f) Turn(a, dx, dz, dt);
@@ -447,19 +467,71 @@ namespace Oxfall.Core.Wildlife
         }
 
         /// <summary>
-        /// A bandit: watches from his post; whoever comes in sight is shot at from where he stands, or
-        /// followed (never far from his post) when out of range or round a corner; given up when gone
-        /// a while, and then back to his post.
+        /// A bandit, a little like a soldier: watches from his post; whoever comes in sight is shot at,
+        /// stepping from side to side between shots, and the others near him are called in on the radio.
+        /// Six rounds, then a reload. Out of range or round a corner, he closes in (never far from his
+        /// post). Badly hurt, he runs for cover once and bandages himself. Someone lost is looked for
+        /// where they were last seen, then he goes back to his post.
         /// </summary>
         private void ThinkBandit(Animal a, float dt, IReadOnlyList<Prey> players, List<Bite> bites)
         {
             a.Timer -= dt;
             a.AttackTimer -= dt;
+            a.ActTimer -= dt;
+            a.StrafeTimer -= dt;
+            a.Strafing = false;
+            a.Pace = 0f;
+
+            if (a.Act == BanditAct.Reloading && a.ActTimer <= 0f)
+            {
+                a.Rounds = Bandits.Magazine;
+                a.Act = BanditAct.None;
+            }
+            if (a.Act == BanditAct.Cover)
+            {
+                // Running for it; once there (or it takes too long), the bandage.
+                if (Distance(a.X, a.Z, a.GoalX, a.GoalZ) > 0.5f && a.ActTimer > 0f) return;
+                a.Act = BanditAct.Healing;
+                a.ActTimer = Bandits.HealSeconds;
+                a.State = AnimalState.Idle;
+            }
+            if (a.Act == BanditAct.Healing)
+            {
+                a.GoalX = a.X;
+                a.GoalZ = a.Z;
+                if (a.ActTimer > 0f) return;
+                a.Health = Math.Min(Animals.MaxHealth(a.Kind), a.Health + Bandits.HealAmount);
+                a.Healed = true;
+                a.Act = BanditAct.None;
+                // He reloaded in cover too.
+                a.Rounds = Bandits.Magazine;
+                if (IndexOf(players, a.Quarry) >= 0)
+                {
+                    a.State = AnimalState.Chase;
+                    a.Lost = 0f;
+                    a.AttackTimer = Math.Max(a.AttackTimer, 0.6f);
+                }
+                else
+                {
+                    a.State = AnimalState.Idle;
+                    a.Timer = 1f;
+                }
+            }
+
             int q = a.State == AnimalState.Chase ? IndexOf(players, a.Quarry) : -1;
+            bool seen = false;
             if (q >= 0)
             {
                 var p = players[q];
-                a.Lost = Sees(a, p) ? 0f : a.Lost + dt;
+                seen = Sees(a, p);
+                if (seen)
+                {
+                    a.Lost = 0f;
+                    a.SeenX = p.X;
+                    a.SeenZ = p.Z;
+                    a.HasSeen = true;
+                }
+                else a.Lost += dt;
                 if (a.Lost > Bandits.LoseSeconds || Distance(a.X, a.Z, p.X, p.Z) > Bandits.LoseRange) q = -1;
             }
             if (q < 0 && players != null)
@@ -478,18 +550,53 @@ namespace Oxfall.Core.Wildlife
                 }
                 if (q >= 0)
                 {
-                    a.Quarry = players[q].Key;
+                    var p = players[q];
+                    bool fresh = a.State != AnimalState.Chase || a.Quarry != p.Key;
+                    a.Quarry = p.Key;
                     a.State = AnimalState.Chase;
                     a.Lost = 0f;
+                    a.SeenX = p.X;
+                    a.SeenZ = p.Z;
+                    a.HasSeen = true;
+                    seen = true;
+                    if (a.Act == BanditAct.Searching) a.Act = BanditAct.None;
                     a.AttackTimer = Math.Max(a.AttackTimer, Bandits.FirstShotSeconds);
+                    if (fresh) Alert(a, p.Key);
                 }
             }
             if (q < 0)
             {
                 if (a.State == AnimalState.Chase)
                 {
-                    // Back to his post.
+                    // Gone: he fills his revolver, and looks where they were last seen, or goes back.
                     a.Angry = false;
+                    a.Rounds = Bandits.Magazine;
+                    a.Act = BanditAct.None;
+                    a.State = AnimalState.Wander;
+                    a.Timer = 25f;
+                    a.GoalX = a.HomeX;
+                    a.GoalZ = a.HomeZ;
+                    if (a.HasSeen)
+                    {
+                        Leashed(a, a.SeenX, a.SeenZ, out a.GoalX, out a.GoalZ);
+                        a.Act = BanditAct.Searching;
+                        a.ActTimer = Bandits.SearchSeconds;
+                        a.HasSeen = false;
+                    }
+                    return;
+                }
+                if (a.Act == BanditAct.Searching)
+                {
+                    if (a.State == AnimalState.Wander && a.Timer > 0f)
+                    {
+                        a.ActTimer = Bandits.SearchSeconds;
+                        return;
+                    }
+                    if (a.State == AnimalState.Wander) Rest(a);
+                    // There: a look all round, then back to his post.
+                    a.Yaw = (a.Yaw + 75f * dt) % 360f;
+                    if (a.ActTimer > 0f) return;
+                    a.Act = BanditAct.None;
                     a.GoalX = a.HomeX;
                     a.GoalZ = a.HomeZ;
                     a.State = AnimalState.Wander;
@@ -505,42 +612,162 @@ namespace Oxfall.Core.Wildlife
             var prey = players[q];
             float dx = prey.X - a.X, dz = prey.Z - a.Z;
             float dist = (float)Math.Sqrt(dx * dx + dz * dz);
-            if (a.Lost <= 0f && dist <= Bandits.Range)
+            if (seen && dist <= Bandits.Range)
             {
-                // Stands and shoots once he faces them.
-                a.GoalX = a.X;
-                a.GoalZ = a.Z;
+                // Faces them, stepping aside now and then, and fires when he has a round and his aim.
                 Turn(a, dx, dz, dt);
+                if (a.StrafeTimer <= 0f) Strafe(a, dx, dz, dist);
+                a.Pace = Bandits.StrafeSpeed;
+                a.Strafing = Distance(a.X, a.Z, a.GoalX, a.GoalZ) > 0.25f;
+                if (a.Act == BanditAct.Reloading) return;
                 float want = (float)(Math.Atan2(dx, dz) * 180.0 / Math.PI);
                 float off = Math.Abs(((want - a.Yaw) % 360f + 540f) % 360f - 180f);
                 if (a.AttackTimer <= 0f && off < 15f)
                 {
                     a.AttackTimer = Bandits.FireSeconds + (float)_random.NextDouble() * 0.4f;
                     a.Shots++;
+                    a.Rounds--;
                     float dy = prey.Y - a.Y;
                     bool hit = _random.NextDouble() < Bandits.HitChance((float)Math.Sqrt(dist * dist + dy * dy));
                     bites?.Add(new Bite(a.Id, prey.Key, hit ? Bandits.Damage : 0f));
+                    if (a.Rounds <= 0)
+                    {
+                        a.Act = BanditAct.Reloading;
+                        a.ActTimer = Bandits.ReloadSeconds;
+                    }
                 }
                 return;
             }
             // Closes in (round what is in the way), but not past his leash.
-            float px = prey.X, pz = prey.Z;
-            float hx = px - a.HomeX, hz = pz - a.HomeZ;
+            Leashed(a, prey.X, prey.Z, out a.GoalX, out a.GoalZ);
+        }
+
+        /// <summary>A spot towards (x, z), no further than his leash from a bandit's post.</summary>
+        private static void Leashed(Animal a, float x, float z, out float gx, out float gz)
+        {
+            float hx = x - a.HomeX, hz = z - a.HomeZ;
             float fromHome = (float)Math.Sqrt(hx * hx + hz * hz);
             if (fromHome > Bandits.Leash)
             {
-                px = a.HomeX + hx / fromHome * Bandits.Leash;
-                pz = a.HomeZ + hz / fromHome * Bandits.Leash;
+                x = a.HomeX + hx / fromHome * Bandits.Leash;
+                z = a.HomeZ + hz / fromHome * Bandits.Leash;
             }
-            a.GoalX = px;
-            a.GoalZ = pz;
+            gx = x;
+            gz = z;
         }
 
-        /// <summary>Whether a bandit can see a player: no monument wall, hill or building between his eyes and their chest.</summary>
-        private bool Sees(Animal a, Prey p)
+        /// <summary>A spot a step or two to one side of a bandit (across his line to the target), the other side each time.</summary>
+        private void Strafe(Animal a, float dx, float dz, float dist)
         {
-            float ex = a.X, ey = a.Y + 1.55f, ez = a.Z;
-            float tx = p.X, ty = p.Y + 1.2f, tz = p.Z;
+            a.StrafeTimer = 1.1f + (float)_random.NextDouble() * 0.9f;
+            a.GoalX = a.X;
+            a.GoalZ = a.Z;
+            if (dist < 0.01f) return;
+            float sx = dz / dist, sz = -dx / dist;
+            float far = Bandits.StrafeMetres * (0.6f + 0.4f * (float)_random.NextDouble());
+            for (int tries = 0; tries < 2; tries++)
+            {
+                a.StrafeSide = -a.StrafeSide;
+                float x = a.X + sx * far * a.StrafeSide, z = a.Z + sz * far * a.StrafeSide;
+                if (!Walkable(x, z) || Distance(x, z, a.HomeX, a.HomeZ) > Bandits.Leash) continue;
+                a.GoalX = x;
+                a.GoalZ = z;
+                return;
+            }
+        }
+
+        /// <summary>A bandit moving at his own pace straight to his spot, facing where he aims, not where he goes.</summary>
+        private void Slide(Animal a, float dt)
+        {
+            float dx = a.GoalX - a.X, dz = a.GoalZ - a.Z;
+            float d = (float)Math.Sqrt(dx * dx + dz * dz);
+            if (d <= 0.2f)
+            {
+                a.Speed = 0f;
+                a.Strafing = false;
+                return;
+            }
+            float step = Math.Min(a.Pace * dt, d);
+            float nx = a.X + dx / d * step, nz = a.Z + dz / d * step;
+            if (!Walkable(nx, nz))
+            {
+                a.GoalX = a.X;
+                a.GoalZ = a.Z;
+                a.Speed = 0f;
+                a.Strafing = false;
+                return;
+            }
+            a.X = nx;
+            a.Z = nz;
+            a.Y = Monuments.SurfaceHeight(_ground, nx, nz);
+            a.Speed = step / dt;
+        }
+
+        /// <summary>A bandit's radio call: the others near him come for <paramref name="quarry"/>.</summary>
+        private void Alert(Animal a, int quarry)
+        {
+            a.Calls++;
+            foreach (var b in _animals.Values)
+            {
+                if (b == a || b.Kind != AnimalKind.Bandit || b.IsDead || b.State == AnimalState.Chase) continue;
+                if (b.Act == BanditAct.Cover || b.Act == BanditAct.Healing) continue;
+                if (Distance(a.X, a.Z, b.X, b.Z) > Bandits.RadioRange) continue;
+                if (b.Act == BanditAct.Searching) b.Act = BanditAct.None;
+                b.Quarry = quarry;
+                b.State = AnimalState.Chase;
+                b.Angry = true;
+                // Not seen yet: he has a while longer than usual to find them.
+                b.Lost = Bandits.LoseSeconds - Bandits.RadioSeconds;
+                b.AttackTimer = Math.Max(b.AttackTimer, Bandits.FirstShotSeconds);
+            }
+        }
+
+        /// <summary>Badly hurt: off to the nearest spot out of sight of (fromX, fromZ) near his post, to bandage himself there.</summary>
+        private void TakeCover(Animal a, float fromX, float fromZ)
+        {
+            float fy = Monuments.SurfaceHeight(_ground, fromX, fromZ) + 1.5f;
+            float bestX = a.X, bestZ = a.Z, fallbackX = a.X, fallbackZ = a.Z;
+            float farthest = Distance(a.X, a.Z, fromX, fromZ);
+            bool found = false;
+            foreach (float r in CoverRings)
+            {
+                float bestAway = -1f;
+                for (int k = 0; k < 12; k++)
+                {
+                    double angle = k * Math.PI / 6.0;
+                    float x = a.X + (float)Math.Cos(angle) * r, z = a.Z + (float)Math.Sin(angle) * r;
+                    if (!Walkable(x, z) || Distance(x, z, a.HomeX, a.HomeZ) > Bandits.Leash) continue;
+                    float away = Distance(x, z, fromX, fromZ);
+                    if (away > farthest)
+                    {
+                        farthest = away;
+                        fallbackX = x;
+                        fallbackZ = z;
+                    }
+                    float y = Monuments.SurfaceHeight(_ground, x, z);
+                    if (LineClear(x, y + 1.2f, z, fromX, fy, fromZ) || away <= bestAway) continue;
+                    bestAway = away;
+                    bestX = x;
+                    bestZ = z;
+                    found = true;
+                }
+                if (found) break;
+            }
+            a.GoalX = found ? bestX : fallbackX;
+            a.GoalZ = found ? bestZ : fallbackZ;
+            a.Act = BanditAct.Cover;
+            a.ActTimer = Bandits.CoverSeconds;
+            a.State = AnimalState.Flee;
+        }
+
+        private static readonly float[] CoverRings = { 3f, 6f, 9f, 12f };
+
+        /// <summary>Whether a bandit can see a player: no monument wall, hill or building between his eyes and their chest.</summary>
+        private bool Sees(Animal a, Prey p) => LineClear(a.X, a.Y + 1.55f, a.Z, p.X, p.Y + 1.2f, p.Z);
+
+        /// <summary>No monument wall, hill or building between two points.</summary>
+        private bool LineClear(float ex, float ey, float ez, float tx, float ty, float tz)
+        {
             for (int i = 1; i < 8; i++)
             {
                 float t = i / 8f;

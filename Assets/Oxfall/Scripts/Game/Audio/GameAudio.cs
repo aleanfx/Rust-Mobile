@@ -48,6 +48,11 @@ namespace Oxfall.Game.Audio
 
         /// <summary>How hard it is raining (0..1): the rain's hiss and a stronger wind with it.</summary>
         public float Rain { get; set; }
+
+        /// <summary>How light the day is (0 night .. 1 noon): birds sing by day in the trees, crickets chirp at night.</summary>
+        public float Daylight { get; set; } = 1f;
+        private AudioSource _crickets;
+        private float _birdTimer = 4f;
         private AudioSource _waves;
         private Transform _player;
         private CharacterController _body;
@@ -74,6 +79,7 @@ namespace Oxfall.Game.Audio
             audio._wind = audio.Loop(go, audio._bank.WindLoop, 0.22f);
             audio._waves = audio.Loop(go, audio._bank.WavesLoop, 0f);
             audio._rain = audio.Loop(go, audio._bank.RainLoop, 0f);
+            audio._crickets = audio.Loop(go, audio._bank.CricketsLoop, 0f);
             return audio;
         }
 
@@ -183,7 +189,40 @@ namespace Oxfall.Game.Audio
             _waves.volume = Mathf.MoveTowards(_waves.volume, _wavesTarget, Time.deltaTime * 0.3f);
             _rain.volume = Rain * 0.5f;
             _wind.volume = 0.22f + Rain * 0.2f;
+            Wildlife();
         }
+
+        /// <summary>
+        /// The island alive: by day, now and then a bird calls from somewhere in the trees around (more
+        /// often in the woods, never in the rain); at night the crickets, quieter in the rain.
+        /// </summary>
+        private void Wildlife()
+        {
+            float night = Mathf.Clamp01((0.35f - Daylight) / 0.25f);
+            float dry = 1f - Mathf.Clamp01(Rain * 2f);
+            _crickets.volume = Mathf.MoveTowards(_crickets.volume, night * 0.14f * (0.4f + 0.6f * dry), Time.deltaTime * 0.05f);
+            _birdTimer -= Time.deltaTime;
+            if (_birdTimer > 0f) return;
+            var p = _player.position;
+            float forest = _shape.Forest(p.x, p.z);
+            _birdTimer = Mathf.Lerp(11f, 3.5f, forest) * Random.Range(0.7f, 1.4f);
+            if (night > 0.3f || dry < 0.6f || p.y < IslandShape.WaterLevel) return;
+            float angle = Random.value * Mathf.PI * 2f, far = Random.Range(8f, 28f);
+            var at = new Vector3(p.x + Mathf.Cos(angle) * far, 0f, p.z + Mathf.Sin(angle) * far);
+            at.y = _shape.Height(at.x, at.z) + Random.Range(4f, 9f);
+            var calls = _bank.Birds;
+            PlayAt(calls[Random.Range(0, calls.Length)], at, 0.32f * dry, 4f, 45f, 0.12f);
+        }
+
+        /// <summary>Someone else's step (another player, a bandit), heard from where they tread.</summary>
+        public void PlayStep(Vector3 at, bool running)
+        {
+            var steps = _shape.Height(at.x, at.z) < 2.2f ? _bank.StepsSand : _bank.StepsGrass;
+            PlayAt(steps[_step++ % steps.Length], at, running ? 0.75f : 0.5f, 1.5f, running ? 30f : 20f, 0.08f);
+        }
+
+        /// <summary>A bandit's radio crackling where he stands.</summary>
+        public void PlayRadio(Vector3 at) => PlayAt(_bank.Radio, at, 0.8f, 3f, 55f, 0.04f);
 
         /// <summary>Thunder, as loud as it is near.</summary>
         public void PlayThunder(float volume) => Shot(_bank.Thunder, volume, 0.12f);

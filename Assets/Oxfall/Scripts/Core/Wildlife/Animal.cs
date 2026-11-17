@@ -167,6 +167,42 @@ namespace Oxfall.Core.Wildlife
 
         /// <summary>Another only turns up when nobody is this near the post.</summary>
         public const float RespawnClearance = 40f;
+
+        /// <summary>Rounds in his revolver before he must reload, and how long reloading takes (a moment to push him).</summary>
+        public const int Magazine = 6;
+        public const float ReloadSeconds = 2.4f;
+
+        /// <summary>
+        /// Whoever he sees or is shot by, he calls out on his radio: every other bandit this near him
+        /// comes for the same player, and keeps after them this long without seeing them.
+        /// </summary>
+        public const float RadioRange = 40f, RadioSeconds = 12f;
+
+        /// <summary>Between shots he steps aside this far, at this pace, so he is no standing target.</summary>
+        public const float StrafeMetres = 2.6f, StrafeSpeed = 2.3f;
+
+        /// <summary>Hurt below this share of his health, he runs for cover once and bandages himself there.</summary>
+        public const float CoverBelow = 0.45f;
+
+        /// <summary>Longest he runs for cover, how long the bandage takes, and the health it gives back.</summary>
+        public const float CoverSeconds = 5f, HealSeconds = 3.2f, HealAmount = 40f;
+
+        /// <summary>When he loses someone he goes to look where they were last seen, and looks about this long.</summary>
+        public const float SearchSeconds = 5f;
+    }
+
+    /// <summary>What a bandit is busy with besides walking and shooting (it shows on him, and is heard).</summary>
+    public enum BanditAct : byte
+    {
+        None = 0,
+        /// <summary>Out of rounds: reloading his revolver, not firing.</summary>
+        Reloading = 1,
+        /// <summary>Badly hurt: running for cover.</summary>
+        Cover = 2,
+        /// <summary>In cover, bandaging himself.</summary>
+        Healing = 3,
+        /// <summary>Gone to where he last saw someone, looking about.</summary>
+        Searching = 4,
     }
 
     /// <summary>One animal on the island: where it is, which way it faces, how it is, what it is doing.</summary>
@@ -196,6 +232,24 @@ namespace Oxfall.Core.Wildlife
         /// <summary>A bandit, who keeps to his post (it never moves with him).</summary>
         public bool Guard { get; internal set; }
 
+        /// <summary>A bandit's rounds left in his revolver.</summary>
+        public int Rounds { get; internal set; } = Bandits.Magazine;
+
+        /// <summary>What a bandit is busy with.</summary>
+        public BanditAct Act { get; internal set; }
+
+        /// <summary>A bandit's radio calls so far (each one is heard where he stands).</summary>
+        public int Calls { get; internal set; }
+
+        /// <summary>A bandit has bandaged himself already (only once a life).</summary>
+        public bool Healed { get; internal set; }
+
+        /// <summary>A bandit stepping aside while he aims: he moves without turning, so the legs, not the facing, carry him.</summary>
+        public bool Strafing { get; internal set; }
+
+        /// <summary>The speed a phone should walk it on in the way it faces (none while a bandit steps aside).</summary>
+        public float Drift => Strafing ? 0f : Speed;
+
         public bool IsDead => State == AnimalState.Dead;
 
         // What it is about: a spot to walk to, someone to chase or run from, and timers.
@@ -207,6 +261,12 @@ namespace Oxfall.Core.Wildlife
         internal bool Angry;
         internal float Lost;
         internal float PostYaw;
+        internal float ActTimer;
+        internal float StrafeTimer;
+        internal int StrafeSide = 1;
+        internal float SeenX, SeenZ;
+        internal bool HasSeen;
+        internal float Pace;
 
         public override string ToString() => $"{Kind} {Id} ({X:0.0}, {Z:0.0}) {State} {Health:0}";
     }

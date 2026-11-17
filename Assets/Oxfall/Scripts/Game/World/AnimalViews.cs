@@ -54,6 +54,8 @@ namespace Oxfall.Game.World
             // A bandit: the figure, and his count of shots (a new one: he fired).
             public RemotePlayer Man;
             public int Shots;
+            public int Calls;
+            public BanditAct Act;
         }
 
         /// <summary>An animal calls out (a wolf or boar starting a charge, a deer bolting, any of them hurt): its kind, where.</summary>
@@ -61,6 +63,12 @@ namespace Oxfall.Game.World
 
         /// <summary>A bandit fired: from his revolver's muzzle, the way it points.</summary>
         public event Action<Vector3, Vector3> BanditFired;
+
+        /// <summary>A bandit called the others on his radio, from where he stands.</summary>
+        public event Action<Vector3> BanditRadioed;
+
+        /// <summary>A bandit started on something (reloading, bandaging...), where he stands: for its sound.</summary>
+        public event Action<BanditAct, Vector3> BanditBusy;
 
         /// <summary>What bandits wear: a headwrap, a burlap shirt, hide trousers and boots.</summary>
         private static readonly string[] BanditOutfit = { ItemIds.BurlapHeadwrap, ItemIds.BurlapShirt, ItemIds.HidePants, ItemIds.HideBoots };
@@ -133,6 +141,18 @@ namespace Oxfall.Game.World
                     v.Shots = a.Shots;
                     Fired(v);
                 }
+                if (v.Man != null && (a.Calls & 0xFF) != (v.Calls & 0xFF))
+                {
+                    v.Calls = a.Calls;
+                    if (v.Shown) BanditRadioed?.Invoke(v.Root.transform.position + Vector3.up * 1.5f);
+                }
+                if (v.Man != null && a.Act != v.Act)
+                {
+                    v.Act = a.Act;
+                    v.Man.SetBusy(a.Act == BanditAct.Reloading ? RemotePlayer.Busy.Reloading
+                        : a.Act == BanditAct.Healing ? RemotePlayer.Busy.Healing : RemotePlayer.Busy.None);
+                    if (v.Shown && a.State != AnimalState.Dead) BanditBusy?.Invoke(a.Act, v.Root.transform.position + Vector3.up * 1.2f);
+                }
                 bool alarm = a.State != v.State && (a.State == AnimalState.Chase || (a.State == AnimalState.Flee && a.Kind == AnimalKind.Deer));
                 // A bandit makes no animal's cry.
                 if (v.Man == null && (alarm || hurt) && Time.time - v.CalledAt > 3f)
@@ -170,6 +190,7 @@ namespace Oxfall.Game.World
         /// <summary>A bandit's shot: the flash at his muzzle, where he aims.</summary>
         private void Fired(View v)
         {
+            v.Man.Kick();
             if (!v.Shown || !v.Man.TryMuzzle(out var muzzle)) return;
             var forward = Quaternion.Euler(-v.Pitch, v.Yaw, 0f) * Vector3.forward;
             BanditFired?.Invoke(muzzle, forward);
@@ -374,6 +395,8 @@ namespace Oxfall.Game.World
                 Figure = man.Root,
                 Man = man,
                 Shots = a.Shots,
+                Calls = a.Calls,
+                Act = a.Act,
                 Renderers = man.Root.GetComponentsInChildren<Renderer>(true),
                 X = a.X,
                 Z = a.Z,
@@ -385,6 +408,8 @@ namespace Oxfall.Game.World
                 Health = a.Health,
             };
             man.SetDown(a.State == AnimalState.Dead);
+            man.SetBusy(a.Act == BanditAct.Reloading ? RemotePlayer.Busy.Reloading
+                : a.Act == BanditAct.Healing ? RemotePlayer.Busy.Healing : RemotePlayer.Busy.None);
             Place(v, 0.02f);
             return v;
         }

@@ -62,6 +62,7 @@ namespace Oxfall.Game
         /// <summary>When the last blast went off (a hurt just after one is the blast's).</summary>
         private float _lastBlast = -10f;
         // Guns: who fired last and when (for "te dispara"), and the attack label last shown for the gun in hand.
+        private float _radioWarnedAt = -100f;
         private readonly System.Collections.Generic.Dictionary<ushort, float> _firedAt = new System.Collections.Generic.Dictionary<ushort, float>();
         private string _gunLabel;
         private KeypadUi _keypad;
@@ -308,6 +309,28 @@ namespace Oxfall.Game
             {
                 _explosions?.MuzzleFlash(muzzle, forward, false);
                 GameAudio.PlayAt(audio.Bank.RevolverShot, muzzle, 1f, 6f, 200f, 0.05f);
+            };
+            _animalViews.BanditRadioed += at =>
+            {
+                audio.PlayRadio(at);
+                // Near enough to hear it: a warning, now and then.
+                var me = _player.transform.position;
+                if ((at - me).sqrMagnitude < Bandits.RadioRange * Bandits.RadioRange && Time.time - _radioWarnedAt > 25f)
+                {
+                    _radioWarnedAt = Time.time;
+                    _hud.ShowToast("¡Un bandido pide refuerzos por radio!");
+                }
+            };
+            _animalViews.BanditBusy += (act, at) =>
+            {
+                if (act == BanditAct.Reloading) GameAudio.PlayAt(audio.Bank.GunReload, at, 0.85f, 2f, 30f, 0.05f);
+                else if (act == BanditAct.Healing) GameAudio.PlayAt(audio.Bank.Bandage, at, 0.8f, 2f, 22f, 0.05f);
+            };
+            // Others' footsteps (players and bandits), heard from where they tread, only near.
+            RemotePlayer.Footstep = (at, running) =>
+            {
+                var me = _player.transform.position;
+                if ((at - me).sqrMagnitude < 32f * 32f && (at - me).sqrMagnitude > 0.5f) audio.PlayStep(at, running);
             };
             gatherer.FireSound = audio.Bank.FireLoop;
             controls.Tapped += () => audio.Play(SoundCue.Tap);
@@ -1085,7 +1108,8 @@ namespace Oxfall.Game
             Debug.Log($"[Oxfall] Gunshot by {_net.NameOf(shooter) ?? "someone"} ({tool})");
             var forward = Quaternion.Euler(-pitch, yaw, 0f) * Vector3.forward;
             // From the gun in their hands, when this phone shows it.
-            var muzzle = _net.Players.TryGetValue(shooter, out var them) && them.TryMuzzle(out var held)
+            if (_net.Players.TryGetValue(shooter, out var them)) them.Kick();
+            var muzzle = them != null && them.TryMuzzle(out var held)
                 ? held : origin + forward * 0.6f + Vector3.down * 0.15f;
             bool big = gun.Pellets > 1;
             _explosions.MuzzleFlash(muzzle, forward, big);
@@ -1726,6 +1750,38 @@ namespace Oxfall.Game
                 case "clear-animals":
                     // Test, alone: no animals at all, so a shot is not spoiled by a passing wolf.
                     if (!_actions.Online) _fauna.Clear();
+                    break;
+                case "bandits":
+                    // Test, alone: what each bandit near is about.
+                    if (_actions.Online || _fauna == null) break;
+                    foreach (var b in _fauna.All)
+                    {
+                        if (b.Kind != AnimalKind.Bandit) continue;
+                        var at = new Vector3(b.X, b.Y, b.Z);
+                        float d = Vector3.Distance(at, _player.transform.position);
+                        if (d < 90f) Debug.Log($"[Oxfall] Bandit {b.Id} {b.State} act={b.Act} rounds={b.Rounds} hp={b.Health:0} calls={b.Calls} healed={b.Healed} strafing={b.Strafing} ({d:0.0} m)");
+                    }
+                    break;
+                case "hurt-bandit":
+                    // Test, alone: the nearest living bandit badly hurt, as if this player shot him.
+                    if (_actions.Online || _fauna == null) break;
+                    {
+                        Animal near = null;
+                        float best = float.MaxValue;
+                        var me = _player.transform.position;
+                        foreach (var b in _fauna.All)
+                        {
+                            if (b.Kind != AnimalKind.Bandit || b.IsDead) continue;
+                            float d = (new Vector3(b.X, b.Y, b.Z) - me).sqrMagnitude;
+                            if (d < best) { best = d; near = b; }
+                        }
+                        if (near != null)
+                        {
+                            _fauna.Hit(near.Id, 65f, 0, me.x, me.z);
+                            _animalViews.Flinch(near.Id);
+                            Debug.Log($"[Oxfall] Hurt bandit {near.Id}: hp={near.Health:0} act={near.Act}");
+                        }
+                    }
                     break;
                 case "animals":
                     foreach (int id in _animalViews.Ids)
@@ -3203,6 +3259,7 @@ namespace Oxfall.Game
             // The cold, by the same rules the server hurts with (online it only shows here).
             var feet = _player.transform.position;
             float daylight = _dayNight.Cycle.Daylight, rain = _weather != null ? _weather.Rain : 0f;
+            _audio.Daylight = daylight;
             bool inWater = _player.IsSwimming || feet.y < IslandShape.WaterLevel - Temperature.WadeDepth;
             float fire = Temperature.FireWarmth(_settlement, feet.x, feet.y, feet.z);
             _warmth = Temperature.Felt(daylight, rain, Temperature.Insulation(_inventory), fire,

@@ -12,7 +12,7 @@ namespace Oxfall.Core.Net
     public static class Protocol
     {
         /// <summary>Raised whenever a message changes shape; a client of another version is turned away.</summary>
-        public const ushort Version = 31;
+        public const ushort Version = 32;
 
         /// <summary>Snapshots per second the server sends.</summary>
         public const int TickRate = 20;
@@ -1217,9 +1217,14 @@ namespace Oxfall.Core.Net
                 w.Float(a.X);
                 w.Float(a.Z);
                 w.Byte((byte)((int)Math.Round(a.Yaw / 360f * 256f) & 0xFF));
-                w.Byte((byte)Math.Min(255, (int)Math.Round(a.Speed * 20f)));
+                w.Byte((byte)Math.Min(255, (int)Math.Round(a.Drift * 20f)));
                 w.Byte((byte)Math.Min(255, Math.Max(0, (int)Math.Round(a.Health / Wildlife.Animals.MaxHealth(a.Kind) * 255f))));
                 w.Byte((byte)(a.Shots & 0xFF));
+                if (a.Kind == AnimalKind.Bandit)
+                {
+                    w.Byte((byte)a.Act);
+                    w.Byte((byte)(a.Calls & 0xFF));
+                }
                 count++;
             }
             w.PatchUShort(countAt, (ushort)count);
@@ -1239,8 +1244,15 @@ namespace Oxfall.Core.Net
                 float speed = r.Byte() / 20f;
                 float health = r.Byte() / 255f;
                 int shots = r.Byte();
+                var act = BanditAct.None;
+                int calls = 0;
+                if (kind == AnimalKind.Bandit)
+                {
+                    act = (BanditAct)r.Byte();
+                    calls = r.Byte();
+                }
                 if (!Wildlife.Animals.IsKnown(kind)) continue;
-                into.Add(new AnimalSnap(id, kind, state, x, z, yaw, speed, health, shots));
+                into.Add(new AnimalSnap(id, kind, state, x, z, yaw, speed, health, shots, act, calls));
             }
         }
 
