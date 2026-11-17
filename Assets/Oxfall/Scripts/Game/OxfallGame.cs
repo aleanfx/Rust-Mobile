@@ -63,6 +63,9 @@ namespace Oxfall.Game
         private float _lastBlast = -10f;
         // Guns: who fired last and when (for "te dispara"), and the attack label last shown for the gun in hand.
         private float _radioWarnedAt = -100f;
+
+        /// <summary>Test, alone: the animals and bandits hold still where they are (for pictures of what they do).</summary>
+        private bool _faunaFrozen;
         private readonly System.Collections.Generic.Dictionary<ushort, float> _firedAt = new System.Collections.Generic.Dictionary<ushort, float>();
         private string _gunLabel;
         private KeypadUi _keypad;
@@ -1379,7 +1382,7 @@ namespace Oxfall.Game
                     _prey.Add(new Fauna.Prey(0, p.x, p.y, p.z));
                 }
                 _bites.Clear();
-                _fauna.Tick(dt, _prey, _bites);
+                if (!_faunaFrozen) _fauna.Tick(dt, _prey, _bites);
                 foreach (var bite in _bites)
                 {
                     // A bandit's miss: only the shot is seen and heard.
@@ -2019,6 +2022,9 @@ namespace Oxfall.Game
                 case "face-workbench": FaceDeployable(Nearest(DeployableKind.Workbench)); break;
                 case "to-recycler": ToRecycler(); break;
                 case "to-bandit": ToBandit(); break;
+                case "close-bandit": ToBandit(4.5f); break;
+                case "freeze-animals": _faunaFrozen = true; break;
+                case "thaw-animals": _faunaFrozen = false; break;
                 case "airdrop": DevAirdrop(); break;
                 case "weather-auto": _weather.Force(null, null); break;
                 case "learn-all":
@@ -3189,7 +3195,7 @@ namespace Oxfall.Game
             _player.Teleport(_player.transform.position, yaw, pitch);
         }
 
-        private void ToBandit()
+        private void ToBandit(float r = 13f)
         {
             var here = _player.transform.position;
             int best = -1;
@@ -3205,13 +3211,13 @@ namespace Oxfall.Game
             var ground = _world.Shape.Ground;
             for (int i = 0; i < 24; i++)
             {
-                float angle = i * 15f * Mathf.Deg2Rad, r = 13f;
+                float angle = i * 15f * Mathf.Deg2Rad;
                 float x = at.x + Mathf.Sin(angle) * r, z = at.z + Mathf.Cos(angle) * r;
                 float y = Monuments.SurfaceHeight(ground, x, z);
                 if (Monuments.Solid(ground, x, z, 0.5f) || Mathf.Abs(y - at.y) > 3f) continue;
                 if (Monuments.LineBlocked(ground, x, y + 1.5f, z, at.x, at.y + 1.5f, at.z)) continue;
                 var to = at - new Vector3(x, y, z);
-                _player.Teleport(new Vector3(x, y + 0.05f, z), Mathf.Atan2(to.x, to.z) * Mathf.Rad2Deg, 0f);
+                _player.Teleport(new Vector3(x, y + 0.05f, z), Mathf.Atan2(to.x, to.z) * Mathf.Rad2Deg, r < 8f ? 6f : 0f);
                 Debug.Log($"[Oxfall] Near bandit {best} at ({at.x:0.0}, {at.y:0.0}, {at.z:0.0}) from ({x:0.0}, {z:0.0})");
                 return;
             }

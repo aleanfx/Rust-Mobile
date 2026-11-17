@@ -68,7 +68,13 @@ const check = (name, ok) => { results.push(`${ok ? 'PASS' : 'FAIL'} ${name}`); l
     await cmd('heal', 200);
     reloading = await pollBandits(/act=Reloading/, 1500);
   }
-  if (reloading) { await cmd('face-animal', 300); await shot('02-reloading'); }
+  if (reloading) {
+    await cmd('freeze-animals', 200);
+    await cmd('close-bandit', 3000);
+    await shot('02-reloading');
+    await cmd('to-bandit', 1500);
+    await cmd('thaw-animals', 300);
+  }
   check('he runs dry and reloads', !!reloading);
   check('the reload is heard', await waitForLog('Bandit busy: Reloading', 15000));
   const strafed = log.some(l => /strafing=True/.test(l)) || !!(await pollBandits(/strafing=True/, 15000));
@@ -80,7 +86,13 @@ const check = (name, ok) => { results.push(`${ok ? 'PASS' : 'FAIL'} ${name}`); l
   await cmd('hurt-bandit', 800);
   check('badly hurt, he runs for cover', since(i0, 'act=Cover') || !!(await pollBandits(/act=(Cover|Healing)/, 3000)));
   const healing = await pollBandits(/act=Healing/, 20000);
-  if (healing) { await cmd('face-animal', 300); await shot('03-bandaging'); }
+  if (healing) {
+    await cmd('freeze-animals', 200);
+    await cmd('close-bandit', 3000);
+    await shot('03-bandaging');
+    await cmd('to-bandit', 1500);
+    await cmd('thaw-animals', 300);
+  }
   check('he bandages himself', !!healing);
   check('the bandage is heard', await waitForLog('Bandit busy: Healing', 15000));
   const healed = await pollBandits(/healed=True/, 20000);
