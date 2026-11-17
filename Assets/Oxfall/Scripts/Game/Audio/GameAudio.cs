@@ -53,6 +53,7 @@ namespace Oxfall.Game.Audio
         public float Daylight { get; set; } = 1f;
         private AudioSource _crickets;
         private float _birdTimer = 4f;
+        private float _howlTimer = 40f;
         private AudioSource _waves;
         private Transform _player;
         private CharacterController _body;
@@ -201,9 +202,21 @@ namespace Oxfall.Game.Audio
             float night = Mathf.Clamp01((0.35f - Daylight) / 0.25f);
             float dry = 1f - Mathf.Clamp01(Rain * 2f);
             _crickets.volume = Mathf.MoveTowards(_crickets.volume, night * 0.14f * (0.4f + 0.6f * dry), Time.deltaTime * 0.05f);
+            var p = _player.position;
+            // Now and then at night, wolves howling somewhere far off.
+            _howlTimer -= Time.deltaTime;
+            if (_howlTimer <= 0f)
+            {
+                _howlTimer = Random.Range(45f, 110f);
+                if (night > 0.5f)
+                {
+                    float a = Random.value * Mathf.PI * 2f, d = Random.Range(70f, 130f);
+                    var howlAt = new Vector3(p.x + Mathf.Cos(a) * d, p.y + 5f, p.z + Mathf.Sin(a) * d);
+                    PlayAt(_bank.Howl, howlAt, 0.55f, 20f, 170f, 0.1f);
+                }
+            }
             _birdTimer -= Time.deltaTime;
             if (_birdTimer > 0f) return;
-            var p = _player.position;
             float forest = _shape.Forest(p.x, p.z);
             _birdTimer = Mathf.Lerp(11f, 3.5f, forest) * Random.Range(0.7f, 1.4f);
             if (night > 0.3f || dry < 0.6f || p.y < IslandShape.WaterLevel) return;
@@ -220,6 +233,9 @@ namespace Oxfall.Game.Audio
             var steps = _shape.Height(at.x, at.z) < 2.2f ? _bank.StepsSand : _bank.StepsGrass;
             PlayAt(steps[_step++ % steps.Length], at, running ? 0.75f : 0.5f, 1.5f, running ? 30f : 20f, 0.08f);
         }
+
+        /// <summary>A wolf howling to its pack where it stands, heard far.</summary>
+        public void PlayHowl(Vector3 at) => PlayAt(_bank.Howl, at, 0.9f, 6f, 120f, 0.08f);
 
         /// <summary>A bandit's radio crackling where he stands.</summary>
         public void PlayRadio(Vector3 at) => PlayAt(_bank.Radio, at, 0.8f, 3f, 55f, 0.04f);

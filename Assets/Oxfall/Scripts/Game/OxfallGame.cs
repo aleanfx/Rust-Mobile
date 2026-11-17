@@ -308,6 +308,11 @@ namespace Oxfall.Game
             _copters.EngineClip = audio.Bank.EngineLoop;
             gatherer.Sound += audio.Play;
             _animalViews.Called += audio.PlayAnimal;
+            _animalViews.Howled += at =>
+            {
+                audio.PlayHowl(at);
+                Debug.Log("[Oxfall] Wolf howled");
+            };
             _animalViews.BanditFired += (muzzle, forward) =>
             {
                 _explosions?.MuzzleFlash(muzzle, forward, false);
@@ -1777,6 +1782,28 @@ namespace Oxfall.Game
                 case "clear-animals":
                     // Test, alone: no animals at all, so a shot is not spoiled by a passing wolf.
                     if (!_actions.Online) _fauna.Clear();
+                    break;
+                case "wolf-pack":
+                    // Test, alone: a pack of three wolves some way ahead, not yet near enough to notice.
+                    if (_actions.Online || _fauna == null) break;
+                    {
+                        var me = _player.transform.position;
+                        var ahead = _player.transform.forward;
+                        ahead.y = 0f;
+                        ahead.Normalize();
+                        var at = me + ahead * (Animals.WolfSight + 6f);
+                        var pack = _fauna.AddPack(at.x, at.z, Animals.PackSize);
+                        Debug.Log($"[Oxfall] Wolf pack {pack[0].Pack} of {pack.Count} at ({at.x:0.0}, {at.z:0.0})");
+                    }
+                    break;
+                case "wolves":
+                    if (_actions.Online || _fauna == null) break;
+                    foreach (var w in _fauna.All)
+                    {
+                        if (w.Kind != AnimalKind.Wolf) continue;
+                        float d = Vector3.Distance(new Vector3(w.X, w.Y, w.Z), _player.transform.position);
+                        if (d < 80f) Debug.Log($"[Oxfall] Wolf {w.Id} pack={w.Pack} {w.State} hp={w.Health:0} calls={w.Calls} ({d:0.0} m)");
+                    }
                     break;
                 case "bandits":
                     // Test, alone: what each bandit near is about.

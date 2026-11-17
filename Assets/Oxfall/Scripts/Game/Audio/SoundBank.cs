@@ -75,6 +75,9 @@ namespace Oxfall.Game.Audio
         /// <summary>Birds by day: a few different calls (a whistle, a trill, a chirp run), one now and then from the trees.</summary>
         public AudioClip[] Birds { get; }
 
+        /// <summary>A wolf's howl: a rising, wavering cry that holds and falls away.</summary>
+        public AudioClip Howl { get; }
+
         /// <summary>Crickets at night (a loop).</summary>
         public AudioClip CricketsLoop { get; }
 
@@ -246,6 +249,7 @@ namespace Oxfall.Game.Audio
                     + Tone(t - 0.45f, 470f + 30f * Mathf.Sin(t * 9f)) * Env(t - 0.45f, 0.08f, 0.3f)) * 0.6f),
             };
             CricketsLoop = MakeLoop("crickets", 4f, CricketSample);
+            Howl = Make("howl", 3.2f, HowlSample);
         }
 
         // ---- building blocks ----
@@ -323,6 +327,18 @@ namespace Oxfall.Game.Audio
             float speech = (voice * 0.55f + bright * 0.35f) * syllables * talking;
             float beep = Mathf.Clamp(Tone(t - 1.06f, 1450f) * 3f, -1f, 1f) * (t > 1.06f && t < 1.16f ? 1f : 0f) * 0.35f;
             return squelch + speech * 0.7f + bright * 0.05f * talking + beep;
+        }
+
+        private float _howlPhase;
+        private float HowlSample(float t, int i)
+        {
+            // The pitch glides up, wavers as it holds, and sinks at the end; a breathy edge on top.
+            float rise = Mathf.SmoothStep(0f, 1f, t / 0.5f), fall = Mathf.SmoothStep(0f, 1f, (t - 2.2f) / 0.9f);
+            float pitch = 330f + 330f * rise - 170f * fall + 9f * Mathf.Sin(t * 31f) * rise;
+            _howlPhase += 2f * Mathf.PI * pitch / Rate;
+            float voice = Mathf.Sin(_howlPhase) + 0.35f * Mathf.Sin(_howlPhase * 2f) + 0.12f * Mathf.Sin(_howlPhase * 3f);
+            float swell = Mathf.Clamp01(t / 0.35f) * Mathf.Clamp01((3.2f - t) / 0.7f);
+            return (voice * 0.8f + Dark(0.3f) * 0.12f) * swell;
         }
 
         private float CricketSample(float t, int i)

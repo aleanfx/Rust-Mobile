@@ -80,6 +80,16 @@ namespace Oxfall.Core.Wildlife
         /// <summary>How near a wolf notices a player and comes for them.</summary>
         public const float WolfSight = 20f;
 
+        /// <summary>Wolves roam in packs this big; one that comes for someone brings the others this near.</summary>
+        public const int PackSize = 3;
+        public const float PackRally = 30f;
+
+        /// <summary>A pack closes in from different sides: each but the first circles to a spot this far to one side before going in.</summary>
+        public const float FlankMetres = 4f;
+
+        /// <summary>A wolf hurt below this share of its health runs off.</summary>
+        public const float WolfFleesBelow = 0.3f;
+
         /// <summary>How near a player makes a deer (or an unhurt boar) bolt.</summary>
         public const float Shyness = 11f;
 
@@ -232,13 +242,16 @@ namespace Oxfall.Core.Wildlife
         /// <summary>A bandit, who keeps to his post (it never moves with him).</summary>
         public bool Guard { get; internal set; }
 
+        /// <summary>Which pack a wolf runs with (0: alone).</summary>
+        public int Pack { get; internal set; }
+
         /// <summary>A bandit's rounds left in his revolver.</summary>
         public int Rounds { get; internal set; } = Bandits.Magazine;
 
         /// <summary>What a bandit is busy with.</summary>
         public BanditAct Act { get; internal set; }
 
-        /// <summary>A bandit's radio calls so far (each one is heard where he stands).</summary>
+        /// <summary>A bandit's radio calls so far (each one is heard where he stands); a wolf's calls to its pack.</summary>
         public int Calls { get; internal set; }
 
         /// <summary>A bandit has bandaged himself already (only once a life).</summary>
@@ -267,6 +280,9 @@ namespace Oxfall.Core.Wildlife
         internal float SeenX, SeenZ;
         internal bool HasSeen;
         internal float Pace;
+        internal float Flank;
+        internal float FlankBearing;
+        internal bool Flanked;
 
         public override string ToString() => $"{Kind} {Id} ({X:0.0}, {Z:0.0}) {State} {Health:0}";
     }

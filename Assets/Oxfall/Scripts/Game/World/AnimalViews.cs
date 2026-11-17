@@ -61,6 +61,11 @@ namespace Oxfall.Game.World
         /// <summary>An animal calls out (a wolf or boar starting a charge, a deer bolting, any of them hurt): its kind, where.</summary>
         public event Action<AnimalKind, Vector3> Called;
 
+        /// <summary>A wolf howled to bring its pack (the first of a pack to go for someone), where it stands.</summary>
+        public event Action<Vector3> Howled;
+
+        private float _howledAt = -100f;
+
         /// <summary>A bandit fired: from his revolver's muzzle, the way it points.</summary>
         public event Action<Vector3, Vector3> BanditFired;
 
@@ -158,7 +163,13 @@ namespace Oxfall.Game.World
                 if (v.Man == null && (alarm || hurt) && Time.time - v.CalledAt > 3f)
                 {
                     v.CalledAt = Time.time;
-                    Called?.Invoke(a.Kind, v.Root.transform.position + Vector3.up * 0.6f);
+                    // The first wolf of a pack to go for someone howls; the rest snarl.
+                    if (a.Kind == AnimalKind.Wolf && alarm && Time.time - _howledAt > 8f)
+                    {
+                        _howledAt = Time.time;
+                        Howled?.Invoke(v.Root.transform.position + Vector3.up * 0.7f);
+                    }
+                    else Called?.Invoke(a.Kind, v.Root.transform.position + Vector3.up * 0.6f);
                 }
                 v.Health = a.Health;
                 if (v.State != a.State && a.State == AnimalState.Dead) SetDead(v, true);

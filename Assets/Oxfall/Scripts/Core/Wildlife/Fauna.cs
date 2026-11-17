@@ -56,6 +56,7 @@ namespace Oxfall.Core.Wildlife
         private readonly List<(float X, float Z, float Yaw, float Timer)> _posts = new List<(float, float, float, float)>();
         private readonly List<int> _gone = new List<int>();
         private int _nextId = 1;
+        private int _nextPack = 1;
 
         public Fauna(IslandGround ground, int seed)
         {
@@ -86,7 +87,7 @@ namespace Oxfall.Core.Wildlife
         }
 
         /// <summary>How many of each roam the island (it is about 350 m across).</summary>
-        public const int Boars = 7, Wolves = 4, Deer = 7;
+        public const int Boars = 7, Wolves = 6, Deer = 7;
 
         /// <summary>The herds a fresh island starts with.</summary>
         public void Populate() => Populate(Boars, Wolves, Deer);
@@ -177,12 +178,79 @@ namespace Oxfall.Core.Wildlife
         public void Populate(int boars, int wolves, int deer)
         {
             for (int i = 0; i < boars; i++) Spawn(AnimalKind.Boar, null);
-            for (int i = 0; i < wolves; i++) Spawn(AnimalKind.Wolf, null);
+            for (int left = wolves; left > 0; left -= Animals.PackSize) SpawnPack(Math.Min(Animals.PackSize, left), null);
             for (int i = 0; i < deer; i++) Spawn(AnimalKind.Deer, null);
         }
 
         /// <summary>Puts an animal of this kind somewhere it likes, out of sight of the players. False if nowhere fit.</summary>
-        public bool Spawn(AnimalKind kind, IReadOnlyList<Prey> players)
+        public bool Spawn(AnimalKind kind, IReadOnlyList<Prey> players) => SpawnOne(kind, players) != null;
+
+        /// <summary>A pack of wolves together somewhere in the woods, out of sight of the players. False if nowhere fit.</summary>
+        public bool SpawnPack(int size, IReadOnlyList<Prey> players)
+        {
+            var leader = SpawnOne(AnimalKind.Wolf, players);
+            if (leader == null) return false;
+            leader.Pack = _nextPack++;
+            for (int i = 1; i < size; i++) JoinPack(leader);
+            return true;
+        }
+
+        /// <summary>A pack of wolves set down at a spot (for tests): the leader there, the others beside it.</summary>
+        public List<Animal> AddPack(float x, float z, int size)
+        {
+            var leader = Add(AnimalKind.Wolf, x, z, 0f);
+            leader.Pack = _nextPack++;
+            var pack = new List<Animal> { leader };
+            for (int i = 1; i < size; i++) pack.Add(JoinPack(leader));
+            return pack;
+        }
+
+        /// <summary>Another wolf for <paramref name="member"/>'s pack, beside it, taking a side to come in from.</summary>
+        private Animal JoinPack(Animal member)
+        {
+            float x = member.X, z = member.Z;
+            for (int i = 0; i < 12; i++)
+            {
+                double angle = _random.NextDouble() * Math.PI * 2.0;
+                float r = 1.5f + (float)_random.NextDouble() * 2.5f;
+                float tx = member.X + (float)Math.Cos(angle) * r, tz = member.Z + (float)Math.Sin(angle) * r;
+                if (!Walkable(tx, tz)) continue;
+                x = tx;
+                z = tz;
+                break;
+            }
+            var wolf = Add(AnimalKind.Wolf, x, z, member.Yaw);
+            wolf.Pack = member.Pack;
+            // A side nobody in the pack takes yet: straight in, from the left, from the right.
+            bool left = false, right = false, straight = false;
+            foreach (var b in _animals.Values)
+            {
+                if (b == wolf || b.Pack != wolf.Pack || b.IsDead) continue;
+                if (b.Flank > 1f) left = true;
+                else if (b.Flank < -1f) right = true;
+                else straight = true;
+            }
+            wolf.Flank = !straight ? 0f : !left ? 70f : !right ? -70f : (float)(_random.NextDouble() * 120.0 - 60.0);
+            return wolf;
+        }
+
+        /// <summary>A wolf back on the island: with a pack short of wolves (beside one of it, out of the players' sight), or a new pack.</summary>
+        private bool SpawnWolf(IReadOnlyList<Prey> players)
+        {
+            var counts = new Dictionary<int, int>();
+            foreach (var b in _animals.Values)
+                if (b.Kind == AnimalKind.Wolf && !b.IsDead && b.Pack != 0) counts[b.Pack] = counts.TryGetValue(b.Pack, out int n) ? n + 1 : 1;
+            foreach (var b in _animals.Values)
+            {
+                if (b.Kind != AnimalKind.Wolf || b.IsDead || b.Pack == 0 || counts[b.Pack] >= Animals.PackSize) continue;
+                if (b.State == AnimalState.Chase || (players != null && Near(players, b.X, b.Z, SpawnClearance))) continue;
+                JoinPack(b);
+                return true;
+            }
+            return SpawnPack(1, players);
+        }
+
+        private Animal SpawnOne(AnimalKind kind, IReadOnlyList<Prey> players)
         {
             for (int attempt = 0; attempt < 80; attempt++)
             {
@@ -195,10 +263,9 @@ namespace Oxfall.Core.Wildlife
                 float slack = attempt / 160f;
                 if (kind == AnimalKind.Deer ? forest > 0.5f + slack : forest < 0.45f - slack) continue;
                 if (players != null && Near(players, x, z, SpawnClearance)) continue;
-                Add(kind, x, z, (float)_random.NextDouble() * 360f);
-                return true;
+                return Add(kind, x, z, (float)_random.NextDouble() * 360f);
             }
-            return false;
+            return null;
         }
 
         /// <summary>Sets an animal down at a spot (for tests and spawning).</summary>
@@ -268,10 +335,17 @@ namespace Oxfall.Core.Wildlife
                 }
                 if (fresh) Alert(a, attacker);
             }
+            else if (a.Kind == AnimalKind.Wolf && a.Health < Animals.WolfFleesBelow * Animals.MaxHealth(a.Kind))
+            {
+                // Badly hurt: off it goes, whimpering.
+                a.Angry = false;
+                Flee(a, fromX, fromZ, 6f);
+            }
             else
             {
                 a.Angry = true;
-                Chase(a, attacker);
+                Chase(a, attacker, fromX, fromZ);
+                if (a.Kind == AnimalKind.Wolf) Rally(a, attacker, fromX, fromZ);
             }
             return false;
         }
@@ -340,7 +414,7 @@ namespace Oxfall.Core.Wildlife
                     continue;
                 }
                 // Nowhere out of sight just now: try again in a while.
-                if (Spawn(kind, players)) _waiting.RemoveAt(i);
+                if (kind == AnimalKind.Wolf ? SpawnWolf(players) : Spawn(kind, players)) _waiting.RemoveAt(i);
                 else _waiting[i] = (kind, 20f);
             }
         }
@@ -372,6 +446,18 @@ namespace Oxfall.Core.Wildlife
                     a.GoalX = prey.X;
                     a.GoalZ = prey.Z;
                     float d = Distance(a.X, a.Z, prey.X, prey.Z);
+                    if (a.Kind == AnimalKind.Wolf && !a.Flanked && Math.Abs(a.Flank) > 1f)
+                    {
+                        // Round to its side first (the bearing fixed when the chase began), then in.
+                        float b = a.FlankBearing * (float)(Math.PI / 180.0);
+                        float sx = prey.X + (float)Math.Sin(b) * Animals.FlankMetres, sz = prey.Z + (float)Math.Cos(b) * Animals.FlankMetres;
+                        if (d <= Animals.FlankMetres * 0.75f || Distance(a.X, a.Z, sx, sz) < 1.5f || !Walkable(sx, sz)) a.Flanked = true;
+                        else
+                        {
+                            a.GoalX = sx;
+                            a.GoalZ = sz;
+                        }
+                    }
                     if (d <= Animals.AttackReach && Math.Abs(prey.Y - a.Y) < 2f && a.AttackTimer <= 0f)
                     {
                         a.AttackTimer = Animals.AttackSeconds;
@@ -389,7 +475,8 @@ namespace Oxfall.Core.Wildlife
                         var p = players[nearest];
                         if (a.Kind == AnimalKind.Wolf && distance < Animals.WolfSight)
                         {
-                            Chase(a, p.Key);
+                            Chase(a, p.Key, p.X, p.Z);
+                            Rally(a, p.Key, p.X, p.Z);
                             break;
                         }
                         if (a.Kind == AnimalKind.Deer && distance < Animals.Shyness)
@@ -789,11 +876,20 @@ namespace Oxfall.Core.Wildlife
 
         private void Wander(Animal a)
         {
+            // A wolf of a pack keeps near its leader.
+            var leader = Leader(a);
+            if (leader != null)
+            {
+                a.HomeX = leader.X;
+                a.HomeZ = leader.Z;
+            }
             for (int i = 0; i < 8; i++)
             {
                 double angle = _random.NextDouble() * Math.PI * 2.0;
-                // A guard paces about his post; an animal roams.
-                float r = a.Guard ? 1f + (float)_random.NextDouble() * 5f : 4f + (float)_random.NextDouble() * 14f;
+                // A guard paces about his post; a pack's wolf keeps close; an animal roams.
+                float r = a.Guard ? 1f + (float)_random.NextDouble() * 5f
+                    : leader != null ? 2f + (float)_random.NextDouble() * 5f
+                    : 4f + (float)_random.NextDouble() * 14f;
                 float x = a.HomeX + (float)Math.Cos(angle) * r, z = a.HomeZ + (float)Math.Sin(angle) * r;
                 if (!Walkable(x, z)) continue;
                 a.GoalX = x;
@@ -816,15 +912,43 @@ namespace Oxfall.Core.Wildlife
             a.HomeZ = a.Z;
         }
 
-        private static void Chase(Animal a, int quarry)
+        private static void Chase(Animal a, int quarry, float preyX, float preyZ)
         {
             if (a.State != AnimalState.Chase)
             {
                 a.HomeX = a.X;
                 a.HomeZ = a.Z;
+                // Which side it comes in from: its own way to the prey, turned by its place in the pack.
+                a.FlankBearing = (float)(Math.Atan2(a.X - preyX, a.Z - preyZ) * 180.0 / Math.PI) + a.Flank;
+                a.Flanked = false;
             }
             a.State = AnimalState.Chase;
             a.Quarry = quarry;
+        }
+
+        /// <summary>A wolf's call to its pack: the others near it come for the same prey.</summary>
+        private void Rally(Animal a, int quarry, float preyX, float preyZ)
+        {
+            if (a.Pack == 0) return;
+            a.Calls++;
+            foreach (var b in _animals.Values)
+            {
+                if (b == a || b.Pack != a.Pack || b.IsDead || b.State == AnimalState.Chase || b.State == AnimalState.Flee) continue;
+                if (Distance(a.X, a.Z, b.X, b.Z) > Animals.PackRally) continue;
+                b.Angry = true;
+                Chase(b, quarry, preyX, preyZ);
+                b.AttackTimer = Math.Max(b.AttackTimer, 0.3f);
+            }
+        }
+
+        /// <summary>The pack's leader: its first wolf still alive (null for a lone wolf, or one that leads).</summary>
+        private Animal Leader(Animal a)
+        {
+            if (a.Pack == 0) return null;
+            Animal leader = null;
+            foreach (var b in _animals.Values)
+                if (b.Pack == a.Pack && !b.IsDead && (leader == null || b.Id < leader.Id)) leader = b;
+            return leader == a ? null : leader;
         }
 
         private void Flee(Animal a, float fromX, float fromZ, float seconds)
