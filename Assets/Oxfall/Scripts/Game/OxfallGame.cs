@@ -763,6 +763,7 @@ namespace Oxfall.Game
             _net.Swung += (who, impact) =>
             {
                 if (!_net.Players.TryGetValue(who, out var them) || !them.Visible) return;
+                Debug.Log($"[Oxfall] Saw {them.Name} swing: {impact}");
                 them.Swing();
                 var at = them.Root.position + Vector3.up * 1.1f;
                 var bank = _audio.Bank;
