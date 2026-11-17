@@ -98,6 +98,7 @@ namespace Oxfall.Core.Net
             Fauna.Guard(Fauna.Posts(Ground));
             CreateAirdrops(seed, obstacles);
             CreateLockedCrates(seed);
+            CreateHelis(seed);
             CreateBoats();
             CreateMinicopters();
             CreateHorses(obstacles);
@@ -461,6 +462,9 @@ namespace Oxfall.Core.Net
                     if (drop.HasValue) AirdropsStarted.Add(drop.Value);
                     return ActionResult.Ok;
                 }
+                case ActKind.DevHeli:
+                    if (!DevMode) return ActionResult.Invalid;
+                    return DevHeli(a, player);
                 case ActKind.DevCrate:
                 {
                     // 0: a locked crate in an outpost now; 1: one a little ahead of the player; 2: the nearest one's hack all but done.
@@ -682,6 +686,7 @@ namespace Oxfall.Core.Net
             TickTurrets();
             TickAirdrops();
             TickLockedCrates();
+            TickHelis(deltaSeconds);
             Environment.Weather.At(Seed, Time, out float rain, out _);
             float daylight = Day.Daylight;
             foreach (var record in _online.Values)

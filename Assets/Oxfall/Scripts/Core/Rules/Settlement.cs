@@ -211,6 +211,21 @@ namespace Oxfall.Core.Rules
             return crate;
         }
 
+        /// <summary>A downed helicopter's crate set down here, full of <paramref name="items"/>, too hot to open for a while.</summary>
+        public Deployable PlaceHeliCrate(float x, float y, float z, float yaw, IEnumerable<Gathering.Yield> items)
+        {
+            var crate = Add(new Deployable(0, DeployableKind.HeliCrate, x, y, z, yaw, 0));
+            var into = Container(crate.Id);
+            foreach (var item in items)
+                if (item.Amount > 0) into.Add(item.ItemId, item.Amount);
+            LootDropped?.Invoke(crate);
+            SetHack(crate.Id, PatrolHelis.CrateBurnSeconds);
+            return crate;
+        }
+
+        /// <summary>Crates that open on a timer: a locked crate (once hacked) and a downed helicopter's (once it cools).</summary>
+        public static bool IsTimedCrate(DeployableKind kind) => kind == DeployableKind.LockedCrate || kind == DeployableKind.HeliCrate;
+
         // ---- Locked crates
 
         /// <summary>Locked crates being hacked (seconds to go) and those already open (0).</summary>
@@ -221,7 +236,7 @@ namespace Oxfall.Core.Rules
 
         /// <summary>Whether a locked crate is open (anything else that holds things always is).</summary>
         public bool IsCrateOpen(int id) =>
-            !_deployables.TryGetValue(id, out var d) || d.Kind != DeployableKind.LockedCrate || (_hacks.TryGetValue(id, out float left) && left <= 0f);
+            !_deployables.TryGetValue(id, out var d) || !IsTimedCrate(d.Kind) || (_hacks.TryGetValue(id, out float left) && left <= 0f);
 
         /// <summary>Seconds left on a locked crate's hack (0 when open or not started).</summary>
         public float HackLeft(int id) => _hacks.TryGetValue(id, out float left) ? left : 0f;
@@ -233,7 +248,7 @@ namespace Oxfall.Core.Rules
         /// </summary>
         public bool SetHack(int id, float left)
         {
-            if (!_deployables.TryGetValue(id, out var d) || d.Kind != DeployableKind.LockedCrate) return false;
+            if (!_deployables.TryGetValue(id, out var d) || !IsTimedCrate(d.Kind)) return false;
             left = Math.Max(0f, Math.Min(LockedCrates.HackSeconds, left));
             bool wasOpen = _hacks.TryGetValue(id, out float before) && before <= 0f;
             // Once open it stays open (a late word of the hack does not lock it again).

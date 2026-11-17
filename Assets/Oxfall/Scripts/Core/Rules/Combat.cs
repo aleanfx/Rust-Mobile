@@ -11,6 +11,8 @@ namespace Oxfall.Core.Rules
         Animal = 2,
         /// <summary>A survivor asleep (their player away): the target is their owner number.</summary>
         Sleeper = 3,
+        /// <summary>A patrol helicopter: the target is its id (a head shot means its rotors).</summary>
+        Heli = 4,
     }
 
     /// <summary>

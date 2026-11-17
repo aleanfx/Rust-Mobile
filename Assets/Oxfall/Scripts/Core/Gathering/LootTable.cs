@@ -130,6 +130,40 @@ namespace Oxfall.Core.Gathering
             return loot;
         }
 
+        private static readonly (string Id, int Min, int Max)[] HeliFinds =
+        {
+            (ItemIds.SemiRifle, 1, 1), (ItemIds.MetalFacemask, 1, 1), (ItemIds.MetalChestPlate, 1, 1), (ItemIds.RoadsignKilt, 1, 1),
+            (ItemIds.SatchelCharge, 1, 3), (ItemIds.Beancan, 2, 4), (ItemIds.Revolver, 1, 1), (ItemIds.AutoTurret, 1, 1),
+            (ItemIds.MetalSpring, 2, 3), (ItemIds.Gears, 3, 6), (ItemIds.MetalPipe, 2, 4), (ItemIds.LowGradeFuel, 60, 120),
+        };
+
+        /// <summary>
+        /// What one of a downed patrol helicopter's crates holds: rifle rounds, syringes, scrap and
+        /// metal from the wreck, and two finds (a rifle, metal armour, charges, parts, fuel).
+        /// </summary>
+        public static List<Yield> HeliCrate(Random random)
+        {
+            var loot = new List<Yield>(8)
+            {
+                new Yield(ItemIds.RifleBullet, 30 + random.Next(41)),
+                new Yield(ItemIds.MedicalSyringe, 1 + random.Next(2)),
+                new Yield(ItemIds.Scrap, 50 + random.Next(51)),
+                new Yield(ItemIds.MetalFragments, 150 + random.Next(151)),
+            };
+            var picks = new List<int>();
+            while (picks.Count < 2)
+            {
+                int i = random.Next(HeliFinds.Length);
+                if (!picks.Contains(i)) picks.Add(i);
+            }
+            foreach (int i in picks)
+            {
+                var find = HeliFinds[i];
+                loot.Add(new Yield(find.Id, find.Min + random.Next(find.Max - find.Min + 1)));
+            }
+            return loot;
+        }
+
         /// <summary>
         /// What a bandit had on him: rounds for his revolver, scrap and cloth, sometimes a bandage or a
         /// part, and now and then the revolver itself.

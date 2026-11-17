@@ -115,6 +115,31 @@ namespace Oxfall.Core.Net
                 blow = killed ? AnimalBlow.Killed : AnimalBlow.Hurt;
                 return true;
             }
+            if (kind == ArrowTarget.Heli)
+            {
+                if (!Helis.TryGet(targetId, out var heli) || heli.Down) return false;
+                if (!CouldHitHeli(gun, shot, heli)) return false;
+                shot.PelletsLeft -= pellets;
+                headPellets = Math.Max(0, Math.Min(headPellets, pellets));
+                float range = Distance3(shot, heli.X, heli.Y, heli.Z);
+                float body = Firearms.Damage(gun, pellets - headPellets, range), rotor = Firearms.Damage(gun, headPellets, range);
+                damage = body + rotor * PatrolHelis.RotorMultiplier;
+                killed = HurtHeli(heli, body, false, playerId) | HurtHeli(heli, rotor, true, playerId);
+                return true;
+            }
+            return false;
+        }
+
+        /// <summary>Whether a shot's line passes near the helicopter: its nose, middle, tail or rotor tips.</summary>
+        private static bool CouldHitHeli(GunSpec gun, Shot s, PatrolHeli h)
+        {
+            double yaw = h.Yaw * Math.PI / 180.0;
+            float fx = (float)Math.Sin(yaw), fz = (float)Math.Cos(yaw);
+            foreach (var (along, side, up) in new[] { (0f, 0f, -1.5f), (3.5f, 0f, -1.5f), (-6f, 0f, -0.5f), (0f, 5f, 1.5f), (0f, -5f, 1.5f), (5f, 0f, 1.5f), (-4f, 0f, 1.5f) })
+            {
+                float x = h.X + fx * along + fz * side, z = h.Z + fz * along - fx * side;
+                if (Firearms.CouldHit(gun, s.X, s.Y, s.Z, s.Yaw, s.Pitch, x, h.Y + up, z, 2.5f)) return true;
+            }
             return false;
         }
 

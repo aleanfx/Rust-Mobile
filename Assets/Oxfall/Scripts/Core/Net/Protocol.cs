@@ -12,7 +12,7 @@ namespace Oxfall.Core.Net
     public static class Protocol
     {
         /// <summary>Raised whenever a message changes shape; a client of another version is turned away.</summary>
-        public const ushort Version = 33;
+        public const ushort Version = 34;
 
         /// <summary>Snapshots per second the server sends.</summary>
         public const int TickRate = 20;
@@ -203,6 +203,10 @@ namespace Oxfall.Core.Net
         TurretShot = 70,
         /// <summary>Another player's blow landed on something: who, and what it struck (a <see cref="SwingImpact"/>), for their swing and its sound.</summary>
         Swung = 71,
+        /// <summary>Every patrol helicopter: where, which way it points and leans, its health, what it is doing and whom it is after.</summary>
+        Helis = 72,
+        /// <summary>What the helicopters fired since the last tick: rounds, rockets and their bursts, whom they hit and whether it killed.</summary>
+        HeliShots = 73,
     }
 
     /// <summary>What a player does to their own belongings (inside an <see cref="MessageType.Act"/> message).</summary>
@@ -257,6 +261,8 @@ namespace Oxfall.Core.Net
         Fall = 28,
         /// <summary>Test servers only: a locked crate (a: 0 in an outpost, 1 ahead of the player, 2 the hack all but done).</summary>
         DevCrate = 29,
+        /// <summary>Test servers only: the patrol helicopter (a: 0 comes in, 1 comes for the player, 2 badly hurt, 3 shot down, 4 gone).</summary>
+        DevHeli = 30,
     }
 
     /// <summary>A horse as everyone is told of it.</summary>
@@ -298,6 +304,35 @@ namespace Oxfall.Core.Net
             Fuel = fuel;
             Driver = driver;
         }
+    }
+
+    /// <summary>A patrol helicopter as everyone is told of it.</summary>
+    public readonly struct HeliSnap
+    {
+        public readonly int Id;
+        public readonly float X, Y, Z, Yaw, Pitch, Roll, Health;
+        public readonly Rules.HeliState State;
+        public readonly ushort Target;
+
+        public HeliSnap(int id, float x, float y, float z, float yaw, float pitch, float roll, float health, Rules.HeliState state, ushort target)
+        {
+            Id = id;
+            X = x;
+            Y = y;
+            Z = z;
+            Yaw = yaw;
+            Pitch = pitch;
+            Roll = roll;
+            Health = health;
+            State = state;
+            Target = target;
+        }
+
+        public static HeliSnap Of(Rules.PatrolHeli h) =>
+            new HeliSnap(h.Id, h.X, h.Y, h.Z, h.Yaw, h.Pitch, h.Roll, h.Health, h.State, (ushort)Math.Max(0, Math.Min(65535, h.Target)));
+
+        public bool Smoking => Health < Rules.PatrolHelis.MaxHealth * 0.5f;
+        public bool Down => State == Rules.HeliState.Crashing || State == Rules.HeliState.Wreck;
     }
 
     /// <summary>A boat as everyone is told of it.</summary>
@@ -512,6 +547,7 @@ namespace Oxfall.Core.Net
                 case ActKind.DevSpawnAnimal:
                 case ActKind.DevGive:
                 case ActKind.DevCrate:
+                case ActKind.DevHeli:
                 case ActKind.Board:
                 case ActKind.Refuel:
                 case ActKind.Mount:
@@ -578,6 +614,7 @@ namespace Oxfall.Core.Net
                 case ActKind.DevSpawnAnimal:
                 case ActKind.DevGive:
                 case ActKind.DevCrate:
+                case ActKind.DevHeli:
                 case ActKind.Board:
                 case ActKind.Refuel:
                 case ActKind.Mount:
@@ -924,6 +961,91 @@ namespace Oxfall.Core.Net
                 float fuel = r.UShort() / 10f;
                 ushort driver = r.UShort();
                 into.Add(new MinicopterSnap(id, x, y, z, yaw, health, fuel, driver));
+            }
+        }
+
+        /// <summary>Every patrol helicopter, for everyone (seldom more than one).</summary>
+        public static void Helis(NetWriter w, IEnumerable<Rules.PatrolHeli> helis)
+        {
+            w.Reset();
+            w.Byte((byte)MessageType.Helis);
+            int countAt = w.Length;
+            w.Byte(0);
+            int count = 0;
+            foreach (var h in helis)
+            {
+                if (count == 16) break;
+                w.UShort((ushort)(h.Id & 0xFFFF));
+                w.Float(h.X);
+                w.Float(h.Y);
+                w.Float(h.Z);
+                w.UShort((ushort)((int)Math.Round(h.Yaw / 360f * 65536f) & 0xFFFF));
+                w.Byte((byte)(sbyte)Math.Max(-90, Math.Min(90, (int)Math.Round(h.Pitch))));
+                w.Byte((byte)(sbyte)Math.Max(-90, Math.Min(90, (int)Math.Round(h.Roll))));
+                w.UShort((ushort)Math.Min(65535, Math.Max(0, (int)Math.Ceiling(h.Health))));
+                w.Byte((byte)h.State);
+                w.UShort((ushort)Math.Max(0, Math.Min(65535, h.Target)));
+                count++;
+            }
+            w.PatchByte(countAt, (byte)count);
+        }
+
+        public static void ReadHelis(NetReader r, List<HeliSnap> into)
+        {
+            into.Clear();
+            int count = r.Byte();
+            if (count > 16) throw new ProtocolException("Too many helicopters.");
+            for (int i = 0; i < count; i++)
+            {
+                int id = r.UShort();
+                float x = r.Float(), y = r.Float(), z = r.Float();
+                float yaw = r.UShort() / 65536f * 360f;
+                float pitch = (sbyte)r.Byte(), roll = (sbyte)r.Byte();
+                float health = r.UShort();
+                var state = (Rules.HeliState)r.Byte();
+                if (state < Rules.HeliState.Patrol || state > Rules.HeliState.Wreck) throw new ProtocolException("Unknown helicopter state.");
+                ushort target = r.UShort();
+                into.Add(new HeliSnap(id, x, y, z, yaw, pitch, roll, health, state, target));
+            }
+        }
+
+        /// <summary>What the helicopters fired this tick: each round, rocket and burst, with the damage it did and whether it killed.</summary>
+        public static void HeliShots(NetWriter w, IReadOnlyList<(Rules.HeliShot Shot, float Damage, bool Killed)> shots, int from, int count)
+        {
+            w.Reset();
+            w.Byte((byte)MessageType.HeliShots);
+            w.Byte((byte)count);
+            for (int i = from; i < from + count; i++)
+            {
+                var (s, damage, killed) = shots[i];
+                w.UShort((ushort)(s.Heli & 0xFFFF));
+                w.Byte((byte)s.Kind);
+                w.Float(s.FromX);
+                w.Float(s.FromY);
+                w.Float(s.FromZ);
+                w.Float(s.ToX);
+                w.Float(s.ToY);
+                w.Float(s.ToZ);
+                w.UShort((ushort)Math.Max(0, Math.Min(65535, s.Target)));
+                w.Byte((byte)Math.Min(255, Math.Max(0, (int)Math.Round(damage))));
+                w.Bool(killed);
+            }
+        }
+
+        public static void ReadHeliShots(NetReader r, List<(Rules.HeliShot Shot, int Damage, bool Killed)> into)
+        {
+            into.Clear();
+            int count = r.Byte();
+            for (int i = 0; i < count; i++)
+            {
+                int heli = r.UShort();
+                var kind = (Rules.HeliShotKind)r.Byte();
+                if (kind < Rules.HeliShotKind.Bullet || kind > Rules.HeliShotKind.Splash) throw new ProtocolException("Unknown helicopter shot.");
+                float fx = r.Float(), fy = r.Float(), fz = r.Float(), tx = r.Float(), ty = r.Float(), tz = r.Float();
+                ushort target = r.UShort();
+                int damage = r.Byte();
+                bool killed = r.Bool();
+                into.Add((new Rules.HeliShot(heli, kind, fx, fy, fz, tx, ty, tz, target, damage), damage, killed));
             }
         }
 

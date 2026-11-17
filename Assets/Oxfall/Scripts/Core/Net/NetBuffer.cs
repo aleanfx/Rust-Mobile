@@ -54,6 +54,13 @@ namespace Oxfall.Core.Net
             _buffer[at + 1] = (byte)(value >> 8);
         }
 
+        /// <summary>Writes over one byte already written at <paramref name="at"/>.</summary>
+        public void PatchByte(int at, byte value)
+        {
+            if (at < 0 || at + 1 > Length) throw new ArgumentOutOfRangeException(nameof(at));
+            _buffer[at] = value;
+        }
+
         public void Int(int value)
         {
             Ensure(4);

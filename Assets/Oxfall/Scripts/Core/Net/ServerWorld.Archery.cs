@@ -88,6 +88,14 @@ namespace Oxfall.Core.Net
                 blow = killed ? AnimalBlow.Killed : AnimalBlow.Hurt;
                 return true;
             }
+            if (kind == ArrowTarget.Heli)
+            {
+                if (!Helis.TryGet(targetId, out var heli) || heli.Down) return false;
+                if (Distance(shot.X, shot.Z, heli.X, heli.Z) > reach + 8f) return false;
+                damage = shot.Damage * (head ? PatrolHelis.RotorMultiplier : 1f);
+                killed = HurtHeli(heli, shot.Damage, head, playerId);
+                return true;
+            }
             return false;
         }
 
