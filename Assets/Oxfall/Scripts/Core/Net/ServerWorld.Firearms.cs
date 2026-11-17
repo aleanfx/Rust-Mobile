@@ -130,17 +130,21 @@ namespace Oxfall.Core.Net
             return false;
         }
 
-        /// <summary>Whether a shot's line passes near the helicopter: its nose, middle, tail or rotor tips.</summary>
+        /// <summary>
+        /// Whether a shot's line passes near the helicopter: within its length of its middle, with room for
+        /// how far it flies while the shooter's screen catches up with it (it is quick and far off).
+        /// </summary>
         private static bool CouldHitHeli(GunSpec gun, Shot s, PatrolHeli h)
         {
-            double yaw = h.Yaw * Math.PI / 180.0;
-            float fx = (float)Math.Sin(yaw), fz = (float)Math.Cos(yaw);
-            foreach (var (along, side, up) in new[] { (0f, 0f, -1.5f), (3.5f, 0f, -1.5f), (-6f, 0f, -0.5f), (0f, 5f, 1.5f), (0f, -5f, 1.5f), (5f, 0f, 1.5f), (-4f, 0f, 1.5f) })
-            {
-                float x = h.X + fx * along + fz * side, z = h.Z + fz * along - fx * side;
-                if (Firearms.CouldHit(gun, s.X, s.Y, s.Z, s.Yaw, s.Pitch, x, h.Y + up, z, 2.5f)) return true;
-            }
-            return false;
+            var d = Firearms.Direction(s.Yaw, s.Pitch);
+            float vx = h.X - s.X, vy = h.Y - s.Y, vz = h.Z - s.Z;
+            float along = vx * d.X + vy * d.Y + vz * d.Z;
+            if (along < 0f || along > gun.Range + 10f) return false;
+            float cx = vx - d.X * along, cy = vy - d.Y * along, cz = vz - d.Z * along;
+            float off = (float)Math.Sqrt(cx * cx + cy * cy + cz * cz);
+            float speed = (float)Math.Sqrt(h.Vx * h.Vx + h.Vy * h.Vy + h.Vz * h.Vz);
+            float cone = along * (float)Math.Tan((gun.SpreadDegrees * 1.5f + 1.5f) * Math.PI / 180.0);
+            return off <= 6.5f + cone + speed * 0.6f;
         }
 
         private static float Distance3(Shot s, float x, float y, float z)
