@@ -50,6 +50,11 @@ namespace Oxfall.Core.Rules
         Toggle = 29,
         /// <summary>Power at a device now (<see cref="BuildOp.Top"/>; for a battery, what it holds). Told by the server.</summary>
         Power = 30,
+        /// <summary>
+        /// A locked crate's hacking: asked for, starts it; told by the server, the seconds it has left
+        /// (<see cref="BuildOp.Top"/>; 0: it has opened).
+        /// </summary>
+        Hack = 31,
     }
 
     /// <summary>
@@ -184,6 +189,9 @@ namespace Oxfall.Core.Rules
         /// <summary>The power at a device (a battery's charge).</summary>
         public static BuildOp Power(int id, float value) => OnDeployable(BuildOpKind.Power, id).WithTop(value);
 
+        /// <summary>A locked crate's hacking: <paramref name="left"/> seconds to go (0: open). Asking, starts it.</summary>
+        public static BuildOp Hack(int id, float left = 0f) => OnDeployable(BuildOpKind.Hack, id).WithTop(left);
+
         /// <summary>Lights a furnace, or puts it out.</summary>
         public static BuildOp Light(int id, bool on) =>
             new BuildOp(BuildOpKind.Light, PieceType.Foundation, 0, 0, default, open: on, deployed: Target(id));
@@ -275,6 +283,7 @@ namespace Oxfall.Core.Rules
                 case BuildOpKind.Wire: return $"Wire {Code}->{Id}";
                 case BuildOpKind.Toggle: return $"Toggle {Id} {(Open ? "on" : "off")}";
                 case BuildOpKind.Power: return $"Power {Id} {Top:0.#}";
+                case BuildOpKind.Hack: return $"Hack {Id} {Top:0.#}";
                 default: return $"{Kind} {Type} ({X},{Z}{(PieceRef.IsEdgeType(Type) ? "," + Axis : "")}{(Level > 0 ? "@" + Level : "")})";
             }
         }
@@ -407,6 +416,7 @@ namespace Oxfall.Core.Rules
                     w.Bool(Open);
                     break;
                 case BuildOpKind.Power:
+                case BuildOpKind.Hack:
                     w.Int(Id);
                     w.Float(Top);
                     break;
@@ -571,6 +581,11 @@ namespace Oxfall.Core.Rules
                 {
                     int id = r.Int();
                     return Power(id, Finite(r.Float()));
+                }
+                case BuildOpKind.Hack:
+                {
+                    int id = r.Int();
+                    return Hack(id, Math.Max(0f, Math.Min(LockedCrates.HackSeconds, Finite(r.Float()))));
                 }
                 default:
                     throw new ProtocolException("Unknown build op " + (byte)kind + ".");
@@ -745,6 +760,8 @@ namespace Oxfall.Core.Rules
                     return settlement.Power.SetOn(op.Id, op.Open);
                 case BuildOpKind.Power:
                     return settlement.Power.Set(op.Id, op.Top);
+                case BuildOpKind.Hack:
+                    return settlement.SetHack(op.Id, op.Top);
                 default:
                     return false;
             }
@@ -809,6 +826,8 @@ namespace Oxfall.Core.Rules
             foreach (var hurt in settlement.DamagedDeployables) ops.Add(BuildOp.DeployableHealth(hurt.Key, hurt.Value));
             foreach (var crop in settlement.CropAges)
                 if (crop.Value > 0f) ops.Add(BuildOp.Grow(crop.Key, crop.Value));
+            // Locked crates being hacked, and those already open.
+            foreach (var hack in settlement.Hacks) ops.Add(BuildOp.Hack(hack.Key, hack.Value));
             foreach (var machine in settlement.AllOrders)
                 for (int i = 0; i < machine.Value.Length; i++)
                     if (!machine.Value[i].IsEmpty) ops.Add(BuildOp.SetOrder(machine.Key, i, machine.Value[i]));

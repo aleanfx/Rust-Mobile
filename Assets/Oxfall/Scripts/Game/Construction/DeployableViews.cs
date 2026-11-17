@@ -69,6 +69,47 @@ namespace Oxfall.Game.Construction
         }
     }
 
+    /// <summary>
+    /// A locked crate's laptop and lamp: dark red and still while it waits, green screen and a lamp
+    /// blinking red with a beep each second while it is hacked, both green once open.
+    /// </summary>
+    public sealed class CrateView : MonoBehaviour
+    {
+        public enum Mode { Locked, Hacking, Open }
+
+        public Mode State;
+        public Material Red, Green, Dark, ScreenLocked, ScreenWorking;
+        /// <summary>A beep for each second of the hack (heard from the crate).</summary>
+        public Action<Vector3> Beep;
+        private MeshRenderer _renderer;
+        private float _next;
+        private bool _lit;
+
+        private void Awake() => _renderer = GetComponent<MeshRenderer>();
+
+        public void Set(Mode mode)
+        {
+            State = mode;
+            if (_renderer == null) _renderer = GetComponent<MeshRenderer>();
+            var materials = _renderer.sharedMaterials;
+            materials[MeshFactory.CrateScreen] = mode == Mode.Locked ? ScreenLocked : ScreenWorking;
+            materials[MeshFactory.CrateLamp] = mode == Mode.Open ? Green : Red;
+            _renderer.sharedMaterials = materials;
+            _lit = true;
+        }
+
+        private void Update()
+        {
+            if (State != Mode.Hacking || Time.time < _next) return;
+            _next = Time.time + 0.5f;
+            _lit = !_lit;
+            var materials = _renderer.sharedMaterials;
+            materials[MeshFactory.CrateLamp] = _lit ? Red : Dark;
+            _renderer.sharedMaterials = materials;
+            if (_lit) Beep?.Invoke(transform.TransformPoint(MeshFactory.CrateTimer));
+        }
+    }
+
     /// <summary>A siren light's beams: two turning lights inside its dome while it has power.</summary>
     public sealed class SirenView : MonoBehaviour
     {
@@ -105,6 +146,12 @@ namespace Oxfall.Game.Construction
 
         /// <summary>A siren started wailing: the object its sound should play from.</summary>
         public event Action<GameObject> SirenStarted;
+
+        /// <summary>A locked crate's laptop beeped (once a second while it is hacked), where it is.</summary>
+        public event Action<Vector3> CrateBeeped;
+
+        /// <summary>A locked crate came open while on screen, where it is.</summary>
+        public event Action<Vector3> CrateOpened;
 
         private readonly Mesh _hempPlant, _berryPlant;
         private readonly Mesh _turretBase = MeshFactory.AutoTurretBase(), _turretHead = MeshFactory.AutoTurretHead();
@@ -152,6 +199,14 @@ namespace Oxfall.Game.Construction
                 Mesh = MeshFactory.AirdropCrate(),
                 Materials = new[] { materials.DropPaint, materials.Steel, materials.ChuteOrange, materials.WhitePaint },
             };
+            // And a locked crate in the ruins.
+            _models[DeployableKind.LockedCrate] = new ItemModel
+            {
+                Mesh = MeshFactory.LockedCrate(),
+                Materials = new[] { materials.CratePaint, materials.Steel, materials.LockBody, materials.LedRed, materials.WarnYellow, materials.LedRed },
+            };
+            _crateScreenLocked = materials.SirenOff;
+            _crateScreenWorking = materials.LedGreen;
             // Crops: the plant as it will grow (the ghost shows it full size), on a mound of dug earth.
             var shapes = new System.Random(71);
             _hempPlant = MeshFactory.Hemp(shapes);
@@ -192,6 +247,7 @@ namespace Oxfall.Game.Construction
         }
 
         private readonly Material[] _switchGrip;
+        private readonly Material _crateScreenLocked, _crateScreenWorking;
 
         public ItemModel ModelOf(DeployableKind kind) => _models.TryGetValue(kind, out var m) ? m : null;
 
@@ -242,6 +298,17 @@ namespace Oxfall.Game.Construction
                 Changed(d.Id);
             else if (Electricity.IsElectric(d.Kind))
                 Electrify(d, go);
+            else if (d.Kind == DeployableKind.LockedCrate)
+            {
+                var crate = go.AddComponent<CrateView>();
+                crate.Red = _lampOff;
+                crate.Green = _lampOn;
+                crate.Dark = _ledDark;
+                crate.ScreenLocked = _crateScreenLocked;
+                crate.ScreenWorking = _crateScreenWorking;
+                crate.Beep = at => CrateBeeped?.Invoke(at);
+                crate.Set(CrateMode(d.Id));
+            }
             else if (d.Kind == DeployableKind.Recycler)
             {
                 var wheel = new GameObject("Flywheel");
@@ -526,6 +593,16 @@ namespace Oxfall.Game.Construction
                 Run(go, _settlement.IsLit(id));
                 return;
             }
+            if (d.Kind == DeployableKind.LockedCrate)
+            {
+                var crate = go.GetComponent<CrateView>();
+                if (crate == null) return;
+                var mode = CrateMode(id);
+                if (mode == CrateView.Mode.Open && crate.State != CrateView.Mode.Open)
+                    CrateOpened?.Invoke(go.transform.TransformPoint(MeshFactory.CrateTimer));
+                crate.Set(mode);
+                return;
+            }
             if (d.Kind != DeployableKind.Furnace) return;
             bool lit = _settlement.IsLit(id);
             if (lit && !_fires.ContainsKey(id))
@@ -536,6 +613,9 @@ namespace Oxfall.Game.Construction
                 UnityEngine.Object.Destroy(fire.gameObject);
             }
         }
+
+        private CrateView.Mode CrateMode(int id) =>
+            _settlement.IsCrateOpen(id) ? CrateView.Mode.Open : _settlement.IsHacked(id) ? CrateView.Mode.Hacking : CrateView.Mode.Locked;
 
         /// <summary>A recycler's lamp goes green and its flywheel turns, humming, while it runs; red and still when it stops.</summary>
         private void Run(GameObject go, bool running)

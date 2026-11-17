@@ -40,6 +40,8 @@ namespace Oxfall.Core.Rules
         private readonly Dictionary<int, float> _cooking = new Dictionary<int, float>();
         private readonly Dictionary<int, float> _crops = new Dictionary<int, float>();
         private readonly Dictionary<int, VendOrder[]> _orders = new Dictionary<int, VendOrder[]>();
+        /// <summary>Locked crates being hacked (seconds to go) or open (0).</summary>
+        private readonly Dictionary<int, float> _hacks = new Dictionary<int, float>();
         private readonly Dictionary<PieceRef, int> _owners = new Dictionary<PieceRef, int>();
         private readonly Dictionary<LockTarget, CodeLockState> _locks = new Dictionary<LockTarget, CodeLockState>();
         private readonly List<int> _scratch = new List<int>();
@@ -198,6 +200,84 @@ namespace Oxfall.Core.Rules
             return crate;
         }
 
+        /// <summary>A locked crate set down here, full of <paramref name="items"/> (everyone sees it through LootDropped).</summary>
+        public Deployable PlaceLockedCrate(float x, float y, float z, float yaw, IEnumerable<Gathering.Yield> items)
+        {
+            var crate = Add(new Deployable(0, DeployableKind.LockedCrate, x, y, z, yaw, 0));
+            var into = Container(crate.Id);
+            foreach (var item in items)
+                if (item.Amount > 0) into.Add(item.ItemId, item.Amount);
+            LootDropped?.Invoke(crate);
+            return crate;
+        }
+
+        // ---- Locked crates
+
+        /// <summary>Locked crates being hacked (seconds to go) and those already open (0).</summary>
+        public IEnumerable<KeyValuePair<int, float>> Hacks => _hacks;
+
+        /// <summary>Whether a locked crate's hack has started (it may be open already).</summary>
+        public bool IsHacked(int id) => _hacks.ContainsKey(id);
+
+        /// <summary>Whether a locked crate is open (anything else that holds things always is).</summary>
+        public bool IsCrateOpen(int id) =>
+            !_deployables.TryGetValue(id, out var d) || d.Kind != DeployableKind.LockedCrate || (_hacks.TryGetValue(id, out float left) && left <= 0f);
+
+        /// <summary>Seconds left on a locked crate's hack (0 when open or not started).</summary>
+        public float HackLeft(int id) => _hacks.TryGetValue(id, out float left) ? left : 0f;
+
+        /// <summary>
+        /// A locked crate's hack has <paramref name="left"/> seconds to go (0: it opened), as the server
+        /// says, or the hack starting. While hacked it does not rot; once open it lies there a while.
+        /// False if it is no locked crate.
+        /// </summary>
+        public bool SetHack(int id, float left)
+        {
+            if (!_deployables.TryGetValue(id, out var d) || d.Kind != DeployableKind.LockedCrate) return false;
+            left = Math.Max(0f, Math.Min(LockedCrates.HackSeconds, left));
+            bool wasOpen = _hacks.TryGetValue(id, out float before) && before <= 0f;
+            // Once open it stays open (a late word of the hack does not lock it again).
+            if (wasOpen) return true;
+            _hacks[id] = left;
+            if (left > 0f) _rotting.Remove(id);
+            else _rotting[id] = LockedCrates.OpenSeconds;
+            DeployableChanged?.Invoke(id);
+            return true;
+        }
+
+        /// <summary>
+        /// A player's copy online: hacks count down to show the time left, but a crate opens only when
+        /// the server says so (they stop a hair short of zero).
+        /// </summary>
+        public void CountDownHacks(float dt)
+        {
+            if (_hacks.Count == 0 || dt <= 0f) return;
+            _scratch.Clear();
+            foreach (var pair in _hacks)
+                if (pair.Value > 0f) _scratch.Add(pair.Key);
+            foreach (int id in _scratch) _hacks[id] = Math.Max(0.01f, _hacks[id] - dt);
+        }
+
+        /// <summary>Locked crates' hacks count down; each that opens is told in <paramref name="opened"/> (when given) and to views.</summary>
+        private void Hack(float dt, List<BuildOp> opened)
+        {
+            if (_hacks.Count == 0) return;
+            _scratch.Clear();
+            foreach (var pair in _hacks)
+                if (pair.Value > 0f) _scratch.Add(pair.Key);
+            foreach (int id in _scratch)
+            {
+                float left = _hacks[id] - dt;
+                if (left > 0f)
+                {
+                    _hacks[id] = left;
+                    continue;
+                }
+                SetHack(id, 0f);
+                opened?.Add(BuildOp.Hack(id, 0f));
+            }
+        }
+
         /// <summary>Seconds this settlement has been ticked (the clock for mending after a blast).</summary>
         public float Clock { get; private set; }
 
@@ -310,6 +390,7 @@ namespace Oxfall.Core.Rules
             if (deployable.Kind == DeployableKind.ToolCupboard) _authorized[deployable.Id] = new HashSet<int> { deployable.Owner };
             if (deployable.Kind == DeployableKind.Bag) _rotting[deployable.Id] = Rules.Deployables.DeathBagSeconds;
             if (deployable.Kind == DeployableKind.SupplyDrop) _rotting[deployable.Id] = Rules.Deployables.SupplyDropSeconds;
+            if (deployable.Kind == DeployableKind.LockedCrate) _rotting[deployable.Id] = LockedCrates.UnhackedSeconds;
             if (Crops.IsCrop(deployable.Kind)) _crops[deployable.Id] = 0f;
             if (deployable.Kind == DeployableKind.VendingMachine) _orders[deployable.Id] = new VendOrder[Vending.Orders];
             DeployableAdded?.Invoke(deployable);
@@ -331,6 +412,7 @@ namespace Oxfall.Core.Rules
             _cooking.Remove(id);
             _crops.Remove(id);
             _orders.Remove(id);
+            _hacks.Remove(id);
             _deployableHealth.Remove(id);
             Power?.Forget(id);
             RemoveLock(LockTarget.On(id));
@@ -628,6 +710,8 @@ namespace Oxfall.Core.Rules
             Upkeep.Tick(this, dt, decayed);
             // Crops reaching a new stage go out with the changes the owner tells everyone.
             Grow(dt, decayed);
+            // And locked crates that open.
+            Hack(dt, decayed);
             if (_rotting.Count > 0)
             {
                 _scratch.Clear();
@@ -735,6 +819,7 @@ namespace Oxfall.Core.Rules
             _deployableHealth.Clear();
             _crops.Clear();
             _orders.Clear();
+            _hacks.Clear();
             Power.Clear();
             Upkeep.Clear();
             _nextId = 1;

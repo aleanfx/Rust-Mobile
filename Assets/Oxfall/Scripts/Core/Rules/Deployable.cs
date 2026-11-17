@@ -80,6 +80,12 @@ namespace Oxfall.Core.Rules
 
         /// <summary>A door controller: opens the door beside it while it has power, shuts it when that stops.</summary>
         DoorController = 26,
+
+        /// <summary>
+        /// A locked crate in the ruins (no item makes one, nobody owns it, nothing breaks it): hacked
+        /// open over some minutes, then full of military loot (see <see cref="LockedCrates"/>).
+        /// </summary>
+        LockedCrate = 27,
     }
 
     /// <summary>One thing set down: what it is, where it stands, which way it faces, and who put it there.</summary>
@@ -131,7 +137,7 @@ namespace Oxfall.Core.Rules
         public const float SupplyDropSeconds = 1200f;
 
         /// <summary>Whether it only empties and goes once empty (a dead player's bag, a supply crate).</summary>
-        public static bool IsLoot(DeployableKind kind) => kind == DeployableKind.Bag || kind == DeployableKind.SupplyDrop;
+        public static bool IsLoot(DeployableKind kind) => kind == DeployableKind.Bag || kind == DeployableKind.SupplyDrop || kind == DeployableKind.LockedCrate;
 
         public static bool IsKnown(DeployableKind kind) => Enum.IsDefined(typeof(DeployableKind), kind);
 
@@ -186,6 +192,7 @@ namespace Oxfall.Core.Rules
                 case DeployableKind.Bag:
                 case DeployableKind.Recycler:
                 case DeployableKind.SupplyDrop:
+                case DeployableKind.LockedCrate:
                     return null;
                 default: throw new ArgumentOutOfRangeException(nameof(kind));
             }
@@ -237,6 +244,7 @@ namespace Oxfall.Core.Rules
                 case DeployableKind.Bag: return Inventory.PlayerSlotCount;
                 case DeployableKind.Recycler: return RecyclerInputSlots * 2;
                 case DeployableKind.SupplyDrop: return 12;
+                case DeployableKind.LockedCrate: return 12;
                 // Materials for its upkeep.
                 case DeployableKind.ToolCupboard: return Upkeep.CupboardSlots;
                 // Shells to fire.
@@ -264,6 +272,7 @@ namespace Oxfall.Core.Rules
                 case DeployableKind.Workbench: return 0.8f;
                 case DeployableKind.Recycler: return 1.1f;
                 case DeployableKind.SupplyDrop: return 0.8f;
+                case DeployableKind.LockedCrate: return 0.9f;
                 case DeployableKind.ShotgunTrap: return 0.45f;
                 // Round a line (see HighWalls.FootprintHalfLength).
                 case DeployableKind.WoodWall:
@@ -339,6 +348,7 @@ namespace Oxfall.Core.Rules
                 case DeployableKind.Workbench: return "Mesa de trabajo";
                 case DeployableKind.Recycler: return "Recicladora";
                 case DeployableKind.SupplyDrop: return "Suministros";
+                case DeployableKind.LockedCrate: return "Caja bloqueada";
                 case DeployableKind.ShotgunTrap: return "Trampa de escopeta";
                 case DeployableKind.WoodWall: return "Muro alto de madera";
                 case DeployableKind.StoneWall: return "Muro alto de piedra";

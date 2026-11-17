@@ -107,6 +107,10 @@ namespace Oxfall.Core.Rules
         NoWireTool,
         /// <summary>A door controller goes beside a door.</summary>
         NoDoorNear,
+        /// <summary>A locked crate opens only once hacked.</summary>
+        CrateLocked,
+        /// <summary>This crate is being hacked already (or is open).</summary>
+        AlreadyHacked,
     }
 
     /// <summary>
@@ -312,6 +316,7 @@ namespace Oxfall.Core.Rules
             if (!settlement.TryGet(id, out var d) || settlement.Container(id) == null) return ActionResult.NoPiece;
             if (!Near(x, y, z, d.X, d.Y, d.Z, UseReach)) return ActionResult.TooFar;
             if (!settlement.CanPass(LockTarget.On(id), owner)) return ActionResult.Locked;
+            if (!settlement.IsCrateOpen(id)) return ActionResult.CrateLocked;
             s.Looting = id;
             // Anyone may look into a vending machine to buy; only its owner reaches its slots.
             s.Shopping = d.Kind == DeployableKind.VendingMachine && d.Owner != owner;
@@ -664,6 +669,16 @@ namespace Oxfall.Core.Rules
                     }
                     else if (settlement.Power.SourceOf(d.Id) == 0) return ActionResult.Ok;
                     settlement.Power.Connect(d.Id, op.Code);
+                    return ActionResult.Ok;
+                }
+                case BuildOpKind.Hack:
+                {
+                    if (!settlement.TryGet(op.Id, out var d)) return ActionResult.NoPiece;
+                    if (d.Kind != DeployableKind.LockedCrate) return ActionResult.Invalid;
+                    if (!Near(x, y, z, d.X, d.Y, d.Z, UseReach)) return ActionResult.TooFar;
+                    if (settlement.IsHacked(d.Id)) return ActionResult.AlreadyHacked;
+                    settlement.SetHack(d.Id, LockedCrates.HackSeconds);
+                    done = BuildOp.Hack(d.Id, LockedCrates.HackSeconds);
                     return ActionResult.Ok;
                 }
                 case BuildOpKind.Toggle:

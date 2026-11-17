@@ -240,6 +240,12 @@ namespace Oxfall.Game.Audio
         /// <summary>A bandit's radio crackling where he stands.</summary>
         public void PlayRadio(Vector3 at) => PlayAt(_bank.Radio, at, 0.8f, 3f, 55f, 0.04f);
 
+        /// <summary>A locked crate's laptop beeping as it works through the lock.</summary>
+        public void PlayHackBeep(Vector3 at) => PlayAt(_bank.KeyBeep, at, 0.55f, 2f, 28f, 0.02f);
+
+        /// <summary>A locked crate's lock giving way: heard across the ruin.</summary>
+        public void PlayCrateOpen(Vector3 at) => PlayAt(_bank.Accepted, at, 1f, 4f, 60f);
+
         /// <summary>Thunder, as loud as it is near.</summary>
         public void PlayThunder(float volume) => Shot(_bank.Thunder, volume, 0.12f);
 

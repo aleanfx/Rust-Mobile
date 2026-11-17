@@ -12,7 +12,7 @@ namespace Oxfall.Core.Net
     public static class Protocol
     {
         /// <summary>Raised whenever a message changes shape; a client of another version is turned away.</summary>
-        public const ushort Version = 32;
+        public const ushort Version = 33;
 
         /// <summary>Snapshots per second the server sends.</summary>
         public const int TickRate = 20;
@@ -255,6 +255,8 @@ namespace Oxfall.Core.Net
         Ride = 27,
         /// <summary>The player landed from a fall of a centimetres (the client feels it; it only hurts the teller).</summary>
         Fall = 28,
+        /// <summary>Test servers only: a locked crate (a: 0 in an outpost, 1 ahead of the player, 2 the hack all but done).</summary>
+        DevCrate = 29,
     }
 
     /// <summary>A horse as everyone is told of it.</summary>
@@ -509,6 +511,7 @@ namespace Oxfall.Core.Net
                 case ActKind.Wear:
                 case ActKind.DevSpawnAnimal:
                 case ActKind.DevGive:
+                case ActKind.DevCrate:
                 case ActKind.Board:
                 case ActKind.Refuel:
                 case ActKind.Mount:
@@ -574,6 +577,7 @@ namespace Oxfall.Core.Net
                 case ActKind.Wear:
                 case ActKind.DevSpawnAnimal:
                 case ActKind.DevGive:
+                case ActKind.DevCrate:
                 case ActKind.Board:
                 case ActKind.Refuel:
                 case ActKind.Mount:

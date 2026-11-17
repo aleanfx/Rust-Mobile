@@ -97,6 +97,7 @@ namespace Oxfall.Core.Net
             Fauna.Populate();
             Fauna.Guard(Fauna.Posts(Ground));
             CreateAirdrops(seed, obstacles);
+            CreateLockedCrates(seed);
             CreateBoats();
             CreateMinicopters();
             CreateHorses(obstacles);
@@ -460,6 +461,29 @@ namespace Oxfall.Core.Net
                     if (drop.HasValue) AirdropsStarted.Add(drop.Value);
                     return ActionResult.Ok;
                 }
+                case ActKind.DevCrate:
+                {
+                    // 0: a locked crate in an outpost now; 1: one a little ahead of the player; 2: the nearest one's hack all but done.
+                    if (!DevMode) return ActionResult.Invalid;
+                    if (a == 2)
+                    {
+                        foreach (var d in Settlement.Deployables)
+                            if (d.Kind == DeployableKind.LockedCrate && Settlement.HackLeft(d.Id) > 2f)
+                            {
+                                Settlement.SetHack(d.Id, 2f);
+                                Announcements.Add(BuildOp.Hack(d.Id, 2f));
+                            }
+                        return ActionResult.Ok;
+                    }
+                    if (a == 1)
+                    {
+                        float yaw = player.Pose.Yaw * (float)(Math.PI / 180.0);
+                        float x = player.Pose.X + (float)Math.Sin(yaw) * 3f, z = player.Pose.Z + (float)Math.Cos(yaw) * 3f;
+                        Settlement.PlaceLockedCrate(x, Ground.Height(x, z), z, player.Pose.Yaw + 180f, LootTable.LockedCrate(_random));
+                        return ActionResult.Ok;
+                    }
+                    return SpawnLockedCrate().HasValue ? ActionResult.Ok : ActionResult.Invalid;
+                }
                 default: return ActionResult.Invalid;
             }
         }
@@ -625,7 +649,9 @@ namespace Oxfall.Core.Net
             done = op;
             if (!_online.TryGetValue(playerId, out var record) || !Players.TryGet(playerId, out var player)) return ActionResult.Invalid;
             var p = player.Pose;
-            return PlayerActions.Build(Settlement, record.Survivor, record.Owner, op, p.X, p.Y, p.Z, out done);
+            var result = PlayerActions.Build(Settlement, record.Survivor, record.Owner, op, p.X, p.Y, p.Z, out done);
+            if (result == ActionResult.Ok && op.Kind == BuildOpKind.Hack) HackStarted(playerId, op.Id);
+            return result;
         }
 
         /// <summary>
@@ -655,6 +681,7 @@ namespace Oxfall.Core.Net
             TickTraps();
             TickTurrets();
             TickAirdrops();
+            TickLockedCrates();
             Environment.Weather.At(Seed, Time, out float rain, out _);
             float daylight = Day.Daylight;
             foreach (var record in _online.Values)

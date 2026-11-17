@@ -790,6 +790,31 @@ namespace Oxfall.Core.Wildlife
             a.Speed = step / dt;
         }
 
+        /// <summary>
+        /// An alarm at (x, z) (a locked crate being hacked): every bandit within <paramref name="radius"/>
+        /// that is not busy comes for <paramref name="quarry"/>. Returns how many came.
+        /// </summary>
+        public int CallBandits(float x, float z, float radius, int quarry)
+        {
+            int came = 0;
+            foreach (var b in _animals.Values)
+            {
+                if (b.Kind != AnimalKind.Bandit || b.IsDead) continue;
+                if (b.Act == BanditAct.Cover || b.Act == BanditAct.Healing) continue;
+                if (Distance(x, z, b.X, b.Z) > radius) continue;
+                came++;
+                if (b.State == AnimalState.Chase) continue;
+                if (b.Act == BanditAct.Searching) b.Act = BanditAct.None;
+                b.Quarry = quarry;
+                b.State = AnimalState.Chase;
+                b.Angry = true;
+                b.Lost = Bandits.LoseSeconds - Bandits.RadioSeconds;
+                b.AttackTimer = Math.Max(b.AttackTimer, Bandits.FirstShotSeconds);
+                b.Calls++;
+            }
+            return came;
+        }
+
         /// <summary>A bandit's radio call: the others near him come for <paramref name="quarry"/>.</summary>
         private void Alert(Animal a, int quarry)
         {

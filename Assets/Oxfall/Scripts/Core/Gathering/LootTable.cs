@@ -93,6 +93,43 @@ namespace Oxfall.Core.Gathering
             return loot;
         }
 
+        private static readonly (string Id, int Min, int Max)[] LockedFinds =
+        {
+            (ItemIds.SatchelCharge, 2, 4), (ItemIds.MetalFacemask, 1, 1), (ItemIds.MetalChestPlate, 1, 1), (ItemIds.RoadsignKilt, 1, 1),
+            (ItemIds.Revolver, 1, 1), (ItemIds.Crossbow, 1, 1), (ItemIds.AutoTurret, 1, 1), (ItemIds.Sword, 1, 1),
+            (ItemIds.Beancan, 3, 5), (ItemIds.SheetMetalDoor, 1, 1), (ItemIds.Gears, 3, 5), (ItemIds.MetalPipe, 3, 5),
+        };
+
+        /// <summary>
+        /// What a locked crate holds, the best loot on the island: always a semi-automatic rifle with
+        /// plenty of rounds, syringes and a heap of scrap, and three finds (charges, metal armour, guns,
+        /// a turret, parts) — worth the wait and the fight for it.
+        /// </summary>
+        public static List<Yield> LockedCrate(Random random)
+        {
+            var loot = new List<Yield>(10)
+            {
+                new Yield(ItemIds.SemiRifle, 1),
+                new Yield(ItemIds.RifleBullet, 60 + random.Next(61)),
+                new Yield(ItemIds.MedicalSyringe, 3 + random.Next(3)),
+                new Yield(ItemIds.Scrap, 120 + random.Next(81)),
+                new Yield(ItemIds.Gunpowder, 100 + random.Next(101)),
+                new Yield(ItemIds.MetalSpring, 2 + random.Next(2)),
+            };
+            var picks = new List<int>();
+            while (picks.Count < 3)
+            {
+                int i = random.Next(LockedFinds.Length);
+                if (!picks.Contains(i)) picks.Add(i);
+            }
+            foreach (int i in picks)
+            {
+                var find = LockedFinds[i];
+                loot.Add(new Yield(find.Id, find.Min + random.Next(find.Max - find.Min + 1)));
+            }
+            return loot;
+        }
+
         /// <summary>
         /// What a bandit had on him: rounds for his revolver, scrap and cloth, sometimes a bandage or a
         /// part, and now and then the revolver itself.

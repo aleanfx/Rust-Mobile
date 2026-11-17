@@ -2520,6 +2520,67 @@ namespace Oxfall.Game.World
             return b.Build("Supply crate");
         }
 
+        /// <summary>Submeshes of the locked crate that change with its state: the laptop's screen and the lamp on the lid.</summary>
+        public const int CrateScreen = 3, CrateLamp = 5;
+
+        /// <summary>Where the countdown hangs over a locked crate (its laptop's screen), in its own frame.</summary>
+        public static readonly Vector3 CrateTimer = new Vector3(0f, 1.25f, 0f);
+
+        /// <summary>
+        /// A locked military crate, long and heavy, front along +Z: olive steel with ribs and hazard
+        /// stripes, a hasp and padlock box in front, a rugged laptop wired into it on the lid (its
+        /// screen faces the front) and a lamp beside it. Submeshes: 0 olive paint, 1 steel, 2 dark
+        /// plastic, 3 the screen, 4 hazard yellow, 5 the lamp.
+        /// </summary>
+        public static Mesh LockedCrate()
+        {
+            var b = new FlatMeshBuilder(6) { UvScale = 0.7f };
+            const float hx = 0.82f, hz = 0.46f, top = 0.74f;
+            // Skids, the body, a lid a little proud with its seam.
+            foreach (float x in new[] { -0.6f, 0.6f })
+                b.AddBox(1, new Vector3(x - 0.08f, 0f, -hz + 0.02f), new Vector3(x + 0.08f, 0.08f, hz - 0.02f));
+            b.AddBox(0, new Vector3(-hx, 0.08f, -hz), new Vector3(hx, top - 0.1f, hz));
+            b.AddBox(1, new Vector3(-hx - 0.01f, top - 0.13f, -hz - 0.01f), new Vector3(hx + 0.01f, top - 0.1f, hz + 0.01f));
+            b.AddBox(0, new Vector3(-hx - 0.02f, top - 0.1f, -hz - 0.02f), new Vector3(hx + 0.02f, top, hz + 0.02f));
+            // Ribs round the body, steel corners.
+            foreach (float x in new[] { -0.5f, 0f, 0.5f })
+                b.AddBox(0, new Vector3(x - 0.035f, 0.08f, -hz - 0.025f), new Vector3(x + 0.035f, top - 0.13f, hz + 0.025f));
+            foreach (float sx in new[] { -1f, 1f })
+            foreach (float sz in new[] { -1f, 1f })
+                b.AddBox(1, new Vector3(sx * hx - 0.04f, 0.08f, sz * hz - 0.04f), new Vector3(sx * hx + 0.04f, top + 0.01f, sz * hz + 0.04f));
+            // Hazard stripes along the foot of the front and back.
+            foreach (float sz in new[] { -1f, 1f })
+            {
+                float face = sz * hz, out1 = sz * (hz + 0.012f);
+                for (int i = 0; i < 6; i++)
+                {
+                    float x0 = -0.44f + i * 0.16f;
+                    if (Mathf.Abs(x0 + 0.04f) < 0.06f || Mathf.Abs(x0 + 0.04f - 0.5f) < 0.06f || Mathf.Abs(x0 + 0.04f + 0.5f) < 0.06f) continue;
+                    b.AddBox(4, new Vector3(x0, 0.12f, Mathf.Min(face, out1)), new Vector3(x0 + 0.08f, 0.22f, Mathf.Max(face, out1)));
+                }
+            }
+            // The hasp and its lock box in the middle of the front, and handles at the ends.
+            b.AddBox(1, new Vector3(-0.09f, top - 0.26f, hz + 0.02f), new Vector3(0.09f, top - 0.02f, hz + 0.07f));
+            b.AddBox(2, new Vector3(-0.06f, top - 0.36f, hz + 0.03f), new Vector3(0.06f, top - 0.2f, hz + 0.1f));
+            foreach (float sx in new[] { -1f, 1f })
+                b.AddTube(1, new Vector3(sx * (hx + 0.03f), 0.5f, -0.18f), new Vector3(sx * (hx + 0.03f), 0.5f, 0.18f), 0.025f, 0.025f, 6);
+            // The laptop: a rugged base on the lid and its screen tilted back, facing the front.
+            const float lx = 0.24f, lz0 = -0.16f, lz1 = 0.16f;
+            b.AddBox(2, new Vector3(-lx, top, lz0), new Vector3(lx, top + 0.035f, lz1));
+            float tilt = 15f * Mathf.Deg2Rad, h = 0.32f;
+            Vector3 hinge = new Vector3(0f, top + 0.035f, lz0 + 0.01f), up = new Vector3(0f, Mathf.Cos(tilt), -Mathf.Sin(tilt));
+            var back = new Vector3(0f, 0f, -0.025f);
+            b.AddHex(2, (x, y, z) => hinge + new Vector3(x == 0 ? -lx : lx, 0f, 0f) + up * (y == 0 ? 0f : h) + (z == 0 ? back : Vector3.zero));
+            var face2 = new Vector3(0f, 0f, 0.004f);
+            b.AddHex(3, (x, y, z) => hinge + new Vector3(x == 0 ? -lx + 0.025f : lx - 0.025f, 0f, 0f) + up * (y == 0 ? 0.025f : h - 0.025f) + (z == 0 ? Vector3.zero : face2));
+            // A cable from the laptop down into the lock box.
+            b.AddTube(2, new Vector3(lx - 0.03f, top + 0.02f, lz1), new Vector3(0.05f, top - 0.2f, hz + 0.09f), 0.012f, 0.012f, 5);
+            // The lamp on the lid's corner.
+            b.AddCylinder(1, new Vector3(-hx + 0.16f, top, hz - 0.16f), 0.06f, 0.06f, 0.04f, 8, 0f);
+            b.AddCylinder(5, new Vector3(-hx + 0.16f, top + 0.04f, hz - 0.16f), 0.045f, 0.035f, 0.07f, 8, 0f);
+            return b.Build("Locked crate");
+        }
+
         /// <summary>
         /// The recycler's flywheel: a disc with four spokes and a hub, facing -X from its middle
         /// (it turns about X while the machine runs). Submeshes: 0 steel, 1 rust.

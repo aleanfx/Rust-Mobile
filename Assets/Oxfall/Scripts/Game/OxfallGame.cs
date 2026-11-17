@@ -147,6 +147,10 @@ namespace Oxfall.Game
         private SleeperViews _sleeperViews;
         // Supply drops: alone the game sends the planes, online the server does and says so.
         private Airdrops _airdrops;
+        /// <summary>Alone: when the next locked crate turns up (online the server says).</summary>
+        private LockedCrates _lockedCrates;
+        /// <summary>What each locked crate was last seen doing (0 locked, 1 hacked, 2 open), to tell of changes once.</summary>
+        private readonly System.Collections.Generic.Dictionary<int, int> _crateStates = new System.Collections.Generic.Dictionary<int, int>();
         private AirdropViews _airdropViews;
         private readonly System.Collections.Generic.List<Airdrop> _airdropsStarted = new System.Collections.Generic.List<Airdrop>();
         private readonly System.Collections.Generic.List<Airdrop> _airdropsLanded = new System.Collections.Generic.List<Airdrop>();
@@ -224,6 +228,8 @@ namespace Oxfall.Game
                 if (a.Kind == AnimalKind.Bandit) _settlement.DropBag(a.X, a.Y, a.Z, a.Yaw, LootTable.Bandit(new System.Random()));
             };
             _actions.Fauna = _fauna;
+            // And now and then a locked crate turns up in an outpost's yard.
+            _lockedCrates = new LockedCrates(s_seed, Time.time);
             // Now and then a plane drops a crate of good things somewhere open (never onto a trunk, a rock or a base).
             _airdrops = new Airdrops(ground, s_seed, Time.time)
             {
@@ -471,6 +477,15 @@ namespace Oxfall.Game
             _deployables.FireStarted += fire => GameAudio.Attach(fire, audio.Bank.FireLoop, 0.7f, 16f);
             _deployables.MachineStarted += hum => GameAudio.Attach(hum, audio.Bank.MachineLoop, 0.55f, 18f);
             _deployables.SirenStarted += wail => GameAudio.Attach(wail, audio.Bank.SirenLoop, 0.5f, 45f);
+            _deployables.CrateBeeped += audio.PlayHackBeep;
+            _deployables.CrateOpened += audio.PlayCrateOpen;
+            // Locked crates: everyone hears when one turns up, is hacked and opens.
+            _settlement.DeployableAdded += d =>
+            {
+                if (d.Kind == DeployableKind.LockedCrate) CrateNews(d.Id);
+            };
+            _settlement.DeployableChanged += CrateNews;
+            _settlement.DeployableRemoved += id => _crateStates.Remove(id);
             _placer = playerObject.AddComponent<DeployablePlacer>();
             _placer.Init(input, player, materials, _hud, _settlement, _deployables);
             _placer.Actions = _actions;
@@ -1069,9 +1084,10 @@ namespace Oxfall.Game
         /// <summary>Every frame while online: the player count and the names over heads.</summary>
         private void TickNet()
         {
-            if (_net == null) return;
+            if (_nameTags == null) return;
             _nameTags.Begin();
-            if (_net.State == NetClient.Status.Online)
+            CrateTags();
+            if (_net != null && _net.State == NetClient.Status.Online)
             {
                 if (_net.OnlineCount != _shownOnline)
                 {
@@ -1491,6 +1507,13 @@ namespace Oxfall.Game
             int owner = _actions.Owner;
             foreach (var d in _settlement.Deployables)
             {
+                if (d.Kind == DeployableKind.LockedCrate)
+                {
+                    bool open = _settlement.IsCrateOpen(d.Id), hacked = _settlement.IsHacked(d.Id);
+                    _mapPins.Add(new MapUi.Pin(new Vector3(d.X, d.Y, d.Z), Icons.Keypad, open ? UiTheme.Good : UiTheme.Accent,
+                        open ? "Caja abierta" : hacked ? "Hackeo " + LockedCrates.Clock(_settlement.HackLeft(d.Id)) : "Caja bloqueada"));
+                    continue;
+                }
                 if (d.Owner != owner) continue;
                 if (d.Kind == DeployableKind.SleepingBag)
                     _mapPins.Add(new MapUi.Pin(new Vector3(d.X, d.Y, d.Z), Icons.Bed, new Color(0.55f, 0.78f, 1f)));
@@ -1710,6 +1733,14 @@ namespace Oxfall.Game
         }
 
         /// <summary>For tests: the nearest thing of a kind set down, or 0.</summary>
+        /// <summary>Any one of this kind on the island (0: none).</summary>
+        private int Any(DeployableKind kind)
+        {
+            foreach (var d in _settlement.Deployables)
+                if (d.Kind == kind) return d.Id;
+            return 0;
+        }
+
         private int Nearest(DeployableKind kind)
         {
             int best = 0;
@@ -2068,6 +2099,17 @@ namespace Oxfall.Game
                 case "face-airdrop": FaceAirdrop(); break;
                 case "open-airdrop": OpenBox(Nearest(DeployableKind.SupplyDrop)); break;
                 case "go-airdrop": GoTo(Nearest(DeployableKind.SupplyDrop)); break;
+                case "locked-crate": DevCrate(0); break;
+                case "crate-here": DevCrate(1); break;
+                case "crate-done": DevCrate(2); break;
+                case "go-crate": ToCrate(); break;
+                case "view-crate": ToCrate(6f); break;
+                case "open-crate": OpenBox(Nearest(DeployableKind.LockedCrate)); break;
+                case "crate-state":
+                    foreach (var d in _settlement.Deployables)
+                        if (d.Kind == DeployableKind.LockedCrate)
+                            Debug.Log($"[Oxfall] Crate {d.Id} hacked={_settlement.IsHacked(d.Id)} open={_settlement.IsCrateOpen(d.Id)} left={_settlement.HackLeft(d.Id):0.0} at ({d.X:0.0}, {d.Z:0.0})");
+                    break;
                 case "go-bag": GoTo(Nearest(DeployableKind.Bag)); break;
                 case "guide-reset": _guide.Restart(); break;
                 case "open-recycler": OpenBox(Nearest(DeployableKind.Recycler)); break;
@@ -3195,8 +3237,94 @@ namespace Oxfall.Game
                 foreach (var drop in _airdropsStarted) _airdropViews.Add(drop);
                 foreach (var drop in _airdropsLanded)
                     _settlement.LandSupplyDrop(drop.DropX, drop.GroundY, drop.DropZ, drop.Yaw, LootTable.SupplyDrop(new System.Random()));
+                if (_lockedCrates != null && _lockedCrates.Due(Time.time, Any(DeployableKind.LockedCrate) != 0)) SpawnLockedCrate();
             }
             _airdropViews.Tick(dt);
+        }
+
+        // ---- Locked crates
+
+        /// <summary>Alone: a locked crate in an outpost's yard now.</summary>
+        private void SpawnLockedCrate()
+        {
+            if (_lockedCrates == null || !_lockedCrates.PickSpot(_world.Shape.Ground, out float x, out float y, out float z, out float yaw)) return;
+            _settlement.PlaceLockedCrate(x, y, z, yaw, LootTable.LockedCrate(new System.Random()));
+        }
+
+        /// <summary>A locked crate turned up, started being hacked or came open: told once, with where.</summary>
+        private void CrateNews(int id)
+        {
+            if (!_settlement.TryGet(id, out var d) || d.Kind != DeployableKind.LockedCrate) return;
+            int state = _settlement.IsCrateOpen(id) ? 2 : _settlement.IsHacked(id) ? 1 : 0;
+            bool known = _crateStates.TryGetValue(id, out int before);
+            if (known && before == state) return;
+            _crateStates[id] = state;
+            string where = LockedCrates.PlaceName(_world.Shape.Ground, d.X, d.Z) ?? MapUi.Square(new Vector3(d.X, 0f, d.Z));
+            var crate = new Vector3(d.X, d.Y, d.Z);
+            bool near = _player != null && (crate - _player.transform.position).sqrMagnitude < 10f * 10f;
+            switch (state)
+            {
+                case 0:
+                    _hud.ShowToast($"Caja bloqueada en {where}: hackéala y defiéndela {LockedCrates.HackSeconds / 60f:0} minutos");
+                    break;
+                case 1:
+                    // Alone, the guards hear it start (online the server sends them).
+                    if (!_actions.Online && _fauna != null) _fauna.CallBandits(d.X, d.Z, LockedCrates.AlarmRadius, 0);
+                    if (!near) _hud.ShowToast($"¡Alguien está hackeando la caja bloqueada de {where}!");
+                    break;
+                case 2:
+                    if (known) _hud.ShowToast(near ? "¡La caja se abrió! Saquea rápido" : $"La caja bloqueada de {where} se abrió");
+                    break;
+            }
+            Debug.Log($"[Oxfall] Locked crate {id} at {where}: {(state == 2 ? "open" : state == 1 ? "hacking" : "locked")}");
+        }
+
+        /// <summary>Over each locked crate: its countdown while hacked (seen from far), or what it is up close.</summary>
+        private void CrateTags()
+        {
+            if (_camera == null || _deployables == null) return;
+            foreach (var d in _settlement.Deployables)
+            {
+                if (d.Kind != DeployableKind.LockedCrate || !_deployables.TryGetView(d.Id, out var view)) continue;
+                var at = view.transform.TransformPoint(MeshFactory.CrateTimer) + Vector3.up * 0.35f;
+                if (_settlement.IsCrateOpen(d.Id)) _nameTags.Show(_camera, at, "CAJA ABIERTA", 30f, UiTheme.Good);
+                else if (_settlement.IsHacked(d.Id)) _nameTags.Show(_camera, at, "HACKEO  " + LockedCrates.Clock(_settlement.HackLeft(d.Id)), 160f, UiTheme.Accent);
+                else _nameTags.Show(_camera, at, "CAJA BLOQUEADA", 45f, UiTheme.Bad);
+            }
+        }
+
+        /// <summary>Test: a locked crate (0 in an outpost, 1 just ahead, 2 the nearest one's hack all but done).</summary>
+        private void DevCrate(int how)
+        {
+            if (_actions.Online)
+            {
+                _net.SendAct(ActKind.DevCrate, how);
+                return;
+            }
+            if (how == 0) SpawnLockedCrate();
+            else if (how == 1)
+            {
+                var p = _player.transform.position + _player.transform.forward * 3f;
+                _settlement.PlaceLockedCrate(p.x, _world.Shape.Height(p.x, p.z), p.z, _player.transform.eulerAngles.y + 180f, LootTable.LockedCrate(new System.Random()));
+            }
+            else
+            {
+                int id = Nearest(DeployableKind.LockedCrate);
+                if (_settlement.HackLeft(id) > 2f) _settlement.SetHack(id, 2f);
+            }
+        }
+
+        /// <summary>Test view: in front of the nearest locked crate, looking at its laptop.</summary>
+        private void ToCrate(float distance = 2.6f)
+        {
+            if (!_settlement.TryGet(Nearest(DeployableKind.LockedCrate), out var d)) return;
+            var front = Quaternion.Euler(0f, d.Yaw, 0f) * Vector3.forward;
+            var at = new Vector3(d.X, d.Y, d.Z) + front * distance;
+            at.y = Mathf.Max(Monuments.SurfaceHeight(_world.Shape.Ground, at.x, at.z), d.Y) + 0.05f;
+            _player.Teleport(at, d.Yaw + 180f, 0f);
+            var to = new Vector3(d.X, d.Y + 0.75f, d.Z) - _player.Head.position;
+            _player.Teleport(at, Mathf.Atan2(to.x, to.z) * Mathf.Rad2Deg, -Mathf.Atan2(to.y, new Vector2(to.x, to.z).magnitude) * Mathf.Rad2Deg);
+            Debug.Log($"[Oxfall] At the locked crate {d}");
         }
 
         /// <summary>Test: a plane now, dropping a crate a little ahead of the player.</summary>
@@ -3402,6 +3530,8 @@ namespace Oxfall.Game
                     && (new Vector3(sensor.X, sensor.Y, sensor.Z) - _player.transform.position).sqrMagnitude <= Electricity.SensorRange * Electricity.SensorRange;
                 _settlement.Tick(Time.deltaTime);
             }
+            // Online, locked crates' countdowns run here between the server's word.
+            else if (_settlement != null) _settlement.CountDownHacks(Time.deltaTime);
             _respawnTimer += Time.deltaTime;
             if (_respawnTimer < RespawnTickSeconds || _world == null) return;
             CloseWhatIsFar();

@@ -180,6 +180,12 @@ namespace Oxfall.Game.Construction
                     _settlement.TryGet(_deployable, out var d);
                     if (d.Kind == DeployableKind.Bag) _hud.SetUseButton("BOLSA", Icons.Bag);
                     else if (d.Kind == DeployableKind.SupplyDrop) _hud.SetUseButton("SUMINISTROS", Icons.Box);
+                    else if (d.Kind == DeployableKind.LockedCrate)
+                    {
+                        if (_settlement.IsCrateOpen(d.Id)) _hud.SetUseButton("CAJA MILITAR", Icons.Box);
+                        else if (_settlement.IsHacked(d.Id)) _hud.SetUseButton("HACKEO " + LockedCrates.Clock(_settlement.HackLeft(d.Id)), Icons.Keypad);
+                        else _hud.SetUseButton("HACKEAR", Icons.Keypad);
+                    }
                     else if (d.Kind == DeployableKind.Furnace) _hud.SetUseButton("HORNO", Icons.Flame);
                     else if (d.Kind == DeployableKind.Campfire) _hud.SetUseButton("FOGATA", Icons.Flame);
                     else if (d.Kind == DeployableKind.Recycler) _hud.SetUseButton("RECICLAR", Icons.Recycle);
@@ -320,6 +326,12 @@ namespace Oxfall.Game.Construction
                     DoorUsed?.Invoke();
                     break;
                 case Target.Box:
+                    if (_settlement.TryGet(_deployable, out var box) && box.Kind == DeployableKind.LockedCrate && !_settlement.IsCrateOpen(box.Id))
+                    {
+                        Hack(box.Id);
+                        _timer = 0f;
+                        break;
+                    }
                     OpenBox?.Invoke(_deployable);
                     break;
                 case Target.Cupboard:
@@ -365,6 +377,26 @@ namespace Oxfall.Game.Construction
                     _timer = 0f;
                     break;
             }
+        }
+
+        // ---- Locked crates
+
+        /// <summary>Starts hacking a locked crate, or says how long it has left.</summary>
+        private void Hack(int id)
+        {
+            if (_settlement.IsHacked(id))
+            {
+                _hud.ShowToast($"Hackeando… se abre en {LockedCrates.Clock(_settlement.HackLeft(id))}. Defiéndela hasta entonces");
+                return;
+            }
+            var result = Actions.Build(BuildOp.Hack(id));
+            if (result != ActionResult.Ok)
+            {
+                _hud.ShowToast(GameActions.Explain(result));
+                return;
+            }
+            Debug.Log($"[Oxfall] Hack started on crate {id}");
+            _hud.ShowToast($"Hackeo iniciado: se abre en {LockedCrates.Clock(LockedCrates.HackSeconds)}. Los guardias te oyeron");
         }
 
         // ---- Electricity

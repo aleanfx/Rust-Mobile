@@ -303,6 +303,17 @@ namespace Oxfall.Core.World
             return (x, m.Y + 0.15f, z, m.Yaw + (outpost ? 0f : 90f));
         }
 
+        /// <summary>
+        /// Where a locked crate is set down in a monument, in world space, and which way it faces: in the
+        /// outpost's yard before the guard hut's doorway; in the gas station's forecourt.
+        /// </summary>
+        public static (float X, float Y, float Z, float Yaw) CrateSpot(Monument m)
+        {
+            bool outpost = m.Kind == MonumentKind.Outpost;
+            Place(m, outpost ? -6f : 4.5f, outpost ? 1.5f : 0.5f, out float x, out float z);
+            return (x, m.Y + 0.15f, z, m.Yaw + (outpost ? 0f : 90f));
+        }
+
         /// <summary>The solid blocks a monument is built of, in world space.</summary>
         public static List<MonumentProp> Props(Monument m)
         {
